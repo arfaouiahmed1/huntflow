@@ -1,4 +1,33 @@
 {
+  "_meta": {
+    "description": "HUNTFLOW Scrapling crawl sources — each category maps to a list of job boards.",
+    "schema": {
+      "category": "string — board category key (remote | europe | mena | global | posts). Requesting category 'all' sweeps every category.",
+      "id": "string — unique board id (used for board_id on crawled jobs).",
+      "name": "string — display name surfaced as the job's source.",
+      "url": "string — listing URL the crawler fetches.",
+      "type": "'static' | 'stealth' | 'posts' — static = TLS-impersonated HTTP fetch; stealth = real stealth browser (JS-heavy pages); posts = forum/thread whose posts are parsed as hiring posts.",
+      "selectors": {
+        "item": "CSS selector matching each job card (or comment row for posts boards).",
+        "title": "CSS selector, or one of the special tokens 'text' / 'href' / 'domain', or a literal string.",
+        "company": "same field config as title.",
+        "location": "same field config as title.",
+        "url": "same field config as title.",
+        "text": "posts boards only — CSS selector for the full post text that gets parsed for the '| Company |' block."
+      },
+      "keyword": "optional — board-level keyword override; defaults to the crawl request keyword.",
+      "maxCards": "optional — per-board card cap (defaults to the remaining request limit).",
+      "_comment": "optional human note about the board."
+    },
+    "how_to_add_a_board": [
+      "1. Add a new top-level category key (or reuse an existing one) mapping to a list of board objects.",
+      "2. Give each board an id, name, url, type, and selectors.",
+      "3. For structured job listing pages set type to 'static' or 'stealth' and provide CSS selectors for item/title/company/location/url.",
+      "4. For forum hiring threads (e.g. HN Who is Hiring) set type to 'posts' and set selectors.item to the comment rows plus selectors.text to the post body; the agent parses the leading '| Company |' block.",
+      "5. Literal field values (e.g. location 'Remote', company 'YCombinator Network') are returned as-is; selectors like 'h4' or 'span.titleline > a' are resolved per card.",
+      "6. Restart the sidecar (uv run uvicorn server:app --port 8001) to pick up changes."
+    ]
+  },
   "remote": [
     {
       "id": "remoteok",
@@ -11,7 +40,8 @@
         "company": "h3[itemprop='name']",
         "location": ".location",
         "url": "a[itemprop='url']"
-      }
+      },
+      "_comment": "RemoteOK serves empty placeholder rows statically (infinite scroll) — set type to 'stealth' if you want real cards via the browser path."
     },
     {
       "id": "weworkremotely",
@@ -24,7 +54,8 @@
         "company": "span.company",
         "location": "span.region",
         "url": "a"
-      }
+      },
+      "_comment": "Server-rendered board; the item selector also matches the filter tabs, which the keyword filter drops."
     },
     {
       "id": "fmhy_remote",
@@ -37,7 +68,8 @@
         "company": "domain",
         "location": "Remote",
         "url": "href"
-      }
+      },
+      "_comment": "A link directory, not a real job board — low precision, mostly filtered by keyword. Included for coverage."
     }
   ],
   "europe": [
@@ -52,7 +84,8 @@
         "company": "span",
         "location": "p",
         "url": "a"
-      }
+      },
+      "_comment": "JS-heavy job board — stealth browser required; selectors may drift as the SPA re-renders."
     },
     {
       "id": "europeremotely",
@@ -65,7 +98,8 @@
         "company": ".company-name",
         "location": "Europe",
         "url": "a"
-      }
+      },
+      "_comment": "Currently returns 403 to the fetcher; kept for when the site reopens access."
     }
   ],
   "mena": [
@@ -80,7 +114,8 @@
         "company": ".company",
         "location": "Tunisia",
         "url": "a.title"
-      }
+      },
+      "_comment": "Tunisian job board — card markup changed recently; extraction is best-effort."
     },
     {
       "id": "tanqeeb_mena",
@@ -93,7 +128,8 @@
         "company": ".company-name",
         "location": "Qatar / MENA",
         "url": "a"
-      }
+      },
+      "_comment": "MENA/Qatar board; the search page currently returns few/no cards statically."
     }
   ],
   "global": [
@@ -108,7 +144,58 @@
         "company": "YCombinator Network",
         "location": "Global",
         "url": "span.titleline > a"
-      }
+      },
+      "_comment": "Directory of the monthly Who-is-Hiring threads; the real posts are parsed by the hacker_news_who_is_hiring posts board."
+    },
+    {
+      "id": "hacker_news_jobs",
+      "name": "HackerNews Jobs",
+      "url": "https://news.ycombinator.com/jobs",
+      "type": "static",
+      "selectors": {
+        "item": "tr.athing",
+        "title": "span.titleline > a",
+        "company": "YCombinator Network",
+        "location": "Global",
+        "url": "span.titleline > a"
+      },
+      "_comment": "YC/HN jobs front page — server-rendered, 30 rows of startup roles linking to ycombinator.com careers pages."
+    }
+  ],
+  "posts": [
+    {
+      "id": "hacker_news_who_is_hiring",
+      "name": "HN Who is Hiring",
+      "url": "https://news.ycombinator.com/item?id=49156683",
+      "type": "posts",
+      "keyword": "developer",
+      "maxCards": 60,
+      "selectors": {
+        "item": "tr.athing.comtr",
+        "text": ".commtext",
+        "title": ".commtext",
+        "company": "text",
+        "location": "text",
+        "url": "href"
+      },
+      "_comment": "Ask HN: Who is hiring? (August 2026). Each comment is parsed for the leading '| Company | Role | Location | Salary' block. Update the ?id= to the current month's thread (see /submitted?id=whoishiring) as it is posted on the first weekday of each month."
+    },
+    {
+      "id": "hacker_news_remote_hiring",
+      "name": "HN Remote Who is Hiring",
+      "url": "https://news.ycombinator.com/item?id=49156683",
+      "type": "posts",
+      "keyword": "remote",
+      "maxCards": 60,
+      "selectors": {
+        "item": "tr.athing.comtr",
+        "text": ".commtext",
+        "title": ".commtext",
+        "company": "text",
+        "location": "text",
+        "url": "href"
+      },
+      "_comment": "Same monthly thread filtered to remote roles — a keyword-only variant of hacker_news_who_is_hiring that keeps the deck remote-focused."
     }
   ]
 }

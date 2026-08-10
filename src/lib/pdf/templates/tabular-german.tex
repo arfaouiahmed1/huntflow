@@ -1,41 +1,68 @@
-\documentclass[11pt,a4paper]{article}
-\usepackage[utf8]{utf8}
-\usepackage[margin=0.75in]{geometry}
-\usepackage{titlesec}
+% ---------------------------------------------------------------------------
+% tabular-german — German "Tabellarischer Lebenslauf" (DACH standard)
+% ATS notes: single column, standard headers, A4, DIN-5008-style spacing.
+% Section titles are translated to German at compile time (xstring); dates
+% inline via \hfill. Placeholders are substituted by the resume renderer.
+% ---------------------------------------------------------------------------
+\documentclass[10.5pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{a4paper, margin=0.65in}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
 \usepackage{enumitem}
-\usepackage{hyperref}
+\setlist{nosep, leftmargin=1.25em, topsep=0.15em}
 \usepackage{xcolor}
-
-\definecolor{primary}{RGB}{30,58,138}
-
+\usepackage{parskip}
+\usepackage{xstring}
+\definecolor{accent}{HTML}{1E3A5F}
+\definecolor{ink}{HTML}{1F2937}
+\definecolor{muted}{HTML}{6B7280}
 \pagestyle{empty}
-\titleformat{\section}{\large\bfseries\color{primary}}{}{0em}{}[\titlerule]
-\titlespacing*{\section}{0pt}{10pt}{6pt}
+
+% Translate the renderer's English section names to German.
+\newcommand{\resumesection}[1]{%
+  \def\tmptitle{#1}%
+  \IfStrEq{#1}{Summary}{\def\tmptitle{Zusammenfassung}}{}%
+  \IfStrEq{#1}{Experience}{\def\tmptitle{Berufserfahrung}}{}%
+  \IfStrEq{#1}{Projects}{\def\tmptitle{Projekte}}{}%
+  \IfStrEq{#1}{Education}{\def\tmptitle{Ausbildung}}{}%
+  \IfStrEq{#1}{Skills}{\def\tmptitle{Kenntnisse}}{}%
+  \IfStrEq{#1}{Certifications}{\def\tmptitle{Zertifikate}}{}%
+  \IfStrEq{#1}{Languages}{\def\tmptitle{Sprachen}}{}%
+  \vspace{0.9em}%
+  {\color{accent}\bfseries\large \tmptitle}\par
+  \vspace{0.1em}{\textcolor{accent}{\rule{\textwidth}{0.6pt}}}\par
+  \vspace{0.4em}%
+}
+
+\newcommand{\resumeentry}[4]{%
+  {\bfseries\color{ink} #1}\hfill{\color{accent}#3}\\[0.05em]
+  {\itshape\color{muted} #2}\\[0.12em]
+  #4
+}
 
 \begin{document}
 
-\begin{center}
-    {\Huge \bfseries {{NAME}}}\\[4pt]
-    \small {{CONTACT_LINE}}\\[2pt]
-    \small {{LOCATION_LINE}}
-\end{center}
+{\LARGE\bfseries\color{ink} {{NAME}}}\par
+{\large\color{accent} {{TITLE}}}\par
+\vspace{0.1em}
+{\small\color{ink} {{CONTACT}}}
+\vspace{0.4em}
 
-\vspace{10pt}
+{{SUMMARY}}
 
-\section*{Berufserfahrung}
-{{EXPERIENCE_SECTION}}
+{{EXPERIENCE}}
 
-\section*{Ausbildung}
-{{EDUCATION_SECTION}}
+{{PROJECTS}}
 
-\section*{Kenntnisse \& Skills}
-{{SKILLS_SECTION}}
+{{EDUCATION}}
 
-\section*{Sprachen}
-{{LANGUAGES_SECTION}}
+{{SKILLS}}
 
-\vspace{20pt}
-\noindent
-{{LOCATION_LINE}}, den \today
+{{CERTIFICATIONS}}
+
+{{LANGUAGES}}
 
 \end{document}

@@ -1,47 +1,46 @@
 % ---------------------------------------------------------------------------
-% creative-sidebar — modern single-column resume/CV with creative accents
-% for tech, design, and product roles. Stays ATS-parseable: no tables or
-% images, standard section headers, color used for text/rules only.
+% minimal-clean — clean, minimal resume/CV with a single accent
+% ATS notes: single column, standard headers, Helvetica, generous whitespace.
+% One teal accent used sparingly; everything else is text that parses cleanly.
 % Placeholders are substituted by the resume renderer.
 % ---------------------------------------------------------------------------
-\documentclass[10.5pt,a4paper]{article}
+\documentclass[10.5pt]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{geometry}
-\geometry{a4paper, margin=0.65in}
+\geometry{letterpaper, margin=0.6in}
 \usepackage{helvet}
 \renewcommand{\familydefault}{\sfdefault}
 \usepackage{enumitem}
 \setlist{nosep, leftmargin=1.25em, topsep=0.15em}
 \usepackage{xcolor}
 \usepackage{parskip}
-\definecolor{accent}{HTML}{6366F1}
-\definecolor{accentsoft}{HTML}{EEF2FF}
-\definecolor{ink}{HTML}{1F2937}
+\definecolor{accent}{HTML}{0F766E}
+\definecolor{ink}{HTML}{111827}
 \definecolor{muted}{HTML}{6B7280}
 \pagestyle{empty}
 
 \newcommand{\resumesection}[1]{%
-  \vspace{0.95em}%
-  {\colorbox{accentsoft}{\textcolor{accent}{\bfseries\large\ \ #1\ }}}\par
+  \vspace{1em}%
+  {\color{accent}\bfseries\large #1}\par
+  \vspace{0.15em}{\textcolor{accent}{\rule{\textwidth}{0.5pt}}}\par
   \vspace{0.4em}%
 }
 
 \newcommand{\resumeentry}[4]{%
-  {\bfseries\color{ink} #1}\hfill{\color{accent}#3}\\[0.05em]
-  {\itshape\color{muted} #2}\\[0.12em]
+  {\bfseries\color{ink} #1}\hfill{\color{muted}#3}\\[0.05em]
+  {\color{muted} #2}\\[0.12em]
   #4
 }
 
 \begin{document}
 
 {\LARGE\bfseries\color{ink} {{NAME}}}\par
+\vspace{0.05em}
 {\large\color{accent} {{TITLE}}}\par
-\vspace{0.12em}
-{\small\color{ink} {{CONTACT}}}\par
+\vspace{0.1em}
+{\small\color{ink} {{CONTACT}}}
 \vspace{0.4em}
-\noindent{\color{accent}\rule{\textwidth}{1.2pt}}\par
-\vspace{0.2em}
 
 {{SUMMARY}}
 

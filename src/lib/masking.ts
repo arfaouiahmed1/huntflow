@@ -34,6 +34,15 @@ export function redactSettings(all: Record<string, string>): Record<string, stri
       } catch {
         out[k] = v;
       }
+    } else if (k === "gmail_oauth") {
+      // Gmail OAuth tokens never round-trip through the browser — hand back
+      // only a harmless status shape, never the access/refresh tokens.
+      try {
+        const t = JSON.parse(v) as { email?: string; expiry?: number };
+        out[k] = JSON.stringify({ connected: true, email: t.email ?? "", expiry: t.expiry ?? 0 });
+      } catch {
+        out[k] = v;
+      }
     } else {
       out[k] = v;
     }

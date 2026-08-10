@@ -3,42 +3,46 @@
 % Adapted from sb2nov/resume (https://github.com/sb2nov/resume) — MIT License.
 % ATS notes: one column, standard section headers, no tables/images for
 % content, Helvetica (parseable everywhere), dates inline via \hfill.
-% Placeholders are substituted by the resume renderer.
+% Modernized: refined ink/muted palette, accent rule under each section title,
+% tighter header with a colored title line. Placeholders are substituted by
+% the resume renderer.
 % ---------------------------------------------------------------------------
 \documentclass[10pt]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{geometry}
-\geometry{letterpaper, margin=0.6in}
+\geometry{letterpaper, margin=0.55in, top=0.5in, bottom=0.5in}
 \usepackage{helvet}
 \renewcommand{\familydefault}{\sfdefault}
 \usepackage{enumitem}
-\setlist{nosep, leftmargin=1.25em, topsep=0.2em}
+\setlist{nosep, leftmargin=1.25em, topsep=0.15em}
 \usepackage{xcolor}
 \usepackage{parskip}
-\usepackage{titlesec}
 \definecolor{accent}{HTML}{1F3A5F}
+\definecolor{ink}{HTML}{1F2937}
+\definecolor{muted}{HTML}{6B7280}
 \pagestyle{empty}
 
 \newcommand{\resumesection}[1]{%
-  \vspace{0.9em}%
-  {\color{accent}\bfseries\large #1}%
-  \vspace{0.15em}\hrule\vspace{0.45em}%
+  \vspace{0.95em}%
+  {\color{accent}\bfseries\large #1}\par
+  \vspace{0.1em}{\textcolor{accent}{\rule{\textwidth}{0.7pt}}}\par
+  \vspace{0.42em}%
 }
 
 \newcommand{\resumeentry}[4]{%
-  {\bfseries #1} \hfill {\color{accent}#3}\\
-  {\itshape #2}\\[0.15em]
+  {\bfseries\color{ink} #1}\hfill{\color{accent}#3}\\[0.05em]
+  {\itshape\color{muted} #2}\\[0.12em]
   #4
 }
 
 \begin{document}
 
-{\LARGE\bfseries {{NAME}}}\par
-{\large {{TITLE}}}\par
-\vspace{0.15em}
-{{CONTACT}}
-\vspace{0.4em}
+{\LARGE\bfseries\color{ink} {{NAME}}}\par
+{\large\color{accent} {{TITLE}}}\par
+\vspace{0.12em}
+{\small\color{ink} {{CONTACT}}}
+\vspace{0.35em}
 
 {{SUMMARY}}
 

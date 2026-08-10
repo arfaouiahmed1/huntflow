@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { settingsRepo, emailsRepo, jobsRepo } from "@/lib/db";
 import { MailSettings, EmailMessage } from "@/types";
 import { toErrorMessage } from "@/lib/errors";
+import { resolveMailAuth } from "@/lib/gmailAuth";
 
 function loadMailSettings(): MailSettings {
   const raw = settingsRepo.get("mail_settings");
@@ -31,18 +32,30 @@ function domainOf(email: string): string {
  */
 export async function POST() {
   const settings = loadMailSettings();
-  if (!settings.imapHost || !settings.imapUser || !settings.imapPass) {
+  // Gmail OAuth (XOAUTH2) takes precedence — access token is already fresh from
+  // resolveMailAuth(); app-password IMAP is the fallback.
+  const gmail = await resolveMailAuth();
+  const hasImap = Boolean(gmail?.imap || (settings.imapHost && settings.imapUser && settings.imapPass));
+  if (!hasImap) {
     return NextResponse.json({ error: "IMAP is not configured — check Settings → Email." }, { status: 400 });
   }
   try {
     const { ImapFlow } = await import("imapflow");
-    const client = new ImapFlow({
-      host: settings.imapHost,
-      port: settings.imapPort,
-      secure: settings.imapPort === 993,
-      auth: { user: settings.imapUser, pass: settings.imapPass },
-      logger: false,
-    });
+    const client = gmail?.imap
+      ? new ImapFlow({
+          host: gmail.imap.host,
+          port: gmail.imap.port,
+          secure: gmail.imap.secure,
+          auth: gmail.imap.auth,
+          logger: false,
+        })
+      : new ImapFlow({
+          host: settings.imapHost,
+          port: settings.imapPort,
+          secure: settings.imapPort === 993,
+          auth: { user: settings.imapUser, pass: settings.imapPass },
+          logger: false,
+        });
 
     await client.connect();
     const lock = await client.getMailboxLock("INBOX");

@@ -1,46 +1,50 @@
 % ---------------------------------------------------------------------------
-% executive — serif single-column CV/resume for senior roles
-% Adapted from RenderCV "classic" theme (https://github.com/rendercv/rendercv)
-% — MIT License. ATS notes: Times is a universal ATS font; single column;
-% section headers are bold small-caps + thin rule; dates inline via \hfill.
-% Modernized: deep-navy accent, muted subtitle, refined rules. Placeholders
-% are substituted by the resume renderer.
+% executive-elegant — refined serif resume/CV for senior and leadership roles
+% ATS notes: single column, Times, standard headers. Small-caps section
+% titles with a thin gold rule; restrained navy/gold palette.
+% Placeholders are substituted by the resume renderer.
 % ---------------------------------------------------------------------------
 \documentclass[11pt]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{geometry}
-\geometry{letterpaper, margin=0.7in}
+\geometry{letterpaper, margin=0.75in, top=0.7in, bottom=0.7in}
 \usepackage{mathptmx}
 \usepackage{enumitem}
 \setlist{nosep, leftmargin=1.25em, topsep=0.2em}
 \usepackage{xcolor}
 \usepackage{parskip}
-\definecolor{accent}{HTML}{24324A}
-\definecolor{ink}{HTML}{1A1A1A}
+\definecolor{accent}{HTML}{1E2A44}
+\definecolor{gold}{HTML}{B4913A}
+\definecolor{ink}{HTML}{1C1C1C}
 \definecolor{muted}{HTML}{6B7280}
 \pagestyle{empty}
 
 \newcommand{\resumesection}[1]{%
   \vspace{1.1em}%
   {\color{accent}\scshape\bfseries\large #1}\par
-  \vspace{0.15em}{\textcolor{accent}{\rule{\textwidth}{0.5pt}}}\par
+  \vspace{0.12em}{\color{gold}\rule{\textwidth}{0.6pt}}\par
   \vspace{0.5em}%
 }
 
 \newcommand{\resumeentry}[4]{%
-  {\bfseries\color{ink} #1}\hfill{\color{accent}#3}\\[0.05em]
+  {\bfseries\color{ink} #1}\hfill{\color{accent}#3}\\[0.06em]
   {\itshape\color{muted} #2}\\[0.15em]
   #4
 }
 
 \begin{document}
 
-{\LARGE\bfseries\color{ink} {{NAME}}}\par
-{\large\itshape\color{accent} {{TITLE}}}\par
+\begin{center}
+  {\LARGE\bfseries\color{ink} {{NAME}}}\par
+  \vspace{0.15em}
+  {\large\itshape\color{accent} {{TITLE}}}\par
+  \vspace{0.3em}
+  {\small\color{ink} {{CONTACT}}}
+\end{center}
+\vspace{0.2em}
+{\color{gold}\rule{\textwidth}{1pt}}
 \vspace{0.15em}
-{\small\color{ink} {{CONTACT}}}
-\vspace{0.5em}
 
 {{SUMMARY}}
 

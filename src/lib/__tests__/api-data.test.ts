@@ -58,6 +58,27 @@ describe("GET /api/data — settings redaction", () => {
     expect(ms.imapUser).toBe("u");
   });
 
+  it("never leaks Gmail OAuth tokens when returning gmail_oauth", async () => {
+    settingsRepo.set(
+      "gmail_oauth",
+      JSON.stringify({
+        email: "you@gmail.com",
+        accessToken: "ya29.ACCESS",
+        refreshToken: "1//REFRESH",
+        expiry: 9999999999999,
+        scope: "https://mail.google.com/",
+      })
+    );
+    const res = await GET();
+    const { settings } = await res.json();
+    const g = JSON.parse(settings.gmail_oauth);
+    expect(g).not.toHaveProperty("accessToken");
+    expect(g).not.toHaveProperty("refreshToken");
+    expect(g).toHaveProperty("email", "you@gmail.com");
+    expect(g).toHaveProperty("connected", true);
+    expect(JSON.stringify(g)).not.toMatch(/ya29\.|1\/\/REFRESH/);
+  });
+
   it("POSTing a masked chain back preserves the real stored key", async () => {
     const realKey = "sk-live-zyxwvu";
     settingsRepo.set("llm_providers", JSON.stringify([{ id: "gemini", apiKey: realKey, enabled: true }]));

@@ -1,35 +1,35 @@
 % ---------------------------------------------------------------------------
-% nordic-clean — Scandinavian minimalist resume/CV
-% ATS notes: single column, generous whitespace, slate accent, A4. Section
-% titles are small-caps with a hairline rule. Placeholders are substituted by
-% the resume renderer.
+% creative-portfolio — bold, colorful resume/CV for design and creative roles
+% ATS notes: single column, standard headers; color and typography carry the
+% personality. No images or tables, so the text stays parseable.
+% Placeholders are substituted by the resume renderer.
 % ---------------------------------------------------------------------------
 \documentclass[10.5pt,a4paper]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{geometry}
-\geometry{a4paper, margin=0.7in, top=0.6in, bottom=0.6in}
+\geometry{a4paper, margin=0.6in}
 \usepackage{helvet}
 \renewcommand{\familydefault}{\sfdefault}
 \usepackage{enumitem}
 \setlist{nosep, leftmargin=1.25em, topsep=0.15em}
 \usepackage{xcolor}
 \usepackage{parskip}
-\definecolor{accent}{HTML}{3D4C5C}
-\definecolor{ink}{HTML}{22262B}
-\definecolor{muted}{HTML}{8A93A0}
+\definecolor{accent}{HTML}{7C3AED}
+\definecolor{hot}{HTML}{F43F5E}
+\definecolor{ink}{HTML}{1E1B2E}
+\definecolor{muted}{HTML}{6B7280}
 \pagestyle{empty}
 
 \newcommand{\resumesection}[1]{%
   \vspace{1em}%
-  {\color{accent}\bfseries\small\MakeUppercase{#1}}\par
-  \vspace{0.15em}{\textcolor{accent}{\rule{\textwidth}{0.4pt}}}\par
-  \vspace{0.45em}%
+  {\color{accent}\bfseries\large \raisebox{0.15em}{\rule{0.5em}{0.5em}}\,#1}\par
+  \vspace{0.3em}%
 }
 
 \newcommand{\resumeentry}[4]{%
-  {\bfseries\color{ink} #1}\hfill{\color{muted}#3}\\[0.05em]
-  {\color{muted} #2}\\[0.12em]
+  {\bfseries\color{ink} #1}\hfill{\color{hot}#3}\\[0.05em]
+  {\itshape\color{muted} #2}\\[0.15em]
   #4
 }
 
@@ -37,10 +37,13 @@
 
 {\Huge\bfseries\color{ink} {{NAME}}}\par
 \vspace{0.1em}
-{\large\color{accent} {{TITLE}}}\par
+{\LARGE\color{accent} {{TITLE}}}\par
 \vspace{0.15em}
-{\small\color{muted} {{CONTACT}}}
+{\small\color{ink} {{CONTACT}}}
 \vspace{0.5em}
+
+\noindent{\color{hot}\rule{\textwidth}{2.2pt}}\par
+\vspace{0.3em}
 
 {{SUMMARY}}
 

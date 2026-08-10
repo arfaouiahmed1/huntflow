@@ -1,0 +1,59 @@
+% ---------------------------------------------------------------------------
+% technical-modern — developer-focused compact resume/CV
+% ATS notes: single column, standard headers, Helvetica, tight spacing so it
+% fits one page. Compact entries with an accent date column; section titles
+% carry a short accent tick. Placeholders are substituted by the renderer.
+% ---------------------------------------------------------------------------
+\documentclass[10pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{letterpaper, margin=0.5in, top=0.45in, bottom=0.45in}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{enumitem}
+\setlist{nosep, leftmargin=1.1em, topsep=0.1em}
+\usepackage{xcolor}
+\usepackage{parskip}
+\definecolor{accent}{HTML}{0891B2}
+\definecolor{ink}{HTML}{0F172A}
+\definecolor{muted}{HTML}{64748B}
+\pagestyle{empty}
+
+\newcommand{\resumesection}[1]{%
+  \vspace{0.8em}%
+  {\color{accent}\rule{1.1em}{1.6pt}}\hspace{0.45em}%
+  {\color{ink}\bfseries\small\MakeUppercase{#1}}\par
+  \vspace{0.35em}%
+}
+
+\newcommand{\resumeentry}[4]{%
+  {\bfseries\color{ink} #1}\hfill{\color{accent}\small #3}\\[0.03em]
+  {\small\color{muted} #2}\\[0.1em]
+  #4
+}
+
+\begin{document}
+
+{\LARGE\bfseries\color{ink} {{NAME}}}\par
+\vspace{0.05em}
+{\large\color{accent} {{TITLE}}}\par
+\vspace{0.1em}
+{\small\color{ink} {{CONTACT}}}
+\vspace{0.3em}
+
+{{SUMMARY}}
+
+{{EXPERIENCE}}
+
+{{PROJECTS}}
+
+{{EDUCATION}}
+
+{{SKILLS}}
+
+{{CERTIFICATIONS}}
+
+{{LANGUAGES}}
+
+\end{document}

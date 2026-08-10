@@ -1,0 +1,71 @@
+% ---------------------------------------------------------------------------
+% developer-dashboard — two-column dashboard resume/CV for tech leads
+% ATS notes: a dark sidebar holds contact/skills while the main column holds
+% the narrative sections. Still fully text-based (no images/tables), but the
+% two-column layout scores lower on strict ATS readers.
+% Placeholders are substituted by the resume renderer.
+% ---------------------------------------------------------------------------
+\documentclass[10pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{a4paper, margin=0.5in, top=0.5in, bottom=0.5in}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{enumitem}
+\setlist{nosep, leftmargin=1.1em, topsep=0.1em}
+\usepackage{xcolor}
+\usepackage{parskip}
+\setlength{\parindent}{0pt}
+\definecolor{sidebg}{HTML}{0F172A}
+\definecolor{sidefg}{HTML}{E2E8F0}
+\definecolor{sideaccent}{HTML}{38BDF8}
+\definecolor{accent}{HTML}{0EA5E9}
+\definecolor{ink}{HTML}{0F172A}
+\definecolor{muted}{HTML}{475569}
+\pagestyle{empty}
+\setlength{\fboxsep}{0.55em}
+
+\newcommand{\resumesection}[1]{%
+  \vspace{0.7em}%
+  {\bfseries\small #1}\par
+  \vspace{0.1em}{\color{accent}\rule{\linewidth}{1.4pt}}\par
+  \vspace{0.3em}%
+}
+
+\newcommand{\resumeentry}[4]{%
+  {\bfseries\color{ink} #1}\hfill{\color{accent}#3}\\[0.04em]
+  {\small\color{muted} #2}\\[0.1em]
+  #4
+}
+
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{0.34\textwidth}%
+  \colorbox{sidebg}{%
+    \begin{minipage}[t][\dimexpr\textheight-2\fboxsep-0.6pt\relax][t]{\dimexpr\linewidth-2\fboxsep\relax}%
+      \color{sidefg}%
+      \raggedright
+      {\Large\bfseries {{NAME}}}\par
+      \vspace{0.2em}%
+      {\small\color{sideaccent} {{TITLE}}}\par
+      \vspace{0.4em}%
+      {\scriptsize {{CONTACT}}}\par
+      {{SKILLS}}%
+      {{LANGUAGES}}%
+      {{CERTIFICATIONS}}%
+    \end{minipage}%
+  }%
+\end{minipage}%
+\hfill
+\begin{minipage}[t]{0.61\textwidth}%
+  {\color{accent}\rule{\textwidth}{2.4pt}}\par
+  \vspace{0.4em}%
+  {{SUMMARY}}%
+  {{EXPERIENCE}}%
+  {{PROJECTS}}%
+  {{EDUCATION}}%
+\end{minipage}
+
+\end{document}

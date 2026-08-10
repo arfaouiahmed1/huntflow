@@ -52,6 +52,11 @@ const SORT_OPTIONS: { id: SortKey; label: string }[] = [
 export default function TrackerPage() {
   const { applications, activeJobId, setActiveJobId, searchLinkedInJobs, saveLinkedInJob, updateApplication, triggerAutoApply } = useApp();
   const { success, error } = useToast();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 0);
+    return () => clearTimeout(t);
+  }, []);
   const [view, setView] = useState<"board" | "table" | "deck">("board");
   const [showAdd, setShowAdd] = useState<boolean>(() =>
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("add") === "1"
@@ -225,8 +230,8 @@ export default function TrackerPage() {
           <h1 className="font-display text-2xl font-bold tracking-tight text-[var(--paper)]">
             Application Tracker
           </h1>
-          <p className="mt-1 text-sm text-dim">
-            {applications.length} opportunities · {counts.applied + counts.interviewing + counts.offer} active pipelines
+          <p className="mt-1 text-sm text-dim" suppressHydrationWarning>
+            {mounted ? `${applications.length} opportunities · ${counts.applied + counts.interviewing + counts.offer} active pipelines` : "…"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -249,6 +254,13 @@ export default function TrackerPage() {
         </div>
       </div>
 
+      {!mounted && (
+        <div className="rounded-2xl border border-dashed border-[var(--line)]/50 p-10 text-center text-sm text-dim">
+          Loading your applications…
+        </div>
+      )}
+      {mounted && (
+      <>
       {/* LinkedIn Jobs */}
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70">
         <button
@@ -387,7 +399,7 @@ export default function TrackerPage() {
               filter === "all" ? "bg-white/10 text-[var(--paper)]" : "text-dim hover:text-[var(--paper)]"
             )}
           >
-            All · {counts.all}
+            All{mounted ? ` · ${counts.all}` : ""}
           </button>
           {columns.map((col) => (
             <button
@@ -399,7 +411,7 @@ export default function TrackerPage() {
               )}
             >
               <span className="h-1.5 w-1.5 rounded-full" style={{ background: col.accent }} />
-              {col.label} · {counts[col.id]}
+              {col.label}{mounted ? ` · ${counts[col.id]}` : ""}
             </button>
           ))}
         </div>
@@ -625,6 +637,8 @@ export default function TrackerPage() {
         onClose={() => setReviewModalOpen(false)}
         onTailor={(j) => setActiveJobId(j.id)}
       />
+      </>
+      )}
     </div>
   );
 }

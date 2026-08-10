@@ -16,6 +16,7 @@ import {
   Award,
   RefreshCw,
   FileCheck,
+  Bookmark,
 } from "lucide-react";
 import { JobApplication, EmployerReview } from "@/types";
 import { Button } from "@/components/ui/Button";
@@ -26,6 +27,10 @@ interface JobSwipeDeckProps {
   onTailor: (job: JobApplication) => void;
   onRunEmployerReview: (job: JobApplication) => void;
   onCrawlMore?: () => void;
+  /** When provided, renders a "Save to tracker" action on each card. */
+  onSave?: (job: JobApplication) => void;
+  /** When provided, "Skip" records the decision before advancing. */
+  onReviewed?: (job: JobApplication) => void;
 }
 
 export function JobSwipeDeck({
@@ -34,6 +39,8 @@ export function JobSwipeDeck({
   onTailor,
   onRunEmployerReview,
   onCrawlMore,
+  onSave,
+  onReviewed,
 }: JobSwipeDeckProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -197,7 +204,10 @@ export function JobSwipeDeck({
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-5">
             <div className="flex items-center gap-2">
               <button
-                onClick={handlePrev}
+                onClick={() => {
+                  if (onReviewed) onReviewed(job);
+                  handlePrev();
+                }}
                 disabled={currentIndex === 0}
                 className="flex items-center gap-1 text-xs text-dim hover:text-[var(--paper)] disabled:opacity-30"
               >
@@ -206,6 +216,16 @@ export function JobSwipeDeck({
             </div>
 
             <div className="flex items-center gap-3">
+              {onSave && (
+                <Button
+                  variant="outline"
+                  onClick={() => onSave(job)}
+                  className="flex items-center gap-2 text-xs border-sky-500/40 text-sky-300 hover:bg-sky-500/10"
+                >
+                  <Bookmark className="h-4 w-4 text-sky-400" /> Save to Tracker
+                </Button>
+              )}
+
               {!isDirectFit && (
                 <Button
                   variant="outline"

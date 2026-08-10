@@ -17,12 +17,14 @@ import {
   CalendarClock,
   MessagesSquare,
   Archive,
+  Radar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/", label: "Command Deck", icon: LayoutDashboard },
   { href: "/tracker", label: "Applications", icon: KanbanSquare },
+  { href: "/jobs", label: "Job Finder", icon: Radar },
   { href: "/agent", label: "Auto-Apply Agent", icon: Bot },
   { href: "/assistant", label: "Assistant", icon: MessagesSquare },
   { href: "/vault", label: "My Info & Vault", icon: Archive },

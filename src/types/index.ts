@@ -134,6 +134,10 @@ export interface JobApplication {
   };
   createdDate: string;
   companyLogo?: string;
+  /** Board/feed the job was crawled from (e.g. "HN Who is Hiring", "RemoteOK"). */
+  source?: string;
+  /** Marks low-confidence hiring-post extractions (HN Who-is-Hiring style). */
+  hiringPost?: boolean;
 }
 
 export interface Contact {

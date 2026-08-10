@@ -1,29 +1,68 @@
+% ---------------------------------------------------------------------------
+% academic-cv — comprehensive academic/research CV (serif, multi-page)
+% ATS notes: single column, standard headers, Times for universal parsing.
+% Section titles mapped to academic conventions via xstring (publications and
+% awards come from the certifications field). Placeholders are substituted by
+% the resume renderer.
+% ---------------------------------------------------------------------------
 \documentclass[11pt,a4paper]{article}
-\usepackage[utf8]{utf8}
-\usepackage[margin=0.75in]{geometry}
-\usepackage{titlesec}
-
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{a4paper, margin=0.7in}
+\usepackage{mathptmx}
+\usepackage{enumitem}
+\setlist{nosep, leftmargin=1.25em, topsep=0.2em}
+\usepackage{xcolor}
+\usepackage{parskip}
+\usepackage{xstring}
+\definecolor{accent}{HTML}{7A2E2E}
+\definecolor{ink}{HTML}{1A1A1A}
+\definecolor{muted}{HTML}{6B7280}
 \pagestyle{empty}
-\titleformat{\section}{\large\bfseries}{}{0em}{}[\titlerule]
-\titlespacing*{\section}{0pt}{10pt}{6pt}
+
+% Translate the renderer's English section names to academic conventions.
+\newcommand{\resumesection}[1]{%
+  \def\tmptitle{#1}%
+  \IfStrEq{#1}{Summary}{\def\tmptitle{Academic \& Research Profile}}{}%
+  \IfStrEq{#1}{Experience}{\def\tmptitle{Research \& Professional Experience}}{}%
+  \IfStrEq{#1}{Projects}{\def\tmptitle{Research Projects}}{}%
+  \IfStrEq{#1}{Education}{\def\tmptitle{Education \& Degrees}}{}%
+  \IfStrEq{#1}{Skills}{\def\tmptitle{Research Interests \& Methods}}{}%
+  \IfStrEq{#1}{Certifications}{\def\tmptitle{Publications, Awards \& Service}}{}%
+  \IfStrEq{#1}{Languages}{\def\tmptitle{Languages}}{}%
+  \vspace{1em}%
+  {\color{accent}\scshape\bfseries\large \tmptitle}\par
+  \vspace{0.15em}{\textcolor{accent}{\rule{\textwidth}{0.5pt}}}\par
+  \vspace{0.45em}%
+}
+
+\newcommand{\resumeentry}[4]{%
+  {\bfseries\color{ink} #1}\hfill{\color{muted}#3}\\[0.05em]
+  {\itshape\color{muted} #2}\\[0.15em]
+  #4
+}
 
 \begin{document}
 
-\begin{center}
-    {\Huge \bfseries {{NAME}}}\\[4pt]
-    \small {{CONTACT_LINE}}
-\end{center}
+{\LARGE\bfseries\color{ink} {{NAME}}}\par
+{\large\color{accent} {{TITLE}}}\par
+\vspace{0.15em}
+{\small\color{ink} {{CONTACT}}}
+\vspace{0.5em}
 
-\section*{Academic \& Research Profile}
-{{SUMMARY_SECTION}}
+{{SUMMARY}}
 
-\section*{Education \& Degrees}
-{{EDUCATION_SECTION}}
+{{EXPERIENCE}}
 
-\section*{Research \& Professional Experience}
-{{EXPERIENCE_SECTION}}
+{{PROJECTS}}
 
-\section*{Publications, Grants \& Teaching}
-{{SKILLS_SECTION}}
+{{EDUCATION}}
+
+{{SKILLS}}
+
+{{CERTIFICATIONS}}
+
+{{LANGUAGES}}
 
 \end{document}

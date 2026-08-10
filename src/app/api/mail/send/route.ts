@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { settingsRepo, emailsRepo, jobsRepo, contactsRepo } from "@/lib/db";
 import { MailSettings, EmailMessage } from "@/types";
 import { toErrorMessage } from "@/lib/errors";
+import { resolveMailAuth } from "@/lib/gmailAuth";
 
 interface MailSettingsRow {
   imapHost?: string;
@@ -66,7 +67,9 @@ function findContactAndJob(to: string) {
 
 export async function POST(req: Request) {
   const settings = loadMailSettings();
-  if (!isConfigured(settings)) {
+  // Gmail OAuth (XOAUTH2) takes precedence; app-password SMTP is the fallback.
+  const gmail = await resolveMailAuth();
+  if (!isConfigured(settings) && !gmail?.smtp) {
     return NextResponse.json({ error: "Email is not connected — configure it in Settings → Email." }, { status: 400 });
   }
   try {
@@ -76,15 +79,23 @@ export async function POST(req: Request) {
     }
 
     const nodemailer = (await import("nodemailer")).default;
-    const transporter = nodemailer.createTransport({
-      host: settings.smtpHost,
-      port: settings.smtpPort,
-      secure: settings.smtpPort === 465,
-      auth: { user: settings.smtpUser, pass: settings.smtpPass },
-    });
+    const transporter = gmail?.smtp
+      ? nodemailer.createTransport({
+          host: gmail.smtp.host,
+          port: gmail.smtp.port,
+          secure: gmail.smtp.secure,
+          auth: gmail.smtp.auth,
+        })
+      : nodemailer.createTransport({
+          host: settings.smtpHost,
+          port: settings.smtpPort,
+          secure: settings.smtpPort === 465,
+          auth: { user: settings.smtpUser, pass: settings.smtpPass },
+        });
 
+    const sender = gmail?.smtp ? gmail.smtp.auth.user : settings.smtpUser;
     await transporter.sendMail({
-      from: `"${settings.fromName || settings.smtpUser}" <${settings.fromEmail || settings.smtpUser}>`,
+      from: `"${settings.fromName || sender}" <${settings.fromEmail || sender}>`,
       to,
       subject,
       text: body,

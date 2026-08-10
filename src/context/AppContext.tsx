@@ -68,6 +68,12 @@ interface GeneratePayload {
   llmSettings: LLMSettings;
 }
 
+export interface LinkedInLoginResult {
+  authenticated: boolean;
+  profile?: LinkedInProfileData;
+  checkpoint?: boolean;
+}
+
 interface AppContextType {
   applications: JobApplication[];
   profile: UserProfile;
@@ -119,7 +125,8 @@ interface AppContextType {
   }>;
   updateCardStatus: (jobId: string, cardId: string, status: 'unstudied' | 'learning' | 'mastered') => void;
   checkLinkedInSession: () => Promise<boolean>;
-  openLinkedInLogin: () => Promise<boolean>;
+  openLinkedInLogin: () => Promise<LinkedInLoginResult>;
+  logoutLinkedIn: () => Promise<void>;
   importLinkedInProfile: (handle: string) => Promise<LinkedInProfileData>;
   searchLinkedInJobs: (searchUrl: string) => Promise<LinkedInJob[]>;
   saveLinkedInJob: (job: LinkedInJob) => JobApplication;
@@ -755,11 +762,19 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     return Boolean(data?.authenticated);
   };
 
-  const openLinkedInLogin = async (): Promise<boolean> => {
+  const openLinkedInLogin = async (): Promise<LinkedInLoginResult> => {
     const res = await fetch('/api/linkedin/login', { method: 'POST' });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error || 'LinkedIn login window failed.');
-    return Boolean(data?.authenticated);
+    return {
+      authenticated: Boolean(data?.authenticated),
+      profile: data?.profile as LinkedInProfileData | undefined,
+      checkpoint: Boolean(data?.checkpoint),
+    };
+  };
+
+  const logoutLinkedIn = async (): Promise<void> => {
+    await fetch('/api/linkedin/logout', { method: 'POST' });
   };
 
   const importLinkedInProfile = async (handle: string): Promise<LinkedInProfileData> => {
@@ -875,6 +890,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       updateCardStatus,
       checkLinkedInSession,
       openLinkedInLogin,
+      logoutLinkedIn,
       importLinkedInProfile,
       searchLinkedInJobs,
       saveLinkedInJob,
@@ -927,6 +943,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       updateCardStatus,
       checkLinkedInSession,
       openLinkedInLogin,
+      logoutLinkedIn,
       importLinkedInProfile,
       searchLinkedInJobs,
       saveLinkedInJob,

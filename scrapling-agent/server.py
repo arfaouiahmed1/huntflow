@@ -5,12 +5,16 @@ Run with: uv run uvicorn server:app --port 8001
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
 import re
+import shutil
 import threading
 import time
+import urllib.request
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +27,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 AGENT_TOKEN = os.environ.get("HUNTFLOW_AGENT_TOKEN", "")
+
+# Optional Cloudinary streaming — when all three are set, screenshots are
+# uploaded live so the web UI can watch agents through a CDN. Empty values
+# keep the local-only screenshot behavior.
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "")
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("huntflow-agent")
@@ -102,8 +113,69 @@ def end_run(run_id: str, status: str, message: str) -> None:
     record(run_id, message, "success" if status == "success" else "warning")
 
 
+def _cloudinary_upload(file_path: Path) -> Optional[str]:
+    """Upload a PNG to Cloudinary with a signed request.
+
+    Returns the secure URL, or None when Cloudinary isn't configured or the
+    upload fails (the local screenshot is always kept as a fallback). Never
+    raises — the caller must not crash a shot because of an upload problem.
+    """
+    if not (CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET):
+        return None
+    try:
+        timestamp = int(time.time())
+        params_to_sign = f"timestamp={timestamp}"
+        signature = hmac.new(
+            CLOUDINARY_API_SECRET.encode(), params_to_sign.encode(), hashlib.sha1
+        ).hexdigest()
+        url = f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/image/upload"
+
+        with open(file_path, "rb") as fh:
+            file_bytes = fh.read()
+
+        boundary = f"----huntflow-{uuid.uuid4().hex}"
+
+        def _field(name: str, value: str) -> bytes:
+            return (
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+                f"{value}\r\n"
+            ).encode("utf-8")
+
+        body = b"".join([
+            _field("api_key", CLOUDINARY_API_KEY),
+            _field("timestamp", str(timestamp)),
+            _field("signature", signature),
+            (
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="file"; filename="{file_path.name}"\r\n'
+                f"Content-Type: image/png\r\n\r\n"
+            ).encode("utf-8") + file_bytes + b"\r\n",
+            f"--{boundary}--\r\n".encode("utf-8"),
+        ])
+
+        req = urllib.request.Request(url, data=body, method="POST")
+        req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        secure_url = payload.get("secure_url")
+        if secure_url:
+            log.info("📡 Cloudinary upload OK — %s", secure_url)
+        else:
+            log.warning("Cloudinary upload returned no secure_url: %s", payload)
+        return secure_url
+    except Exception as e:  # noqa: BLE001
+        log.warning("Cloudinary upload failed: %s", e)
+        return None
+
+
 def shot(run_id: str, page, label: str) -> Optional[str]:
-    """Capture a screenshot of the live browser page into the run folder."""
+    """Capture a screenshot of the live browser page into the run folder.
+
+    The PNG is written locally under RUN_DIR (as before) and, when Cloudinary
+    is configured, streamed to the CDN so the UI can render it live. The
+    upload is best-effort: failures never break the screenshot itself.
+    """
     try:
         import re as _re
         safe = _re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")[:40] or "step"
@@ -111,7 +183,11 @@ def shot(run_id: str, page, label: str) -> Optional[str]:
         path = RUN_DIR / run_id / name
         path.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(path))
-        record(run_id, f"📸 Snapshot — {label}", "shot", {"screenshot": f"{run_id}/{name}"})
+        data: dict[str, Any] = {"screenshot": f"{run_id}/{name}"}
+        cloudinary_url = _cloudinary_upload(path)
+        if cloudinary_url:
+            data["cloudinary"] = cloudinary_url
+        record(run_id, f"📸 Snapshot — {label}", "shot", data)
         return name
     except Exception as e:  # noqa: BLE001
         record(run_id, f"⚠ Screenshot failed: {e}", "warning")
@@ -242,22 +318,32 @@ def _extract_job(page, url: str) -> dict[str, str]:
     }
 
 
-def _scrape_static(url: str) -> dict[str, str]:
-    """Fast HTTP path — TLS impersonation, no browser needed."""
+def _fetch_static(url: str):
+    """Fetch a listing page with TLS impersonation and return the parsed document."""
     from scrapling.fetchers import Fetcher
 
     page = Fetcher.get(url, impersonate="chrome", timeout=20000)
     if page.status >= 400:
         raise RuntimeError(f"HTTP {page.status}")
-    return _extract_job(page, url)
+    return page
+
+
+def _fetch_dynamic(url: str):
+    """Fetch a listing page in a real stealth browser and return the parsed document."""
+    from scrapling.fetchers import StealthyFetcher
+
+    page = StealthyFetcher.fetch(url, headless=True, network_idle=True, timeout=45000)
+    return page
+
+
+def _scrape_static(url: str) -> dict[str, str]:
+    """Fast HTTP path — TLS impersonation, no browser needed."""
+    return _extract_job(_fetch_static(url), url)
 
 
 def _scrape_dynamic(url: str) -> dict[str, str]:
     """Real-browser path for JS-heavy pages (Scrapling StealthyFetcher)."""
-    from scrapling.fetchers import StealthyFetcher
-
-    page = StealthyFetcher.fetch(url, headless=True, network_idle=True, timeout=45000)
-    return _extract_job(page, url)
+    return _extract_job(_fetch_dynamic(url), url)
 
 
 @app.post("/scrape")
@@ -282,9 +368,243 @@ def scrape(req: ScrapeRequest, _auth: None = Depends(require_token)):
 
 
 class CrawlRequest(BaseModel):
-    category: str = "all"  # "remote" | "europe" | "mena" | "global" | "all"
-    keyword: Optional[str] = "developer"
-    limit: int = 10
+    category: str = "all"  # "remote" | "europe" | "mena" | "global" | "posts" | "all"
+    keyword: str = "developer"
+    limit: int = 20
+
+
+# ---------------------------------------------------------------------------
+# Card-level crawl — iterate job cards per board using sources.json selectors
+# ---------------------------------------------------------------------------
+
+_HTML_TAGS = {
+    "a", "abbr", "address", "article", "aside", "b", "blockquote", "body",
+    "button", "canvas", "caption", "cite", "code", "col", "dd", "del",
+    "details", "div", "dl", "dt", "em", "fieldset", "figcaption", "figure",
+    "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "head", "header",
+    "hr", "html", "i", "iframe", "img", "input", "label", "li", "main",
+    "mark", "menu", "meta", "nav", "noscript", "ol", "option", "p", "pre",
+    "q", "s", "script", "section", "select", "small", "span", "strong",
+    "style", "sub", "summary", "sup", "table", "tbody", "td", "textarea",
+    "tfoot", "th", "thead", "time", "title", "tr", "ul", "var", "video",
+}
+
+# Location hints used when parsing HN-style "| Company |" hiring posts.
+_LOCATION_HINTS = (
+    "remote", "onsite", "hybrid", "worldwide", "anywhere", "global",
+    "us", "usa", "united states", "europe", "eu", "uk", "united kingdom",
+    "london", "berlin", "amsterdam", "paris", "new york", "san francisco",
+    "sf", "mena", "tunisia", "qatar", "dubai", "toronto", "austin",
+    "seattle", "boston", "singapore", "tokyo", "canada", "germany",
+)
+
+
+def _looks_literal(value: str) -> bool:
+    """True when the configured field value is a literal string, not a CSS selector.
+
+    Selectors contain structural punctuation (``[ . # : >``) or are bare tag
+    names (e.g. ``h4``, ``span``). Plain phrases like "Remote", "Qatar / MENA"
+    or "YCombinator Network" are returned as-is.
+    """
+    v = value.strip()
+    if not v:
+        return True
+    if any(ch in v for ch in "[].#:>"):
+        return False
+    if re.fullmatch(r"[a-zA-Z][a-zA-Z0-9]*", v):
+        return v.lower() not in _HTML_TAGS
+    return True
+
+
+def _host_company(url: str) -> str:
+    """Derive a display company from a URL's host (e.g. remoteok.com -> REMOTEOK)."""
+    try:
+        host = re.sub(r"^www\.", "", url.split("//")[-1].split("/")[0])
+        return host.split(".")[0].upper()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _resolve_card_field(card, board, field: str, base_url: str) -> str:
+    """Resolve one job field from a card using the board's selector config.
+
+    Special tokens:
+      - "text"   -> the card's own text
+      - "href"   -> first link href, urljoined against base_url when relative
+      - "domain" -> company derived from the href host
+    Literal values (locations, fixed company names) are returned as-is;
+    anything else is treated as a CSS selector scoped to the card.
+    """
+    value = (board.get("selectors") or {}).get(field, "")
+    try:
+        if value == "text":
+            return (card.text or "").strip()
+        if value == "href":
+            href_el = card.css("a[href]").first
+            el = href_el if href_el is not None else card
+            href = el.attrib.get("href", "") if el is not None else ""
+            href = (href or "").strip()
+            if not href:
+                return ""
+            if href.startswith("http://") or href.startswith("https://"):
+                return href
+            from urllib.parse import urljoin
+
+            return urljoin(base_url, href)
+        if value == "domain":
+            href = _resolve_card_field(card, board, "url", base_url) or base_url
+            return _host_company(href)
+        if _looks_literal(value):
+            return value
+        sub = card.css(value).first
+        return (sub.text or "").strip() if sub is not None else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _card_snippet(card, fallback: str = "") -> str:
+    """Normalized whitespace-collapsed card text (~1500 chars) for scoring."""
+    try:
+        text = card.text or card.get_all_text() or fallback
+    except Exception:  # noqa: BLE001
+        text = fallback
+    return re.sub(r"\s+", " ", str(text)).strip()[:1500]
+
+
+def _extract_cards(page, board, base_url: str, per_board_limit: int) -> list[dict[str, Any]]:
+    """Iterate a board's job cards and resolve structured fields per card."""
+    item_sel = (board.get("selectors") or {}).get("item", "")
+    if not item_sel:
+        return []
+    cap = min(per_board_limit, int(board.get("maxCards") or per_board_limit))
+    jobs: list[dict[str, Any]] = []
+    for card in page.css(item_sel)[:cap]:
+        try:
+            title = _resolve_card_field(card, board, "title", base_url)
+            company = _resolve_card_field(card, board, "company", base_url)
+            location = _resolve_card_field(card, board, "location", base_url)
+            url = _resolve_card_field(card, board, "url", base_url)
+            if not title or not url:
+                continue
+            snippet = _card_snippet(card, f"{title} at {company}.")
+            jobs.append({
+                "id": f"crawl_{uuid.uuid4().hex[:8]}",
+                "title": title,
+                "company": company or _host_company(url),
+                "location": location or "Remote / Flexible",
+                "salary": "",
+                "url": url,
+                "jobDescription": snippet or f"{title} at {company}. See posting for details.",
+                "source": board.get("name", ""),
+                "category": board.get("category", ""),
+                "board_id": board.get("id", ""),
+            })
+        except Exception:  # noqa: BLE001
+            continue
+    return jobs
+
+
+def _parse_hiring_post(text: str) -> Optional[dict[str, str]]:
+    """Parse an HN Who-is-Hiring style "| Company |" comment into a candidate.
+
+    Returns None when the post has no recognizable company/role block.
+    """
+    body = re.sub(r"\s+", " ", text).strip()
+    parts = [p.strip() for p in re.split(r"\s*\|\s*", body) if p.strip()]
+    if len(parts) < 2:
+        return None
+
+    company = parts[0]
+    domain = ""
+    m = re.search(r"\(([a-zA-Z0-9][a-zA-Z0-9.\-]+\.[a-z]{2,})\)", company)
+    if m:
+        domain = m.group(1)
+        company = re.sub(r"\s*\([^)]*\)\s*$", "", company).strip()
+    if len(company) < 2:
+        return None
+
+    role = parts[1]
+    # A role must contain real words — "Full-Time", "Remote" alone aren't roles.
+    if len(role) < 2 or not re.search(r"[a-zA-Z]{3,}", role):
+        return None
+
+    location = ""
+    salary = ""
+    for part in parts[2:]:
+        low = part.lower()
+        if not location and any(hint in low for hint in _LOCATION_HINTS):
+            location = part
+        if not salary and re.search(r"[$€£]|\b(usd|eur|gbp)\b", part, re.I):
+            salary = part
+    if not location:
+        # Most Who-is-Hiring posts are remote; flag as generic otherwise.
+        location = "Remote / Flexible"
+
+    return {
+        "company": company,
+        "role": role,
+        "location": location,
+        "salary": salary,
+        "domain": domain,
+    }
+
+
+def _extract_hiring_posts(page, board, base_url: str, per_board_limit: int) -> list[dict[str, Any]]:
+    """Parse forum/thread posts (HN Who-is-Hiring style) as job candidates."""
+    sels = board.get("selectors") or {}
+    item_sel = sels.get("item", "")
+    text_sel = sels.get("text") or sels.get("title") or ""
+    if not item_sel:
+        return []
+    cap = min(per_board_limit, int(board.get("maxCards") or per_board_limit))
+    jobs: list[dict[str, Any]] = []
+    for card in page.css(item_sel)[:cap]:
+        try:
+            text = ""
+            if text_sel:
+                node = card.css(text_sel).first
+                text = node.text if node is not None else ""
+            if not text:
+                text = card.get_all_text() or ""
+            text = re.sub(r"\s+", " ", str(text)).strip()
+
+            parsed = _parse_hiring_post(text)
+            if not parsed:
+                continue
+
+            comment_id = ""
+            try:
+                comment_id = str(card["id"])
+            except Exception:  # noqa: BLE001
+                comment_id = str(card.attrib.get("id", ""))
+
+            apply_url = ""
+            try:
+                for link in card.css(".commtext a[href]"):
+                    href = link.attrib.get("href", "")
+                    if href and "news.ycombinator.com" not in href:
+                        apply_url = href
+                        break
+            except Exception:  # noqa: BLE001
+                pass
+
+            url = apply_url or (f"{base_url}#{comment_id}" if comment_id else base_url)
+            jobs.append({
+                "id": f"crawl_{uuid.uuid4().hex[:8]}",
+                "title": parsed["role"],
+                "company": parsed["company"],
+                "location": parsed["location"],
+                "salary": parsed["salary"],
+                "url": url,
+                "jobDescription": text[:1500],
+                "source": board.get("name", ""),
+                "category": board.get("category", ""),
+                "board_id": board.get("id", ""),
+                "hiring_post": True,
+            })
+        except Exception:  # noqa: BLE001
+            continue
+    return jobs
 
 
 @app.post("/crawl")
@@ -302,35 +622,54 @@ def crawl(req: CrawlRequest, _auth: None = Depends(require_token)):
         end_run(run_id, "failed", f"Failed to load sources: {e}")
         return {"jobs": []}
 
-    target_categories = [req.category] if req.category in sources_data else list(sources_data.keys())
+    limit = max(1, min(req.limit, 100))
+    # A category may be a top-level key; "all" (or unknown) sweeps every board.
+    if req.category in sources_data and isinstance(sources_data[req.category], list):
+        target_categories = [req.category]
+    else:
+        target_categories = [k for k, v in sources_data.items() if isinstance(v, list)]
     discovered_jobs: list[dict[str, Any]] = []
 
     for cat in target_categories:
         boards = sources_data.get(cat, [])
-        for board in boards:
-            if len(discovered_jobs) >= req.limit:
+        for raw_board in boards:
+            if len(discovered_jobs) >= limit:
                 break
-            record(run_id, f"🔍 Crawling {board['name']} ({cat})…", "info")
+            board = dict(raw_board)
+            board["category"] = cat
+            board_name = board.get("name") or board.get("id") or cat
+            kw = (board.get("keyword") or req.keyword or "").strip().lower()
+            per_board_limit = max(1, limit - len(discovered_jobs))
+            record(run_id, f"🔍 Crawling {board_name} ({cat})…", "info")
             try:
-                if board.get("type") == "stealth":
-                    res = _scrape_dynamic(board["url"])
+                board_type = board.get("type", "static")
+                if board_type == "posts":
+                    page = _fetch_static(board["url"])
+                    found = _extract_hiring_posts(page, board, board["url"], per_board_limit)
+                elif board_type == "stealth":
+                    page = _fetch_dynamic(board["url"])
+                    found = _extract_cards(page, board, board["url"], per_board_limit)
                 else:
-                    res = _scrape_static(board["url"])
-                
-                if res and res.get("title"):
-                    discovered_jobs.append({
-                        "id": f"crawl_{uuid.uuid4().hex[:8]}",
-                        "title": res["title"],
-                        "company": res["company"],
-                        "location": res["location"],
-                        "salary": res.get("salary", "Competitive Salary"),
-                        "url": board["url"],
-                        "jobDescription": res.get("description", "Job description extracted via Scrapling crawler."),
-                        "source": board["name"],
-                        "category": cat,
-                    })
+                    page = _fetch_static(board["url"])
+                    found = _extract_cards(page, board, board["url"], per_board_limit)
+
+                for job in found:
+                    if kw:
+                        haystack = " ".join([
+                            str(job.get("title", "")),
+                            str(job.get("company", "")),
+                            str(job.get("location", "")),
+                            str(job.get("jobDescription", "")),
+                        ]).lower()
+                        if kw not in haystack:
+                            continue
+                    discovered_jobs.append(job)
+                    if len(discovered_jobs) >= limit:
+                        break
+                if found:
+                    record(run_id, f"✅ {board_name} yielded {len(found)} card(s)", "info")
             except Exception as e:  # noqa: BLE001
-                record(run_id, f"⚠ Skipped {board['name']}: {e}", "warning")
+                record(run_id, f"⚠ Skipped {board_name}: {e}", "warning")
 
     end_run(run_id, "success", f"🎉 Crawl completed — found {len(discovered_jobs)} job(s)")
     return {"jobs": discovered_jobs}
@@ -585,19 +924,33 @@ def _li_launch(playwright, headless: bool = False):
     )
 
 
-def _li_is_logged_in(page) -> bool:
+def _li_login_state(page) -> str:
+    """Classify the LinkedIn session state from the live page.
+
+    Returns one of "signed_in" | "checkpoint" | "authwall" | "signed_out".
+    """
     try:
         page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=45000)
         page.wait_for_timeout(2500)
     except Exception:  # noqa: BLE001
-        return False
+        return "signed_out"
     url = page.url
     if "login" in url or "authwall" in url:
-        return False
+        return "authwall"
     try:
-        return page.locator("nav.global-nav, header.global-nav").first.is_visible()
+        if "checkpoint" in url:
+            return "checkpoint"
+        checkpoint = page.locator("#challenge-modal, [data-challenge-url], form[action*='checkpoint']")
+        if checkpoint.count() and checkpoint.first.is_visible():
+            return "checkpoint"
     except Exception:  # noqa: BLE001
-        return False
+        pass
+    try:
+        if page.locator("nav.global-nav, header.global-nav").first.is_visible():
+            return "signed_in"
+    except Exception:  # noqa: BLE001
+        return "signed_out"
+    return "signed_out"
 
 
 @app.post("/linkedin/login")
@@ -608,6 +961,7 @@ def linkedin_login(_auth: None = Depends(require_token)):
 
     run_id = start_run("linkedin", LINKEDIN_LOGIN_URL, "LinkedIn sign-in")
     record(run_id, "🪟 Opening visible Chromium window — sign in manually", "info")
+    state = "signed_out"
     with sync_playwright() as p:
         context = _li_launch(p, headless=False)
         page = context.new_page()
@@ -618,31 +972,53 @@ def linkedin_login(_auth: None = Depends(require_token)):
             page.wait_for_timeout(3000)  # let cookies flush
         except PWTimeout:
             pass
+        state = _li_login_state(page)
         context.close()
-    ok = _li_session_status()
+    ok = state == "signed_in"
     end_run(run_id, "success" if ok else "failed",
             "✅ LinkedIn session saved" if ok else "⚠ No session detected — login window closed early")
-    return {"authenticated": ok}
+    return {"authenticated": ok, "state": state, "checkpoint": state == "checkpoint"}
 
 
 @app.get("/linkedin/session")
 def linkedin_session(_auth: None = Depends(require_token)):
     """Report whether a persistent logged-in LinkedIn session exists."""
-    return {"authenticated": _li_session_status()}
+    return _li_session_status()
 
 
-def _li_session_status() -> bool:
+def _li_session_status() -> dict[str, Any]:
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
         context = _li_launch(p, headless=True)
         try:
             page = context.new_page()
-            return _li_is_logged_in(page)
+            state = _li_login_state(page)
+            return {"authenticated": state == "signed_in", "state": state}
         except Exception:  # noqa: BLE001
-            return False
+            return {"authenticated": False, "state": "signed_out"}
         finally:
             context.close()
+
+
+@app.post("/linkedin/logout")
+def linkedin_logout(_auth: None = Depends(require_token)):
+    """Clear the persisted LinkedIn session (cookies, local storage, etc.)."""
+    run_id = start_run("linkedin", LINKEDIN_LOGIN_URL, "LinkedIn sign-out")
+    try:
+        if SESSION_DIR.is_dir():
+            for child in SESSION_DIR.iterdir():
+                if child.is_dir():
+                    shutil.rmtree(child, ignore_errors=True)
+                else:
+                    child.unlink(missing_ok=True)
+        record(run_id, "🚪 LinkedIn session cleared", "info")
+        end_run(run_id, "success", "🚪 LinkedIn session cleared")
+        return {"authenticated": False, "state": "signed_out"}
+    except Exception as e:  # noqa: BLE001
+        record(run_id, f"⚠ Failed to clear session: {e}", "warning")
+        end_run(run_id, "failed", f"⚠ Failed to clear session: {e}")
+        return {"authenticated": False, "state": "signed_out"}
 
 
 def _li_text(page, *selectors: str) -> str:
@@ -734,6 +1110,47 @@ def linkedin_profile(req: ScrapeRequest, _auth: None = Depends(require_token)):
             data = _li_parse_profile(page)
             end_run(run_id, "success", f"✅ Parsed profile — {data.get('name') or 'unknown'}")
             return {"authenticated": True, "profile": data}
+        finally:
+            context.close()
+
+
+@app.post("/linkedin/import")
+def linkedin_import(req: ScrapeRequest, _auth: None = Depends(require_token)):
+    """Import a public LinkedIn profile using the persisted session.
+
+    Unlike /linkedin/profile it first verifies the session is active and
+    reports the auth state alongside the parsed profile, so the UI can
+    auto-import right after sign-in.
+    """
+    from playwright.sync_api import sync_playwright
+
+    handle = req.url.strip().rstrip("/")
+    if "linkedin.com/in/" not in handle:
+        handle = f"https://www.linkedin.com/in/{handle}"
+    if not handle.startswith("http"):
+        handle = "https://" + handle
+
+    run_id = start_run("linkedin", handle, "Profile import")
+    with sync_playwright() as p:
+        context = _li_launch(p, headless=True)
+        try:
+            page = context.new_page()
+            state = _li_login_state(page)
+            if state != "signed_in":
+                end_run(run_id, "failed", "⚠ Auth wall — session required")
+                return {"authenticated": False, "state": state,
+                        "error": "LinkedIn session required — open Settings → LinkedIn → Sign in."}
+            record(run_id, "🌐 Opening profile in persistent session…", "info")
+            page.goto(handle, wait_until="domcontentloaded", timeout=45000)
+            page.wait_for_timeout(3500)
+            if "authwall" in page.url or "login" in page.url:
+                end_run(run_id, "failed", "⚠ Auth wall — session required")
+                return {"authenticated": False, "state": "authwall",
+                        "error": "LinkedIn session required — open Settings → LinkedIn → Sign in."}
+            shot(run_id, page, "profile loaded")
+            data = _li_parse_profile(page)
+            end_run(run_id, "success", f"✅ Parsed profile — {data.get('name') or 'unknown'}")
+            return {"authenticated": True, "state": "signed_in", "profile": data}
         finally:
             context.close()
 

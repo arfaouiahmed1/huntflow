@@ -1,43 +1,68 @@
-\documentclass[11pt,a4paper]{article}
-\usepackage[utf8]{utf8}
-\usepackage[margin=0.75in]{geometry}
-\usepackage{titlesec}
+% ---------------------------------------------------------------------------
+% mena-cv — MENA-region bilingual professional CV
+% ATS notes: single column, standard headers, A4. Bilingual section titles
+% (translated at compile time via xstring); teal accent for text only.
+% Placeholders are substituted by the resume renderer.
+% ---------------------------------------------------------------------------
+\documentclass[10.5pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{a4paper, margin=0.7in}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
 \usepackage{enumitem}
-\usepackage{hyperref}
+\setlist{nosep, leftmargin=1.25em, topsep=0.15em}
 \usepackage{xcolor}
-\usepackage{graphicx}
-\usepackage{wrapfig}
-
-\definecolor{primary}{RGB}{15,118,110} % Teal color, often professional in MENA
-
+\usepackage{parskip}
+\usepackage{xstring}
+\definecolor{accent}{HTML}{0F766E}
+\definecolor{ink}{HTML}{1F2937}
+\definecolor{muted}{HTML}{6B7280}
 \pagestyle{empty}
-\titleformat{\section}{\large\bfseries\color{primary}}{}{0em}{}[\titlerule]
-\titlespacing*{\section}{0pt}{10pt}{6pt}
+
+% Translate the renderer's English section names to bilingual FR/EN headers.
+\newcommand{\resumesection}[1]{%
+  \def\tmptitle{#1}%
+  \IfStrEq{#1}{Summary}{\def\tmptitle{Profil Professionnel / Professional Summary}}{}%
+  \IfStrEq{#1}{Experience}{\def\tmptitle{Exp\'eriences / Experience}}{}%
+  \IfStrEq{#1}{Projects}{\def\tmptitle{Projets / Projects}}{}%
+  \IfStrEq{#1}{Education}{\def\tmptitle{Formation / Education}}{}%
+  \IfStrEq{#1}{Skills}{\def\tmptitle{Comp\'etences / Skills}}{}%
+  \IfStrEq{#1}{Certifications}{\def\tmptitle{Certifications}}{}%
+  \IfStrEq{#1}{Languages}{\def\tmptitle{Langues / Languages}}{}%
+  \vspace{0.9em}%
+  {\color{accent}\bfseries\large \tmptitle}\par
+  \vspace{0.1em}{\textcolor{accent}{\rule{\textwidth}{0.6pt}}}\par
+  \vspace{0.4em}%
+}
+
+\newcommand{\resumeentry}[4]{%
+  {\bfseries\color{ink} #1}\hfill{\color{accent}#3}\\[0.05em]
+  {\itshape\color{muted} #2}\\[0.12em]
+  #4
+}
 
 \begin{document}
 
-\begin{center}
-    {\Huge \bfseries {{NAME}}}\\[6pt]
-    \small {{CONTACT_LINE}}\\[2pt]
-    \small {{LOCATION_LINE}}\\[2pt]
-    \small Nationality: {{NATIONALITY}} | Date of Birth: {{DATE_OF_BIRTH}}
-\end{center}
+{\LARGE\bfseries\color{ink} {{NAME}}}\par
+{\large\color{accent} {{TITLE}}}\par
+\vspace{0.1em}
+{\small\color{ink} {{CONTACT}}}
+\vspace{0.4em}
 
-\vspace{10pt}
-
-\section*{Profil Professionnel / Summary}
 {{SUMMARY}}
 
-\section*{Expériences Professionnelles / Experience}
-{{EXPERIENCE_SECTION}}
+{{EXPERIENCE}}
 
-\section*{Formation / Education}
-{{EDUCATION_SECTION}}
+{{PROJECTS}}
 
-\section*{Compétences / Skills}
-{{SKILLS_SECTION}}
+{{EDUCATION}}
 
-\section*{Langues / Languages}
-{{LANGUAGES_SECTION}}
+{{SKILLS}}
+
+{{CERTIFICATIONS}}
+
+{{LANGUAGES}}
 
 \end{document}

@@ -3,7 +3,8 @@
 % Adapted from Jake's Resume (https://github.com/jakegut/resume) — MIT License.
 % ATS notes: standard headers, no tables/images, Helvetica, tight spacing so
 % content fits one page; accent color used for text only (parses fine).
-% Placeholders are substituted by the resume renderer.
+% Modernized: refined ink/muted palette and a bolder accent rule. Placeholders
+% are substituted by the resume renderer.
 % ---------------------------------------------------------------------------
 \documentclass[10.5pt]{article}
 \usepackage[utf8]{inputenc}
@@ -16,31 +17,30 @@
 \setlist{nosep, leftmargin=1.15em, topsep=0.15em}
 \usepackage{xcolor}
 \usepackage{parskip}
-\usepackage{titlesec}
 \definecolor{accent}{HTML}{0F62FE}
 \definecolor{ink}{HTML}{111827}
+\definecolor{muted}{HTML}{6B7280}
 \pagestyle{empty}
 
 \newcommand{\resumesection}[1]{%
-  \vspace{0.85em}%
-  \textcolor{accent}{\rule{1.6em}{1.1pt}}\hspace{0.5em}%
-  {\bfseries\large\textcolor{ink}{#1}}\hspace{0.5em}%
-  \textcolor{accent}{\rule{\dimexpr\textwidth-1.6em-2em-0.4em\relax}{1.1pt}}\par
-  \vspace{0.35em}%
+  \vspace{0.9em}%
+  {\color{accent}\bfseries\large #1}\par
+  \vspace{0.1em}{\textcolor{accent}{\rule{\textwidth}{1pt}}}\par
+  \vspace{0.4em}%
 }
 
 \newcommand{\resumeentry}[4]{%
-  {\bfseries #1} \hfill {\color{accent}#3}\\
-  {\itshape #2}\\[0.15em]
+  {\bfseries\color{ink} #1}\hfill{\color{accent}#3}\\[0.05em]
+  {\itshape\color{muted} #2}\\[0.12em]
   #4
 }
 
 \begin{document}
 
-{\LARGE\bfseries {{NAME}}}\par
+{\LARGE\bfseries\color{ink} {{NAME}}}\par
 {\large\color{accent} {{TITLE}}}\par
-\vspace{0.15em}
-{{CONTACT}}
+\vspace{0.12em}
+{\small\color{ink} {{CONTACT}}}
 \vspace{0.35em}
 
 {{SUMMARY}}

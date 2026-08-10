@@ -1,42 +1,57 @@
+% ---------------------------------------------------------------------------
+% letter-motivation-fr — French lettre de motivation
+% ATS notes: linear text flow, no tables, parseable sender/recipient blocks.
+% French salutation and closing are fixed; body uses escaped paragraphs.
+% Placeholders are substituted by the resume renderer.
+% ---------------------------------------------------------------------------
 \documentclass[11pt,a4paper]{article}
-\usepackage[utf8]{utf8}
-\usepackage[margin=1in]{geometry}
-
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{a4paper, margin=0.9in}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{xcolor}
+\usepackage{parskip}
+\definecolor{accent}{HTML}{0E4C92}
+\definecolor{ink}{HTML}{1F2937}
+\definecolor{muted}{HTML}{6B7280}
 \pagestyle{empty}
+
+\newcommand{\coverparagraph}[1]{\vspace{0.85em}#1\par}
 
 \begin{document}
 
 \noindent
-{\bfseries {{NAME}}}\\[2pt]
-{{SENDER_ADDRESS}}\\[2pt]
-{{CONTACT_LINE}}
+{\LARGE\bfseries\color{ink} {{NAME}}}\par
+\vspace{0.1em}
+{\small\color{ink} {{SENDERCONTACT}}}\par
+\vspace{0.15em}
+{\small\color{accent} {{DATE}}}\par
+\vspace{0.4em}
 
-\vspace{20pt}
 \noindent
-{{COMPANY_NAME}}\\[2pt]
-{{COMPANY_ADDRESS}}
+{\color{accent}\rule{\textwidth}{0.6pt}}\par
+\vspace{0.8em}
 
-\vspace{20pt}
-\hfill {{LOCATION_LINE}}, le \today
-
-\vspace{20pt}
 \noindent
-{\bfseries Objet : Candidature au poste de {{JOB_TITLE}}}
+{{RECIPIENT}}
 
-\vspace{15pt}
+\vspace{1.6em}
+\noindent
+{\bfseries Objet : Candidature}\par
+\vspace{0.4em}
 \noindent
 Madame, Monsieur,
 
-\vspace{10pt}
-\noindent
-{{LETTER_BODY}}
+{{PARAGRAPHS}}
 
-\vspace{20pt}
+\vspace{1.4em}
 \noindent
-Je vous prie d'agréer, Madame, Monsieur, l'expression de mes salutations distinguées.
+Je vous prie d'agr\'eer, Madame, Monsieur, l'expression de mes salutations distingu\'ees.
+\vspace{2em}
 
-\vspace{30pt}
 \noindent
-{{NAME}}
+{\bfseries {{NAME}}}
 
 \end{document}

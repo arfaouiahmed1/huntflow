@@ -29,7 +29,7 @@ interface ActivityEvent {
   ts: string;
   kind: EventKind;
   message: string;
-  data?: { screenshot?: string };
+  data?: { screenshot?: string; cloudinary?: string };
 }
 
 interface RunSummary {
@@ -90,6 +90,7 @@ export default function AgentLiveConsole() {
   const [autoScroll, setAutoScroll] = useState(true);
   const lastId = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,7 +146,20 @@ export default function AgentLiveConsole() {
   }, []);
 
   const shown = filter === "all" ? events : events.filter((e) => e.kind === filter);
-  const screenshots = events.filter((e) => e.kind === "shot" && e.data?.screenshot).map((e) => e.data!.screenshot!);
+  const screenshots = events
+    .filter((e) => e.kind === "shot" && (e.data?.screenshot || e.data?.cloudinary))
+    .map((e) => ({
+      id: e.id,
+      cloudinary: e.data?.cloudinary,
+      screenshot: e.data?.screenshot,
+    }));
+
+  // Follow the newest shot so the user watches the agent live.
+  useEffect(() => {
+    if (stripRef.current) {
+      stripRef.current.scrollLeft = stripRef.current.scrollWidth;
+    }
+  }, [screenshots.length]);
 
   const kinds: (EventKind | "all")[] = ["all", "info", "reasoning", "success", "warning", "error", "shot"];
   const kindCount = (k: EventKind | "all") =>
@@ -273,26 +287,34 @@ export default function AgentLiveConsole() {
           <p className="mb-2 flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-dim">
             <Camera className="h-4 w-4 text-[var(--sky)]" /> Snapshots — {screenshots.length}
           </p>
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {screenshots.slice(-8).map((shot) => (
-              <a
-                key={shot}
-                href={`${AGENT_IMG}/screenshots/${shot}`}
-                target="_blank"
-                rel="noreferrer"
-                className="group relative shrink-0 overflow-hidden rounded-xl border border-[var(--line)] transition-transform hover:scale-[1.02]"
-              >
-                <img
-                  src={`${AGENT_IMG}/screenshots/${shot}`}
-                  alt="Agent browser snapshot"
-                  loading="lazy"
-                  className="h-28 w-44 object-cover"
-                />
-                <span className="absolute right-1.5 top-1.5 rounded-md bg-black/60 p-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  <ArrowUpRight className="h-3.5 w-3.5 text-white" />
-                </span>
-              </a>
-            ))}
+          <div ref={stripRef} className="flex gap-3 overflow-x-auto pb-2">
+            {screenshots.slice(-8).map((shot) => {
+              const src = shot.cloudinary || `${AGENT_IMG}/screenshots/${shot.screenshot}`;
+              return (
+                <a
+                  key={shot.id}
+                  href={src}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group relative shrink-0 overflow-hidden rounded-xl border border-[var(--line)] transition-transform hover:scale-[1.02]"
+                >
+                  <img
+                    src={src}
+                    alt="Agent browser snapshot"
+                    loading="lazy"
+                    className="h-28 w-44 object-cover"
+                  />
+                  {shot.cloudinary && (
+                    <span className="absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase tracking-wider text-white/80">
+                      live
+                    </span>
+                  )}
+                  <span className="absolute right-1.5 top-1.5 rounded-md bg-black/60 p-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <ArrowUpRight className="h-3.5 w-3.5 text-white" />
+                  </span>
+                </a>
+              );
+            })}
           </div>
         </div>
       )}

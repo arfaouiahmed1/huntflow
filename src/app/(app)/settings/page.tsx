@@ -37,6 +37,7 @@ export default function SettingsPage() {
     updateProviders,
     checkLinkedInSession,
     openLinkedInLogin,
+    logoutLinkedIn,
     importLinkedInProfile,
     mailSettings,
     saveMailSettings,
@@ -51,6 +52,10 @@ export default function SettingsPage() {
   const [mailForm, setMailForm] = useState<MailSettings>({ ...mailSettings });
   const [testingMail, setTestingMail] = useState(false);
   const [mailResult, setMailResult] = useState<"untested" | "ok" | "failed">("untested");
+  const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; email?: string; expiry?: number }>({
+    connected: false,
+  });
+  const [gmailBusy, setGmailBusy] = useState(false);
   const [addId, setAddId] = useState("");
   const [testResults, setTestResults] = useState<Record<string, ProviderTestStatus>>({});
   const [backupBusy, setBackupBusy] = useState(false);
@@ -123,6 +128,48 @@ export default function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const refreshGmailStatus = async () => {
+    try {
+      const res = await fetch("/api/auth/gmail/status", { cache: "no-store" });
+      if (res.ok) {
+        const data = (await res.json()) as { connected: boolean; email?: string; expiry?: number };
+        setGmailStatus(data);
+      } else {
+        setGmailStatus({ connected: false });
+      }
+    } catch {
+      setGmailStatus({ connected: false });
+    }
+  };
+
+  const onGmailDisconnect = async () => {
+    setGmailBusy(true);
+    try {
+      await fetch("/api/auth/gmail/revoke", { method: "POST" });
+      setGmailStatus({ connected: false });
+      success("Gmail disconnected — mail falls back to app-password settings.");
+    } catch {
+      error("Failed to disconnect Gmail.");
+    } finally {
+      setGmailBusy(false);
+    }
+  };
+
+  /* Gmail OAuth: reflect connect/disconnect (and the /settings?gmail=… redirect) into the UI. */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const gmail = params.get("gmail");
+    if (gmail === "connected") {
+      success("Gmail connected — IMAP + SMTP now use OAuth.");
+      window.history.replaceState({}, "", "/settings");
+    } else if (gmail === "error") {
+      error("Gmail connection failed — check the OAuth client and redirect URI.");
+      window.history.replaceState({}, "", "/settings");
+    }
+    refreshGmailStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const exportBackup = async () => {
     setBackupBusy(true);
     try {
@@ -171,8 +218,58 @@ export default function SettingsPage() {
   const onLinkedInLogin = async () => {
     setLiBusy(true);
     try {
-      const ok = await openLinkedInLogin();
-      setLiStatus(ok ? "signed-in" : "signed-out");
+      const { authenticated, profile: li, checkpoint } = await openLinkedInLogin();
+      setLiStatus(authenticated ? "signed-in" : "signed-out");
+      if (checkpoint && !authenticated) {
+        error("Finish verification in the browser window, then press Refresh");
+        return;
+      }
+      if (authenticated && li) {
+        setForm((f) => ({
+          ...f,
+          name: li.name || f.name,
+          location: li.location || f.location,
+          summary: li.about || f.summary,
+          skills: li.skills?.length ? li.skills : f.skills,
+          experience: li.experience?.map((exp, i) => ({
+            id: "exp-" + Date.now() + "-" + i,
+            company: exp.company || "",
+            role: exp.role || "",
+            duration: exp.duration || "",
+            bulletPoints: exp.details || [],
+          })) || f.experience,
+          education: li.education?.map((edu, i) => ({
+            id: "edu-" + Date.now() + "-" + i,
+            degree: edu.degree || "",
+            school: edu.school || "",
+            year: "",
+          })) || f.education,
+        }));
+        const handle = liHandle.trim();
+        if (handle) {
+          fetch("/api/data/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ linkedin_handle: handle }),
+          }).catch(() => undefined);
+        }
+        success(`Signed in — imported ${li.name || "profile"} for review.`);
+      } else if (authenticated) {
+        success("Signed in to LinkedIn.");
+      }
+    } catch {
+      setLiStatus("signed-out");
+    } finally {
+      setLiBusy(false);
+    }
+  };
+
+  const onLinkedInLogout = async () => {
+    setLiBusy(true);
+    try {
+      await logoutLinkedIn();
+      setLiStatus("signed-out");
+      success("Signed out of LinkedIn.");
     } catch {
       setLiStatus("signed-out");
     } finally {
@@ -361,7 +458,7 @@ export default function SettingsPage() {
               <LogIn className="h-3.5 w-3.5" /> Sign in to LinkedIn
             </Button>
           ) : (
-            <Button size="sm" onClick={() => setLiStatus("signed-out")} variant="outline">
+            <Button size="sm" onClick={onLinkedInLogout} variant="outline" loading={liBusy}>
               Sign out
             </Button>
           )}
@@ -378,7 +475,7 @@ export default function SettingsPage() {
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="flex-1">
             <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
-              Profile handle
+              Profile handle (auto-imported after sign-in)
             </label>
             <input
               className={field}
@@ -409,29 +506,55 @@ export default function SettingsPage() {
           <Mail className="h-4 w-4 text-[var(--chartreuse)]" /> Email
         </h2>
         <p className="mb-4 text-xs leading-relaxed text-dim">
-          Connect a mailbox to send outreach from the composer and auto-scan replies. Gmail works with an app password
-          (Google Account → Security → App passwords); other providers use their IMAP/SMTP settings.
+          Connect a mailbox to send outreach from the composer and auto-scan replies. Gmail works best via OAuth —
+          or fall back to an app password (Google Account → Security → App passwords). Other providers use their
+          IMAP/SMTP settings directly.
         </p>
 
-        <div className="mb-4 flex items-center gap-3">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
           <span
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold",
-              mailSettings.smtpHost
+              mailSettings.smtpHost || gmailStatus.connected
                 ? "border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
                 : "border-[var(--coral)]/40 bg-[var(--coral)]/10 text-[var(--coral)]"
             )}
           >
-            {mailSettings.smtpHost ? <PlugZap className="h-3 w-3" /> : <Unplug className="h-3 w-3" />}
-            {mailSettings.smtpHost ? "Email connected" : "Not connected"}
+            {mailSettings.smtpHost || gmailStatus.connected ? <PlugZap className="h-3 w-3" /> : <Unplug className="h-3 w-3" />}
+            {mailSettings.smtpHost || gmailStatus.connected ? "Email connected" : "Not connected"}
           </span>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold",
+              gmailStatus.connected
+                ? "border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
+                : "border-[var(--line)] bg-white/[0.03] text-dim"
+            )}
+          >
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                gmailStatus.connected ? "bg-[var(--chartreuse)]" : "bg-dim"
+              )}
+            />
+            Gmail · {gmailStatus.connected ? `Connected as ${gmailStatus.email}` : "Not connected"}
+          </span>
+          {gmailStatus.connected ? (
+            <Button size="sm" variant="outline" onClick={onGmailDisconnect} loading={gmailBusy}>
+              <Unplug className="h-3.5 w-3.5" /> Disconnect
+            </Button>
+          ) : (
+            <Button size="sm" onClick={() => window.location.assign("/api/auth/gmail/authorize")}>
+              <PlugZap className="h-3.5 w-3.5" /> Connect Gmail
+            </Button>
+          )}
           {mailResult === "ok" && <span className="text-[11px] font-bold text-[var(--chartreuse)]">✓ Connection verified</span>}
           {mailResult === "failed" && <span className="text-[11px] font-bold text-[var(--coral)]">✕ Connection failed</span>}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-[var(--line)]/50 bg-white/[0.02] p-4">
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">IMAP — receive</p>
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">IMAP — receive · app password (fallback)</p>
             <div className="grid grid-cols-2 gap-2">
               <input
                 className={field}
@@ -465,7 +588,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="rounded-xl border border-[var(--line)]/50 bg-white/[0.02] p-4">
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">SMTP — send</p>
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">SMTP — send · app password (fallback)</p>
             <div className="grid grid-cols-2 gap-2">
               <input
                 className={field}

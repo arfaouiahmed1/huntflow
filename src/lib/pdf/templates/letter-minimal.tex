@@ -1,0 +1,42 @@
+% ---------------------------------------------------------------------------
+% letter-minimal — minimal cover letter with generous whitespace
+% ATS notes: linear text flow, no tables, parseable contact block. Quiet
+% slate accent, no decoration. Placeholders are substituted by the renderer.
+% ---------------------------------------------------------------------------
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{letterpaper, margin=1in}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{xcolor}
+\usepackage{parskip}
+\definecolor{accent}{HTML}{334155}
+\definecolor{muted}{HTML}{6B7280}
+\pagestyle{empty}
+
+\newcommand{\coverparagraph}[1]{\vspace{1em}#1\par}
+
+\begin{document}
+
+{\large\bfseries {{NAME}}}\par
+\vspace{0.1em}
+{\small\color{muted} {{SENDERCONTACT}}}\par
+\vspace{0.2em}
+{\small\color{accent} {{DATE}}}\par
+\vspace{1.2em}
+
+{{RECIPIENT}}
+
+\vspace{1.4em}
+{{SALUTATION}}\par
+
+{{PARAGRAPHS}}
+
+\vspace{1.8em}
+{{CLOSING}}\par
+\vspace{0.8em}
+{{NAME}}
+
+\end{document}

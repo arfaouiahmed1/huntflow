@@ -42,14 +42,26 @@ describe("template registry", () => {
       "nordic-clean",
       "creative-sidebar",
       "academic-cv",
+      "minimal-clean",
+      "technical-modern",
+      "executive-elegant",
+      "developer-dashboard",
+      "academic-europass",
+      "creative-portfolio",
       "letter-cover",
       "letter-motivation",
       "letter-anschreiben-de",
       "letter-motivation-fr",
+      "letter-modern",
+      "letter-minimal",
     ]);
     expect(templateMeta("classic-ats")?.atsScore).toBe(100);
-    expect(templatesForKind("resume").length).toBe(5);
-    expect(templatesForKind("cover_letter").map((t) => t.id)).toEqual(["letter-cover"]);
+    expect(templatesForKind("resume").length).toBe(10);
+    expect(templatesForKind("cover_letter").map((t) => t.id)).toEqual([
+      "letter-cover",
+      "letter-modern",
+      "letter-minimal",
+    ]);
   });
 
   it("loads real .tex sources from disk", () => {
@@ -117,6 +129,59 @@ describe("renderTemplate", () => {
     expect(tex).toContain("Dear Hiring Manager,");
     expect(tex).toContain("Sincerely,");
     expect(tex).not.toContain("{{");
+  });
+});
+
+describe("every template renders", () => {
+  const fullResume: ResumeContent = {
+    header: {
+      name: "Alex Rivera",
+      title: "Senior Frontend Engineer",
+      email: "alex@example.com",
+      phone: "+1 555 0100",
+      location: "Remote",
+      linkedin: "linkedin.com/in/alex",
+      github: "github.com/alex",
+      portfolio: "alex.dev",
+    },
+    summary: "Senior frontend engineer with 8 years building React apps at scale.",
+    skills: ["React", "TypeScript", "Node.js", "GraphQL"],
+    experience: [
+      { role: "Senior Frontend Engineer", company: "Acme Corp", duration: "2021 — Present", bullets: ["Led a team of 4", "Cut bundle size 45%"] },
+    ],
+    education: [{ degree: "BSc Computer Science", school: "State University", year: "2018" }],
+    projects: [{ name: "Portfolio", tech: "Next.js", link: "alex.dev", bullets: ["Personal site"] }],
+    certifications: [{ name: "AWS Certified", issuer: "Amazon", year: "2023" }],
+    languages: [
+      { name: "English", level: "Native" },
+      { name: "French", level: "B2" },
+    ],
+  };
+  const letter: ResumeContent = {
+    header: fullResume.header,
+    recipient: "Hiring Manager\nAcme Corp",
+    paragraphs: ["I am writing to express my interest.", "I would love to chat."],
+  };
+
+  it("renders every registered template with a documentclass and no leftover placeholders", () => {
+    for (const t of RESUME_TEMPLATES) {
+      const isLetterKind = t.kinds.includes("cover_letter") || t.kinds.includes("motivation_letter");
+      const tex = renderTemplate(t.id, isLetterKind ? letter : fullResume);
+      expect(tex, `${t.id} must contain \\documentclass`).toContain("\\documentclass");
+      expect(tex, `${t.id} must have no unresolved {{placeholders}}`).not.toContain("{{");
+    }
+  });
+
+  it("spot-checks template-specific markers", () => {
+    expect(renderTemplate("minimal-clean", fullResume)).toContain("0F766E");
+    expect(renderTemplate("technical-modern", fullResume)).toContain("MakeUppercase");
+    expect(renderTemplate("executive-elegant", fullResume)).toContain("mathptmx");
+    expect(renderTemplate("developer-dashboard", fullResume)).toContain("\\begin{minipage}");
+    expect(renderTemplate("developer-dashboard", fullResume)).toContain("sidebg");
+    expect(renderTemplate("academic-europass", fullResume)).toContain("Publications \\& Awards");
+    expect(renderTemplate("creative-portfolio", fullResume)).toContain("7C3AED");
+    expect(renderTemplate("letter-modern", letter)).toContain("\\rule{\\textwidth}{1.4pt}");
+    expect(renderTemplate("letter-minimal", letter)).toContain("margin=1in");
   });
 });
 

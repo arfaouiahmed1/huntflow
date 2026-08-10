@@ -1,0 +1,72 @@
+% ---------------------------------------------------------------------------
+% academic-europass — Europass-style CV with research/publications sections
+% ATS notes: single column, Times, standard headers, structured sections.
+% Section titles mapped to Europass conventions via xstring; publications and
+% awards come from the certifications field. Placeholders are substituted by
+% the resume renderer.
+% ---------------------------------------------------------------------------
+\documentclass[10.5pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{a4paper, margin=0.7in}
+\usepackage{mathptmx}
+\usepackage{enumitem}
+\setlist{nosep, leftmargin=1.25em, topsep=0.15em}
+\usepackage{xcolor}
+\usepackage{parskip}
+\usepackage{xstring}
+\definecolor{accent}{HTML}{1F4E79}
+\definecolor{ink}{HTML}{1A1A1A}
+\definecolor{muted}{HTML}{6B7280}
+\pagestyle{empty}
+
+% Translate the renderer's English section names to Europass conventions.
+\newcommand{\resumesection}[1]{%
+  \def\tmptitle{#1}%
+  \IfStrEq{#1}{Summary}{\def\tmptitle{Personal Profile}}{}%
+  \IfStrEq{#1}{Experience}{\def\tmptitle{Work \& Research Experience}}{}%
+  \IfStrEq{#1}{Projects}{\def\tmptitle{Research Projects}}{}%
+  \IfStrEq{#1}{Education}{\def\tmptitle{Education \& Training}}{}%
+  \IfStrEq{#1}{Skills}{\def\tmptitle{Digital \& Analytical Skills}}{}%
+  \IfStrEq{#1}{Certifications}{\def\tmptitle{Publications \& Awards}}{}%
+  \IfStrEq{#1}{Languages}{\def\tmptitle{Languages}}{}%
+  \vspace{0.95em}%
+  {\color{accent}\bfseries\large \tmptitle}\par
+  \vspace{0.1em}{\textcolor{accent}{\rule{\textwidth}{0.6pt}}}\par
+  \vspace{0.4em}%
+}
+
+\newcommand{\resumeentry}[4]{%
+  {\bfseries\color{ink} #1}\hfill{\color{accent}#3}\\[0.05em]
+  {\itshape\color{muted} #2}\\[0.12em]
+  #4
+}
+
+\begin{document}
+
+\begin{center}
+  {\LARGE\bfseries\color{ink} {{NAME}}}\par
+  \vspace{0.1em}
+  {\large\color{accent} {{TITLE}}}\par
+  \vspace{0.12em}
+  {\small\color{ink} {{CONTACT}}}
+  \vspace{0.3em}
+  {\color{accent}\rule{\textwidth}{1.2pt}}
+\end{center}
+
+{{SUMMARY}}
+
+{{EXPERIENCE}}
+
+{{PROJECTS}}
+
+{{EDUCATION}}
+
+{{SKILLS}}
+
+{{CERTIFICATIONS}}
+
+{{LANGUAGES}}
+
+\end{document}

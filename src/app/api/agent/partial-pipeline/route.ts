@@ -39,10 +39,10 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, data: result });
   } catch (error: unknown) {
+    // Log the real error server-side; never echo internals to the client.
     console.error("Partial pipeline execution error:", error);
-    const msg = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { success: false, error: msg || "Failed to execute partial pipeline" },
+      { success: false, error: "Failed to execute partial pipeline" },
       { status: 500 }
     );
   }

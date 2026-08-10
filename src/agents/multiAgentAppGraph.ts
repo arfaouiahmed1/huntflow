@@ -105,18 +105,30 @@ async function piiSanitizerNode(state: typeof MultiAgentState.State) {
   const logs: AutoApplyLog[] = [];
   logs.push({ timestamp: ts(), message: "🛡️ Agent #4 (VerificationSanitizer) auditing candidate profile for PII compliance...", type: "info" });
 
-  // Check all fields that may carry sensitive PII, not just the summary
-  const profileAny = state.profile as unknown as Record<string, string | undefined>;
+  // Check all fields that may carry sensitive PII, not just the summary —
+  // including fields many regions forbid on a resume (nationality, gender,
+  // marital status, age/DOB, visa status).
+  const p = state.profile as unknown as Record<string, unknown>;
   const sensitiveContent = [
     state.profile.summary,
     state.profile.phone,
-    profileAny.address,
-    profileAny.dateOfBirth,
-  ].filter(Boolean).join(" | ");
+    p.address,
+    p.dateOfBirth,
+    p.nationality,
+    p.gender,
+    p.maritalStatus,
+    p.visaStatus,
+  ]
+    .filter((v): v is string => typeof v === "string" && Boolean(v))
+    .join(" | ");
 
   const res = await executePiiSanitizerTool({ content: sensitiveContent || "" });
   if (res.hasRedactions) {
-    logs.push({ timestamp: ts(), message: "⚠️ Sensitive fields (phone, address, DOB, or SSN) detected and sanitized prior to document generation.", type: "warning" });
+    logs.push({
+      timestamp: ts(),
+      message: "⚠️ Sensitive fields (phone, address, DOB, SSN, nationality, gender, marital status, visa) detected — keep them out of generated documents where regional rules restrict them.",
+      type: "warning",
+    });
   }
 
   return { logs };
@@ -156,14 +168,17 @@ async function letterTailorNode(state: typeof MultiAgentState.State) {
     kind: "cover_letter",
   });
 
-  // Build a meaningful pitch from actual pipeline data (matched skills + regional salutation)
+  // Build a meaningful pitch from actual pipeline data (matched skills + regional
+  // salutation). Written to sound natural: no em dashes, no template clichés.
   const topSkills = state.matchingSkills.slice(0, 3).join(", ");
   const summary = state.profile?.summary?.slice(0, 180) || "";
   const pitch = topSkills
-    ? `${res.salutation} — With proven expertise in ${topSkills}, I am excited to contribute to ${state.job.company} as ${state.job.title}. ${
-        summary ? summary + " " : ""
-      }I look forward to discussing how my background aligns with your team's goals. ${res.closing}`
-    : `${summary || `I am a motivated ${state.profile?.targetTitle || state.job.title} professional`} eager to join ${state.job.company} as ${state.job.title}. ${res.closing}`;
+    ? `${res.salutation} The ${state.job.title} role at ${state.job.company} maps directly to my experience with ${topSkills}. ${
+        summary ? summary.trim() + " " : ""
+      }I would welcome the chance to talk through how I can help. ${res.closing}`
+    : `${res.salutation} ${
+        summary || `As a ${state.profile?.targetTitle || state.job.title} professional,`
+      } I would welcome the chance to discuss the ${state.job.title} role at ${state.job.company}. ${res.closing}`;
 
   logs.push({ timestamp: ts(), message: `✉️ Cover letter drafted using ${res.letterKind} convention (${state.targetRegion}).`, type: "info" });
 
@@ -196,7 +211,8 @@ async function salaryIntelNode(state: typeof MultiAgentState.State) {
   const res = await executeSalaryIntelTool({
     jobTitle: state.job.title,
     company: state.job.company,
-    location: (state.job as any).location,
+    location: (state.job as { location?: string }).location,
+    jobDescription: state.job.jobDescription,
   });
 
   return {
@@ -226,8 +242,15 @@ async function atsAuditNode(state: typeof MultiAgentState.State) {
   const logs: AutoApplyLog[] = [];
   logs.push({ timestamp: ts(), message: "📊 Agent #10 (ATSAudit) running deterministic ATS parsing rules...", type: "info" });
 
-  const profileAny = state.profile as unknown as Record<string, string | undefined>;
-  const sampleResume = [state.profile.summary, profileAny.experience, profileAny.education].filter(Boolean).join("\n");
+  // Serialize profile sections as real text — joining arrays directly would
+  // produce "[object Object]" and make the audit score meaningless.
+  const experienceText = (state.profile.experience ?? [])
+    .map((e) => `${e.role} @ ${e.company} (${e.duration})${e.bulletPoints?.length ? "\n" + e.bulletPoints.join("\n") : ""}`)
+    .join("\n");
+  const educationText = (state.profile.education ?? [])
+    .map((e) => `${e.degree}, ${e.school}${e.year ? ` (${e.year})` : ""}`)
+    .join("\n");
+  const sampleResume = [state.profile.summary, experienceText, educationText].filter(Boolean).join("\n");
   const res = await executeAtsAuditTool({
     resumeText: sampleResume,
     jobDescription: state.job.jobDescription,
@@ -355,6 +378,7 @@ export async function runMultiAgentApp(input: MultiAgentInput) {
     missingSkills: finalState.missingSkills,
     salaryEstimate: finalState.salaryEstimate,
     outreachSubject: finalState.outreachSubject,
+    interviewPrepTopics: finalState.interviewPrepTopics,
     fields: finalState.fields,
     logs: finalState.logs,
   };
@@ -395,8 +419,13 @@ export async function runPartialPipeline(input: MultiAgentInput & { stopAfter: s
     orchestratorGate: orchestratorGateNode,
   };
 
-  // LangGraph generics accumulate per-node types; dynamic string node names require a cast.
-  // Using a named alias keeps the workflow variable itself properly typed for .compile().
+  // LangGraph's generics accumulate per-node channel types, so dynamic string
+  // node names can't be expressed without a cast. This is sound at runtime:
+  // StateGraph.addNode accepts any node fn and addEdge any two string names —
+  // the exact same functions and edges the full graph wires up statically. The
+  // only difference here is that we wire a *prefix* of the full 11-node graph,
+  // so semantics are identical to running the full pipeline up to `stopAfter`
+  // (it is genuinely the same nodes, not a different "resume" code path).
   const workflow = new StateGraph(MultiAgentState);
   type DynamicBuilder = {
     addNode(name: string, fn: (state: typeof MultiAgentState.State) => Promise<Record<string, unknown>>): void;
@@ -458,6 +487,7 @@ export async function runPartialPipeline(input: MultiAgentInput & { stopAfter: s
     missingSkills: finalState.missingSkills,
     salaryEstimate: finalState.salaryEstimate,
     outreachSubject: finalState.outreachSubject,
+    interviewPrepTopics: finalState.interviewPrepTopics,
     logs: finalState.logs,
   };
 }

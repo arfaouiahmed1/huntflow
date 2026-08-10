@@ -66,6 +66,8 @@ export function migrate(database: DatabaseSync) {
       employer_review TEXT,
       fit_category TEXT,
       multi_agent_outputs TEXT,
+      source TEXT,
+      hiring_post INTEGER NOT NULL DEFAULT 0,
       created_date TEXT NOT NULL,
       company_logo TEXT,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -242,6 +244,8 @@ export function migrate(database: DatabaseSync) {
   addColumn("jobs", "employer_review", "employer_review TEXT");
   addColumn("jobs", "fit_category", "fit_category TEXT");
   addColumn("jobs", "multi_agent_outputs", "multi_agent_outputs TEXT");
+  addColumn("jobs", "source", "source TEXT");
+  addColumn("jobs", "hiring_post", "hiring_post INTEGER NOT NULL DEFAULT 0");
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +258,7 @@ const JOB_COLUMNS = [
   "notes", "match_score", "skills_gap", "documents", "star_flashcards",
   "interview_questions", "job_brief", "salary_intel", "auto_apply_status",
   "auto_apply_logs", "employer_review", "fit_category", "multi_agent_outputs",
-  "created_date", "company_logo",
+  "source", "hiring_post", "created_date", "company_logo",
 ] as const;
 
 function rowToJob(row: Record<string, unknown>): JobApplication {
@@ -292,6 +296,8 @@ function rowToJob(row: Record<string, unknown>): JobApplication {
     employerReview: json(row.employer_review, undefined),
     fitCategory: (row.fit_category as JobApplication["fitCategory"]) || undefined,
     multiAgentOutputs: json(row.multi_agent_outputs, undefined),
+    source: (row.source as string) || undefined,
+    hiringPost: row.hiring_post ? Boolean(Number(row.hiring_post)) : undefined,
     createdDate: String(row.created_date),
     companyLogo: (row.company_logo as string) || undefined,
   };
@@ -324,6 +330,8 @@ function jobToRow(job: JobApplication): Record<string, unknown> {
     employer_review: job.employerReview ? JSON.stringify(job.employerReview) : null,
     fit_category: job.fitCategory ?? null,
     multi_agent_outputs: job.multiAgentOutputs ? JSON.stringify(job.multiAgentOutputs) : null,
+    source: job.source ?? null,
+    hiring_post: job.hiringPost ? 1 : 0,
     created_date: job.createdDate,
     company_logo: job.companyLogo ?? null,
     updated_at: new Date().toISOString(),
@@ -436,6 +444,7 @@ export const jobsRepo = {
          salary_intel=excluded.salary_intel, auto_apply_status=excluded.auto_apply_status,
          auto_apply_logs=excluded.auto_apply_logs, employer_review=excluded.employer_review,
          fit_category=excluded.fit_category, multi_agent_outputs=excluded.multi_agent_outputs,
+         source=excluded.source, hiring_post=excluded.hiring_post,
          company_logo=excluded.company_logo,
          updated_at=excluded.updated_at`
     );

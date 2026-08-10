@@ -45,18 +45,17 @@ export async function executeApply(input: ApplyExecutionInput): Promise<ApplyExe
 
   const agentBase = input.agentUrl || AGENT_BASE_URL;
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90_000);
   try {
     if (!input.url) throw new Error("No application URL on file — cannot navigate.");
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 90_000);
     const res = await fetch(`${agentBase}/apply`, {
       method: "POST",
       headers: agentHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
-    clearTimeout(timer);
 
     if (!res.ok) throw new Error(`Agent responded HTTP ${res.status}`);
 
@@ -87,5 +86,9 @@ export async function executeApply(input: ApplyExecutionInput): Promise<ApplyExe
 
     logs.push({ timestamp: ts(), message: "🧪 Prefill mode — review & submit manually once the sidecar is running", type: "warning" });
     return { status: "manual_required", fields: ["full_name", "email", "phone", "cover_letter"], logs };
+  } finally {
+    // Clear the abort timer on every exit path (success, throw, early return)
+    // so a pending 90s timer never outlives the request.
+    clearTimeout(timer);
   }
 }

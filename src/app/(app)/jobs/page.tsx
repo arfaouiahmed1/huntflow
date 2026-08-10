@@ -157,6 +157,8 @@ export default function JobsPage() {
         matchScore: job.matchScore,
         fitCategory: job.fitCategory,
         skillsGap: job.skillsGap,
+        source: job.source,
+        hiringPost: job.hiringPost,
         notes: job.source ? `Crawled from ${job.source}` : undefined,
         autoApplyStatus: "idle",
         autoApplyLogs: [],

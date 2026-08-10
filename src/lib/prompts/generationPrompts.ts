@@ -7,7 +7,7 @@ import { buildProfileContext, buildJobContext, extractJdTerms, SYSTEM_PREAMBLE, 
 
 export function matchSystemPrompt(): string {
   return `${SYSTEM_PREAMBLE}
-You are a technical recruiting analyst. You score job fit like a rigorous hiring manager and explain it like a coach.
+You are a technical recruiting analyst. You score job fit like a rigorous hiring manager and explain it like a coach. You evaluate dealbreakers first, then must-haves, then nice-to-haves, and you are decisive — no grade inflation.
 
 ${JSON_RULE}`;
 }
@@ -19,11 +19,160 @@ ${buildJobContext(job)}
 
 TASK: Analyze candidate-vs-job fit. Respond as JSON:
 - "matchScore": integer 0-100 (be honest — no grade inflation; consider skill overlap, experience depth, and seniority).
+- "fit": "high" | "medium" | "low" | "skip" — overall fit rating. Mark "skip" if ANY dealbreaker applies: required work authorization/citizenship/clearance the candidate lacks, on-site-only vs a remote-only preference, salary below the candidate's stated minimum, or an unwillingness to relocate.
+- "dealbreakers": string[] — the concrete blocking reasons (empty array if none).
 - "matchingSkills": string[] — skills from the candidate's profile the job explicitly needs.
 - "missingSkills": string[] — skills the job explicitly requires that the candidate lacks (max 6).
 - "strengths": string[] — 3 specific, evidence-based reasons the candidate fits.
-- "recommendations": string[] — 4 tactical actions (resume tweaks, interview angles, skill-building).
+- "recommendations": string[] — 4 tactical actions (resume tweaks, interview angles, skill-building, or how to overcome a dealbreaker).
 - "keyTermFrequency": [{ "term": string, "count": number, "inResume": boolean }] — the 8 most important job-description keywords, with how often they appear and whether the candidate's resume covers them.`;
+}
+
+export type FitRating = "high" | "medium" | "low" | "skip";
+
+export interface FitScoring {
+  fit: FitRating;
+  dealbreakers: string[];
+  mustHavesMet: string[];
+  niceHavesMet: string[];
+}
+
+/* Words that are too generic to establish a title-family match. */
+const TITLE_STOPWORDS = new Set([
+  "engineer", "engineers", "developer", "developers", "engineering", "development",
+  "senior", "lead", "junior", "principal", "staff", "sr", "the", "and", "of", "for", "i", "ii", "iii",
+]);
+/* Role nouns that signal the same family even when titles differ. */
+const CORE_ROLE_NOUNS = [
+  "frontend", "backend", "full", "stack", "mobile", "devops", "data", "machine", "ml", "ai",
+  "platform", "infrastructure", "qa", "design", "product", "growth", "marketing", "sales",
+  "support", "security", "cloud", "sre", "wordpress", "php", "solutions", "technical", "test",
+];
+
+export function titleFamiliesOverlap(jobTitle: string, targetTitle: string): boolean {
+  const tokens = (t: string) =>
+    new Set(
+      t
+        .toLowerCase()
+        .replace(/[^a-z0-9+.#-]/g, " ")
+        .split(/\s+/)
+        .filter((w) => w.length > 2 && !TITLE_STOPWORDS.has(w))
+    );
+  const a = tokens(jobTitle);
+  const b = tokens(targetTitle);
+  for (const w of a) if (b.has(w)) return true;
+  return CORE_ROLE_NOUNS.some((c) => a.has(c) && b.has(c));
+}
+
+/**
+ * Parse an annual-salary-ish string ("$120k - $150k", "$120,000 - $150,000",
+ * "80.000 - 90.000") into a { min, max } pair in the same unit. Returns null
+ * when nothing numeric is present. "Competitive salary" with no range → null.
+ */
+export function parseSalaryText(text: string | undefined | null): { min: number; max: number } | null {
+  if (!text) return null;
+  const cleaned = String(text).replace(/[,\s]/g, "");
+  const nums = Array.from(cleaned.matchAll(/(\d+(?:\.\d+)?)(k|m)?/gi))
+    .map((m) => {
+      const n = parseFloat(m[1]);
+      if (!Number.isFinite(n) || n <= 0) return null;
+      const suffix = (m[2] ?? "").toLowerCase();
+      return suffix === "k" ? n * 1000 : suffix === "m" ? n * 1_000_000 : n;
+    })
+    .filter((n): n is number => n !== null);
+  if (!nums.length) return null;
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  /* A single figure reads as a floor → widen to a range. */
+  return max > min ? { min, max } : { min, max: min * 1.2 };
+}
+
+/**
+ * Deterministic, offline fit engine (per the Proficiently fit-scoring rubric):
+ * dealbreakers → must-haves → nice-to-haves → "high" | "medium" | "low" | "skip".
+ *
+ * - Skip: any dealbreaker (visa/clearance, on-site-only vs remote preference,
+ *   salary below the stated minimum, no relocation for an on-site role).
+ * - High: no dealbreakers + all must-haves (core-skill overlap AND title
+ *   family) + 2+ nice-to-haves.
+ * - Medium: no dealbreakers + most must-haves (either core skills or title).
+ * - Low: no dealbreakers but significant gaps in must-haves.
+ */
+export function scoreFit(
+  job: Pick<JobApplication, "title" | "company" | "salary" | "jobDescription">,
+  profile: UserProfile,
+  matchingSkills: string[]
+): FitScoring {
+  const jd = (job.jobDescription || "").toLowerCase();
+  const dealbreakers: string[] = [];
+
+  /* ---- Dealbreakers: visa / clearance ---- */
+  const authRequired =
+    /(must (be|already have|possess|hold))?.*(authorized to work|work authori[sz]ation|work permit|no (visa|sponsorship)|sponsorship (is )?not|cannot (sponsor|offer sponsorship)|citizen(?!ship)|citizenship required|legal (right|status) to work)/i.test(
+      jd
+    );
+  if (authRequired && profile.workPermitStatus === "sponsorship_required") {
+    dealbreakers.push("Posting requires existing work authorization, but your profile asks for sponsorship.");
+  }
+  if (/security clearance|active clearance|ts\/sci|secret clearance|clearance level/i.test(jd) && !profile.clearanceLevel) {
+    dealbreakers.push("Posting requires a security clearance that your profile does not list.");
+  }
+
+  /* ---- Dealbreakers: location / work mode / relocation ---- */
+  const explicitOnsite = /on-?site|in.?office|must (be|work|live) in|relocat(e|ion) (required|mandatory)/i.test(jd);
+  const explicitRemote = /100% remote|fully remote|remote (first|only|anywhere)|work from anywhere/i.test(jd);
+  const onsiteOnly = explicitOnsite && !/(remote|hybrid)/.test(jd);
+  const preferred = profile.preferredWorkMode;
+  const relocation = profile.willingnessToRelocate;
+
+  if (onsiteOnly && preferred === "remote") {
+    dealbreakers.push("Posting is on-site only, but your preference is remote work.");
+  }
+  if (onsiteOnly && relocation === "no") {
+    dealbreakers.push("Posting requires being on-site, but you are not willing to relocate.");
+  }
+  if (explicitRemote && preferred === "onsite") {
+    dealbreakers.push("Posting is fully remote, but you prefer on-site work.");
+  }
+  if (relocation === "remote_only" && explicitOnsite && !explicitRemote) {
+    dealbreakers.push("You are only open to remote work, but this role requires being on-site.");
+  }
+
+  /* ---- Dealbreakers: salary below the stated minimum ---- */
+  const jdSalary = parseSalaryText(job.salary || jd);
+  const desiredSalary = parseSalaryText(profile.desiredSalary || profile.salaryExpectations);
+  if (jdSalary && desiredSalary && desiredSalary.min > 0 && jdSalary.max < desiredSalary.min) {
+    dealbreakers.push(
+      `Stated salary (${job.salary || "in the posting"}) is below your minimum of ${profile.desiredSalary || profile.salaryExpectations}.`
+    );
+  }
+
+  /* ---- Must-haves ---- */
+  const mustHavesMet: string[] = [];
+  if (matchingSkills.length >= 2) mustHavesMet.push(`Core skill overlap: ${matchingSkills.slice(0, 3).join(", ")}.`);
+  if (titleFamiliesOverlap(job.title, profile.targetTitle)) {
+    mustHavesMet.push(`Title family matches: ${job.title} ~ ${profile.targetTitle}.`);
+  }
+
+  /* ---- Nice-to-haves ---- */
+  const niceHavesMet: string[] = [];
+  const jdSenior = /senior|lead|principal|staff|sr\.?/i.test(jd + job.title);
+  const targetSenior = /senior|lead|principal|staff|sr\.?/i.test(profile.targetTitle);
+  if (jdSenior === targetSenior) niceHavesMet.push("Seniority level aligns with your title.");
+  if (jdSalary && desiredSalary && jdSalary.min >= desiredSalary.min) {
+    niceHavesMet.push("Salary meets or exceeds your minimum expectation.");
+  }
+  const workModeOk = !onsiteOnly || (preferred !== "remote" && relocation !== "no");
+  if (workModeOk && (preferred || relocation)) niceHavesMet.push("Work-mode requirement matches your preferences.");
+  if ((profile.experience?.length ?? 0) >= 2) niceHavesMet.push("Two or more previous roles provide depth.");
+
+  let fit: FitRating;
+  if (dealbreakers.length) fit = "skip";
+  else if (mustHavesMet.length >= 2 && niceHavesMet.length >= 2) fit = "high";
+  else if (mustHavesMet.length >= 1) fit = "medium";
+  else fit = "low";
+
+  return { fit, dealbreakers, mustHavesMet, niceHavesMet };
 }
 
 export function matchFallback(job: JobApplication, profile: UserProfile): SkillsGapAnalysis {
@@ -38,24 +187,42 @@ export function matchFallback(job: JobApplication, profile: UserProfile): Skills
   const coverage = terms.length ? matchingSkills.length / terms.length : 0.4;
   const score = Math.round(Math.min(97, Math.max(38, coverage * 70 + seniorityScore + (profile.experience.length >= 2 ? 8 : 0))));
 
+  const { fit, dealbreakers, niceHavesMet } = scoreFit(job, profile, matchingSkills);
+
+  const titleAligned = titleFamiliesOverlap(job.title, profile.targetTitle);
+  const strengths = [
+    titleAligned
+      ? `Profile targets ${profile.targetTitle}, which maps to this ${job.title} role.`
+      : `Target title ${profile.targetTitle} is adjacent to this ${job.title} role — seniority may differ.`,
+    `Core stack coverage: ${matchingSkills.slice(0, 3).join(", ") || profile.skills.slice(0, 3).join(", ")}.`,
+    `${profile.experience.length} relevant role(s) with ${profile.experience[0]?.duration ?? "industry"} tenure.`,
+    fit === "high"
+      ? "This role is a strong fit for your profile — apply with a tailored pitch."
+      : fit === "skip"
+        ? "Do not apply until the dealbreaker(s) are resolved."
+        : `Moderate fit${niceHavesMet.length ? ` (${niceHavesMet.length} nice-to-have alignment${niceHavesMet.length === 1 ? "" : "s"})` : ""} — worth a tailored application.`,
+  ];
+
+  const recommendations = [
+    `Lead with ${matchingSkills[0] ?? profile.skills[0]} in the resume summary and top 2 bullet points.`,
+    missingSkills.length
+      ? `Address missing terms in the cover letter: ${missingSkills.slice(0, 3).join(", ")}.`
+      : "Keyword coverage is strong — focus on storytelling and metrics in interviews.",
+    dealbreakers.length
+      ? `Resolve the blocking issue before applying: ${dealbreakers[0]}.`
+      : "Add a personal project or section demonstrating the single biggest gap.",
+    "Send the tailored follow-up email 4 days after applying to stay top-of-mind.",
+  ];
+
   return {
     matchScore: score,
     matchingSkills: matchingSkills.length ? matchingSkills : profile.skills.slice(0, 3),
     missingSkills: missingSkills.length ? missingSkills : ["Cloud deployment (AWS/GCP)", "CI/CD pipelines"],
-    strengths: [
-      `Profile targets ${profile.targetTitle}, aligned with this ${job.title} role.`,
-      `Core stack coverage: ${matchingSkills.slice(0, 3).join(", ") || profile.skills.slice(0, 3).join(", ")}.`,
-      `${profile.experience.length} relevant role(s) with ${profile.experience[0]?.duration ?? "industry"} tenure.`,
-    ],
-    recommendations: [
-      `Lead with ${matchingSkills[0] ?? profile.skills[0]} in the resume summary and top 2 bullet points.`,
-      missingSkills.length
-        ? `Address missing terms in the cover letter: ${missingSkills.slice(0, 3).join(", ")}.`
-        : "Keyword coverage is strong — focus on storytelling and metrics in interviews.",
-      "Add a personal project or section demonstrating the single biggest gap.",
-      "Send the tailored follow-up email 4 days after applying to stay top-of-mind.",
-    ],
+    strengths,
+    recommendations,
     keyTermFrequency: terms.length ? terms : extractJdTerms(job.jobDescription, profile.skills).slice(0, 1),
+    fit,
+    dealbreakers: dealbreakers.length ? dealbreakers : undefined,
   };
 }
 

@@ -53,9 +53,8 @@ export async function POST(req: Request) {
       job: updatedJob,
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    // Log the real error server-side; never echo internals to the client.
+    console.error("Employer review failed:", err);
+    return NextResponse.json({ error: "Employer review failed" }, { status: 500 });
   }
 }

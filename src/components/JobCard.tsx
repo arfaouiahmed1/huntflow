@@ -133,6 +133,13 @@ export default function JobCard({
         </div>
       )}
 
+      {job.source && (
+        <div className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-[var(--sky)]/30 bg-[var(--sky)]/10 px-1.5 py-0.5 text-[10px] font-bold text-[var(--sky)]">
+          <Globe className="h-3 w-3" />
+          <span className="truncate max-w-[140px]">{job.source}</span>
+        </div>
+      )}
+
       <div className="mt-3 flex items-center justify-between">
         <StatusSelect
           status={job.status}

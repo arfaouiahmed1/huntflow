@@ -83,6 +83,8 @@ export function cleanSkillsGap(v: unknown): SkillsGapAnalysis | null {
           return [{ term, count: cleanNumber(t.count, 0, 10_000, 0), inResume: Boolean(t.inResume) }];
         })
       : [],
+    fit: v.fit !== undefined ? cleanEnum(v.fit, ["high", "medium", "low", "skip"] as const, "medium") : undefined,
+    dealbreakers: cleanStringArray(v.dealbreakers, 8, 300),
   };
   /* matchScore 0 never occurs legitimately (fallback clamps to 38–97) —
      treat a zero score with no other signal as an unparsable payload. */

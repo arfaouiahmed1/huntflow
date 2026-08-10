@@ -89,6 +89,26 @@ describe("runApplyAgent — threshold gating", () => {
   });
 });
 
+describe("runApplyAgent — profile fit gate (dealbreakers)", () => {
+  it("skips when the profile fit is 'skip' even though the score meets the threshold", async () => {
+    const sponsorProfile = {
+      ...testProfile,
+      workPermitStatus: "sponsorship_required" as const,
+    };
+    const jobWithVisaRequirement = {
+      ...agentJob,
+      matchScore: 92,
+      jobDescription:
+        "Must be authorized to work in the US. React, TypeScript and Node.js required. Sponsorship is not available.",
+    };
+    const res = await runApplyAgent(baseInput({ minMatch: 0, job: jobWithVisaRequirement, profile: sponsorProfile }));
+    expect(res.status).toBe("skipped");
+    expect(res.decision.proceed).toBe(false);
+    expect(res.decision.reason).toContain('Fit is "skip"');
+    expect(res.logs.some((l) => l.message.includes("Fit gate"))).toBe(true);
+  });
+});
+
 describe("runApplyAgent — pitch (prepare node)", () => {
   it("falls back to the profile summary when no provider key exists", async () => {
     mockResolveChain.mockReturnValue([]);

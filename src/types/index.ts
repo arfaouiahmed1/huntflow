@@ -18,6 +18,10 @@ export interface SkillsGapAnalysis {
   strengths: string[];
   recommendations: string[];
   keyTermFrequency: { term: string; count: number; inResume: boolean }[];
+  /** Strict profile-fit rating from the deterministic fit engine (see scoreFit). */
+  fit?: "high" | "medium" | "low" | "skip";
+  /** Concrete reasons this role should be skipped (visa, clearance, on-site-only, salary floor). */
+  dealbreakers?: string[];
 }
 
 export interface TailoredDocuments {
@@ -131,6 +135,7 @@ export interface JobApplication {
     missingSkills?: string[];
     salaryEstimate?: string;
     outreachSubject?: string;
+    interviewPrepTopics?: string[];
   };
   createdDate: string;
   companyLogo?: string;

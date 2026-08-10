@@ -107,7 +107,7 @@ export function buildBoardGuidance(
   } else if (appliedDueSoon.length > 0) {
     appliedSummary = `Follow-ups due soon for ${names(appliedDueSoon)} — don't let them go cold.`;
   } else if (inboxReplies > 0) {
-    appliedSummary = `${plural(inboxReplies, "new reply")} in your inbox for applied roles — read and respond promptly.`;
+    appliedSummary = `${plural(inboxReplies, "new reply", "new replies")} in your inbox for applied roles — read and respond promptly.`;
   } else {
     appliedSummary = `${plural(applied.length, "application")} in flight — follow up 5–7 days after applying if you haven't heard back.`;
   }

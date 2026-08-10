@@ -1,6 +1,21 @@
 import { UserProfile, JobApplication, ResumeContent } from "@/types";
 import { buildProfileContext, buildJobContext, SYSTEM_PREAMBLE, JSON_RULE } from "./commonPrompts";
 
+/**
+ * Letter-specific natural-writing rules (from the Proficiently cover-letter
+ * methodology). Applied to cover/motivation letters so they read like a real
+ * professional wrote them, never a template.
+ */
+export const NATURAL_LETTER_RULES = `NATURAL LETTER RULES:
+- The letter must sound like a seasoned professional talking to a colleague over coffee: confident but approachable, specific, and human.
+- Extract 2-3 concrete achievements with measurable results and connect them to the employer's specific challenges — not their general requirements.
+- Mix short, direct statements with longer explanations; never repeat sentence patterns or start consecutive sentences the same way.
+- Never use em dashes (—); use hyphens, commas, or periods.
+- Avoid template phrases: "I am excited about the opportunity", "aligns perfectly with", "living and breathing [concept]", "passionate about", "proven track record" without a concrete example.
+- Keep sentences under ~25 words where possible.
+- Total letter length: 250-350 words. Vary paragraph lengths for natural flow.
+- STRICT ACCURACY: never extend a role's duration, describe a past role in present tense, or inflate scope beyond what the profile states. When a detail is ambiguous, omit it rather than assume. Every company-attributed metric must belong to that company's role in the profile.`;
+
 export function documentsSystemPrompt(): string {
   return `${SYSTEM_PREAMBLE}
 You are also a senior executive resume writer and a partner-track recruiter who knows exactly what ATS filters and hiring managers look for.
@@ -18,10 +33,13 @@ ${focus}
 
 TASK: Tailor four documents for THIS job:
 
-1. "tailoredResume" — a complete, ATS-optimized markdown CV. Rewrite experience bullets to echo the job description's requirements, leading with the candidate's matching skills. Quantify achievements. Max 700 words.
-2. "coverLetter" — 3 short paragraphs, ${tone}. Hook = the candidate's strongest relevant achievement. Reference the company and role by name.
-3. "motivationLetter" — a compelling 3-paragraph motivation letter focused on why the candidate genuinely wants THIS company and role, not generic fluff.
-4. "followUpEmail" — a concise, warm 4-day follow-up email to the recruiter, referencing the application and one key value point.
+1. "tailoredResume" — a complete, ATS-optimized markdown CV. Rewrite experience bullets to echo the job description's requirements, leading with the candidate's matching skills. Quantify achievements. Max 700 words. Mirror the posting's terminology only for skills the candidate actually has; never invent or inflate scope.
+2. "coverLetter" — 3 short paragraphs, ${tone}. Hook = the candidate's strongest relevant achievement. Reference the company and role by name. Must read like natural human writing, not a template.
+
+${NATURAL_LETTER_RULES}
+
+3. "motivationLetter" — a compelling 3-paragraph motivation letter focused on why the candidate genuinely wants THIS company and role, not generic fluff. Same natural-voice rules as the cover letter.
+4. "followUpEmail" — a concise, warm 4-day follow-up email to the recruiter, referencing the application and one key value point. No em dashes.
 
 Respond as JSON with exactly these keys: "tailoredResume", "coverLetter", "motivationLetter", "followUpEmail".`;
 }
@@ -47,6 +65,7 @@ ${buildJobContext(targetJob as JobApplication)}
 `
     : "";
   const letterKind = kind === "cover_letter" || kind === "motivation_letter";
+  const letterRules = letterKind ? `\n${NATURAL_LETTER_RULES}\n` : "";
   const shape = letterKind
     ? `{
   "header": { "name": string, "title": string, "email": string, "phone": string, "location": string, "linkedin": string, "github": string, "portfolio": string },
@@ -66,7 +85,7 @@ ${buildJobContext(targetJob as JobApplication)}
   return `${buildProfileContext(profile)}
 ${jobBlock}
 
-${behavior}
+${behavior}${letterRules}
 
 TASK: Draft a complete ${kind.replace("_", " ")} document.
 Respond as JSON with exactly this shape (all strings plain text, no markdown):
@@ -94,11 +113,13 @@ export function resumeTailorUserPrompt(kind: string, current: string, job: JobAp
     kind === "cover_letter" || kind === "motivation_letter"
       ? "recipient/paragraphs for letters"
       : "header + summary/skills/experience/education/projects/certifications/languages";
+  const letterRules =
+    kind === "cover_letter" || kind === "motivation_letter" ? `\n${NATURAL_LETTER_RULES}\n` : "";
   return `${buildProfileContext(profile)}
 
 ${buildJobContext(job)}
 
-${behavior}
+${behavior}${letterRules}
 
 CURRENT DRAFT:
 ${current}

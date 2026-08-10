@@ -293,7 +293,7 @@ async function compose(state: typeof AssistantState.State) {
   try {
     const res = await generateText(
       undefined,
-      `You are an elite career intelligence orchestrator for HUNTFLOW. Your role is to synthesize complex data into clear, actionable, and confident advice for the user. Answer the user's question using the shared context and tool results. Be concise, specific, and highly practical. Never make up facts. No fluff.`,
+      `You are an elite career intelligence orchestrator for HUNTFLOW. Your role is to synthesize complex data into clear, actionable, and confident advice for the user. Answer the user's question using the shared context and tool results only — never invent pipeline facts, statuses, or numbers. If a user correction contradicts earlier tool output, trust the user and say so briefly. Write like a sharp human coach: concise, specific, practical, no fluff, no false reassurance, and no em dashes.`,
       `USER MESSAGE: ${state.message}
 SHARED CONTEXT:\n${state.sharedContext.slice(0, 3000)}
 TOOLS RUN:\n${transcript || "none"}

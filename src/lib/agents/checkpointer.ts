@@ -191,6 +191,11 @@ export class SqliteCheckpointSaver extends BaseCheckpointSaver {
   }
 
   async putWrites(): Promise<void> {
-    // Optional write-stream buffering if needed
+    // No-op by design: `put` persists the full checkpoint synchronously, so the
+    // write-stream buffer LangGraph offers is unnecessary here. The graphs in
+    // this app use plain `invoke` (no interrupts / `astream` resume), so
+    // skipping the pending-writes buffer loses nothing: resumed threads read
+    // the last full checkpoint via getTuple. If a future graph adds
+    // `interrupt()` or stream-write resume, this needs a real writes table.
   }
 }

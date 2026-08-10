@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
         missingSkills: result.missingSkills,
         salaryEstimate: result.salaryEstimate,
         outreachSubject: result.outreachSubject,
+        interviewPrepTopics: result.interviewPrepTopics,
       },
     });
 
@@ -83,13 +84,13 @@ export async function POST(req: NextRequest) {
       missingSkills: result.missingSkills,
       salaryEstimate: result.salaryEstimate,
       outreachSubject: result.outreachSubject,
+      interviewPrepTopics: result.interviewPrepTopics,
       logs: result.logs,
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: "Multi-agent execution failed", details: err instanceof Error ? err.message : typeof err === 'object' && err ? JSON.stringify(err) : String(err) },
-      { status: 500 }
-    );
+    // Log the real error server-side; never echo internals to the client.
+    console.error("Multi-agent execution failed:", err);
+    return NextResponse.json({ error: "Multi-agent execution failed" }, { status: 500 });
   } finally {
     if (jobId) inFlight.delete(jobId);
   }

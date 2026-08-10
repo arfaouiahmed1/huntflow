@@ -1,7 +1,8 @@
 import { Annotation, END, StateGraph, START } from "@langchain/langgraph";
 import { AutoApplyLog, TailoredDocuments, UserProfile } from "@/types";
 import { extractJdTerms, matchFallback } from "@/lib/prompts";
-import { pitchSystemPrompt, pitchUserPrompt, pitchFallback } from "@/lib/prompts/applyAgentPrompts";
+import { pitchFallback } from "@/lib/prompts/applyAgentPrompts";
+import { PRINCIPLES_BLOCK } from "@/lib/prompts/principles";
 import { LLMSettings } from "@/lib/llm/providers";
 import { callLLM, resolveChain } from "@/lib/llm/router";
 import { executeApply } from "@/lib/agents/executeApply";
@@ -60,17 +61,32 @@ async function analyzeJob(state: typeof ApplyState.State) {
   const logs: AutoApplyLog[] = [];
   let matchScore = state.job.matchScore ?? null;
 
+  // Always run the deterministic fit engine so the apply decision can also
+  // respect profile dealbreakers (visa, clearance, on-site-only, salary floor),
+  // not just the skill-overlap threshold.
+  const jobLike = {
+    id: state.job.id,
+    title: state.job.title,
+    company: state.job.company,
+    location: "",
+    url: state.job.url,
+    jobDescription: state.job.jobDescription,
+  } as Parameters<typeof matchFallback>[0];
+  const analysis = matchFallback(jobLike, state.profile);
+
   if (matchScore == null) {
-    const jobLike = {
-      title: state.job.title,
-      company: state.job.company,
-      location: "",
-      jobDescription: state.job.jobDescription,
-    } as Parameters<typeof matchFallback>[0];
-    matchScore = matchFallback(jobLike, state.profile).matchScore;
+    matchScore = analysis.matchScore;
     logs.push({ timestamp: ts(), message: `📊 Local fit engine scored role at ${matchScore}%`, type: "info" });
   }
   if (!Number.isFinite(matchScore)) matchScore = 0;
+
+  if (analysis.fit === "skip") {
+    logs.push({
+      timestamp: ts(),
+      message: `🚫 Fit gate: role marked "skip" — ${(analysis.dealbreakers ?? []).slice(0, 2).join("; ") || "profile dealbreaker"}`,
+      type: "warning",
+    });
+  }
 
   const terms = extractJdTerms(state.job.jobDescription, state.profile.skills);
   const topSkills = terms.filter((t) => t.inResume).slice(0, 5).map((t) => t.term);
@@ -82,16 +98,18 @@ async function analyzeJob(state: typeof ApplyState.State) {
     type: "info",
   });
 
+  const fitGate = analysis.fit === "skip";
+  const proceed = matchScore >= state.minMatch && !fitGate;
+  const reason = fitGate
+    ? `Fit is "skip" — ${(analysis.dealbreakers ?? []).slice(0, 1).join("; ") || "profile dealbreaker"}`
+    : matchScore >= state.minMatch
+      ? `Score ${matchScore}% meets threshold ${state.minMatch}%`
+      : `Score ${matchScore}% below threshold ${state.minMatch}%`;
+
   return {
     matchScore,
     logs,
-    decision: {
-      proceed: matchScore >= state.minMatch,
-      reason:
-        matchScore >= state.minMatch
-          ? `Score ${matchScore}% meets threshold ${state.minMatch}%`
-          : `Score ${matchScore}% below threshold ${state.minMatch}%`,
-    },
+    decision: { proceed, reason },
   };
 }
 
@@ -113,7 +131,11 @@ async function prepare(state: typeof ApplyState.State) {
     try {
       const res = await callLLM(
         {
-          system: "You are a Senior Career Strategist and Expert Copywriter. You write 3-sentence, high-signal 'why me' pitches for job applications. Keep it grounded in the user's actual skills. No markdown, no fluff, no sycophantic language.",
+          system: `You are a Senior Career Strategist and Expert Copywriter. You write 3-sentence, high-signal "why me" pitches for job applications.
+
+${PRINCIPLES_BLOCK}
+
+Pitch constraints: keep it grounded in the user's actual skills and accomplishments — never invent facts, skills, or metrics. Write like a real professional in a conversation, not a marketing template: vary sentence rhythm, avoid clichés such as "I am excited about the opportunity" or "aligns perfectly", and never use em dashes. No markdown, no fluff, no sycophantic language.`,
           user: `Role: ${state.job.title} at ${state.job.company}.\nCandidate: ${state.profile.name}, ${state.profile.targetTitle}. Skills: ${state.profile.skills.slice(0, 6).join(", ")}.${gapsStr}\n${
             state.sharedContext
               ? `Search context the user's agents remember:\n${state.sharedContext.slice(0, 1600)}\n`
@@ -131,7 +153,7 @@ async function prepare(state: typeof ApplyState.State) {
   }
 
   if (!pitch) {
-    pitch = `${state.profile.summary.slice(0, 240)}`;
+    pitch = pitchFallback({ title: state.job.title, company: state.job.company }, state.profile);
   }
 
   return { logs, pitch };

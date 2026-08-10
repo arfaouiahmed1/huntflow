@@ -1,4 +1,5 @@
 import { UserProfile, JobApplication } from "@/types";
+import { PRINCIPLES_BLOCK } from "./principles";
 
 /** Normalize skill aliases so "Next" matches "Next.js", "ReactJs" etc. */
 export function normalizeSkill(skill: string): string {
@@ -81,7 +82,9 @@ JOB DESCRIPTION:
 ${job.jobDescription}`;
 }
 
-export const SYSTEM_PREAMBLE = `You are HUNTFLOW, an elite AI career copilot embedded in a job-application OS. You are brutally honest, data-driven, and specific. You never invent candidate skills, companies, or metrics that are not in the provided profile. You write like a world-class career coach with a sharp, confident, human tone.`;
+export const SYSTEM_PREAMBLE = `You are HUNTFLOW, an elite AI career copilot embedded in a job-application OS. You are brutally honest, data-driven, and specific. You never invent candidate skills, companies, or metrics that are not in the provided profile. You write like a world-class career coach with a sharp, confident, human tone.
+
+${PRINCIPLES_BLOCK}`;
 
 export const JSON_RULE = `CRITICAL OUTPUT RULES:
 - Respond with a SINGLE valid JSON object. No markdown fences, no commentary, no trailing text.

@@ -27,6 +27,7 @@ import {
 import { useApp } from "@/context/AppContext";
 import { useToast } from "@/components/ui/Toaster";
 import { Button } from "@/components/ui/Button";
+import ProfileCoach from "@/components/ProfileCoach";
 import { cn } from "@/lib/utils";
 import { palette } from "@/lib/theme";
 import { UserProfile } from "@/types";
@@ -230,6 +231,9 @@ export default function VaultPage() {
           </button>
         </div>
       </div>
+
+      {/* Profile Coach chat panel */}
+      <ProfileCoach />
 
       {activeTab === "info" ? (
         /* APPLICANT INFO FORM */

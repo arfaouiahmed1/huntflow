@@ -29,8 +29,8 @@ export function employerReviewFallback(job: Pick<JobApplication, "title" | "comp
     verdict,
     strengths: [
       `Strong core alignment in ${matched.slice(0, 3).join(", ") || profile.skills.slice(0, 2).join(", ")}.`,
-      `Relevant experience title (${profile.targetTitle}) matches job seniority.`,
-      `Verified tenure across ${profile.experience.length} previous organization(s).`,
+      `Profile targets ${profile.targetTitle}, which positions well against this ${job.title} role.`,
+      `${profile.experience.length} role(s) with ${profile.experience[0]?.duration ?? "industry"} tenure in the profile.`,
     ],
     riskFactors: missing.length
       ? missing.slice(0, 3).map((m) => `Missing explicit mention of ${m} in primary experience bullets.`)

@@ -50,6 +50,7 @@ export const SalaryIntelSchema = z.object({
   jobTitle: z.string(),
   company: z.string(),
   location: z.string().optional(),
+  jobDescription: z.string().optional(),
 });
 
 export const OutreachEmailSchema = z.object({
@@ -69,6 +70,33 @@ export const AtsAuditSchema = z.object({
  * Tool Execution Handlers
  * ------------------------------------------------------------------ */
 
+/** Detect an ATS vendor when the posting names it; otherwise "generic". */
+function detectAtsType(jd: string): string {
+  const lower = jd.toLowerCase();
+  if (/greenhouse/i.test(lower)) return "greenhouse";
+  if (/lever/i.test(lower)) return "lever";
+  if (/workday/i.test(lower)) return "workday";
+  if (/taleo|oracle recruiting/i.test(lower)) return "taleo";
+  if (/ashby/i.test(lower)) return "ashby";
+  return "generic";
+}
+
+/** Derive culture signals from the posting itself instead of hardcoding. */
+function cultureKeywordsFromJd(jd: string): string[] {
+  const lower = jd.toLowerCase();
+  const signals: string[] = [];
+  if (/remote|distributed|async|work from home|wfh/i.test(lower)) signals.push("Remote-first");
+  if (/hybrid|flexible schedule|flexible work/i.test(lower)) signals.push("Hybrid / flexible");
+  if (/fast.paced|agile|sprint|velocity|move fast/i.test(lower)) signals.push("Fast-paced");
+  if (/startup|seed|series|scale.?up|pre.?ipo/i.test(lower)) signals.push("Startup / scale-up");
+  if (/enterprise|fortune|large.?(company|org)/i.test(lower)) signals.push("Enterprise");
+  if (/collaborat|team|cross.functional|pair|inclusive/i.test(lower)) signals.push("Collaborative");
+  if (/ownership|autonom|initiative|self.?driven/i.test(lower)) signals.push("Ownership-driven");
+  if (/growth|hiring|expanding|scal/i.test(lower)) signals.push("Growth phase");
+  if (/impact|mission|purpose|make a difference/i.test(lower)) signals.push("Impact-focused");
+  return signals.length ? signals.slice(0, 6) : ["Standard professional culture"];
+}
+
 export async function executeCompanyIntelTool(input: z.infer<typeof CompanyIntelSchema>, settings?: LLMSettings) {
   try {
     const jsonResult = await generateJSON<{ atsType: string; cultureKeywords: string[]; summary: string; }>(
@@ -78,14 +106,16 @@ export async function executeCompanyIntelTool(input: z.infer<typeof CompanyIntel
     );
     return {
       success: true,
-      ...jsonResult,
+      atsType: typeof jsonResult.atsType === "string" && jsonResult.atsType ? jsonResult.atsType : detectAtsType(input.jobDescription),
+      cultureKeywords: Array.isArray(jsonResult.cultureKeywords) ? jsonResult.cultureKeywords.slice(0, 8) : cultureKeywordsFromJd(input.jobDescription),
+      summary: typeof jsonResult.summary === "string" ? jsonResult.summary : "",
     };
   } catch {
     return {
       success: true,
-      atsType: "generic",
-      cultureKeywords: ["Innovation", "Impact", "Collaboration"],
-      summary: "Company focused on standard modern engineering practices.",
+      atsType: detectAtsType(input.jobDescription),
+      cultureKeywords: cultureKeywordsFromJd(input.jobDescription),
+      summary: `Deterministic scan of the posting (offline): ${cultureKeywordsFromJd(input.jobDescription).join(", ").toLowerCase()}.`,
     };
   }
 }
@@ -145,10 +175,28 @@ export async function executeLetterTailorTool(input: z.infer<typeof LetterTailor
 
 export async function executeInterviewPrepTool(input: z.infer<typeof InterviewPrepSchema>) {
   const terms = extractJdTerms(input.jobDescription, []).slice(0, 5).map((t) => t.term);
+  const jd = (input.jobDescription || "").toLowerCase();
+  const focusTopics: string[] = [];
+  for (const t of terms) {
+    focusTopics.push(
+      `Hands-on depth on ${t}: be ready to explain real usage, tradeoffs, and a concrete example from your work.`
+    );
+  }
+  const signalTopics: Array<[RegExp, string]> = [
+    [/lead|manage|mentor|team|stakeholder/i, "Leadership and alignment: prepare 1-2 stories about leading work or unblocking a team."],
+    [/remote|distributed|async/i, "Remote collaboration: how you communicate, document decisions, and stay aligned async."],
+    [/startup|fast.paced|ambiguous|scale|growth/i, "Ownership under ambiguity: a story where you took initiative without clear direction."],
+    [/legacy|migrat|refactor|moderni/i, "Migration and modernization: tradeoffs you made and how you de-risked the change."],
+    [/customer|user|product|impact|metric/i, "User-facing impact: connect your work to a measurable outcome."],
+    [/incident|on.?call|reliab|sre/i, "Reliability and incidents: how you diagnose, respond, and prevent recurrence."],
+  ];
+  for (const [re, topic] of signalTopics) {
+    if (re.test(jd)) focusTopics.push(topic);
+  }
   return {
     success: true,
-    focusTopics: terms,
-    questionsCount: 5,
+    focusTopics: focusTopics.slice(0, 8),
+    questionsCount: focusTopics.length,
   };
 }
 
@@ -157,7 +205,7 @@ export async function executeSalaryIntelTool(input: z.infer<typeof SalaryIntelSc
     const result = await generateJSON<{ estimatedRange: string; confidence: string }>(
       settings,
       "You are a compensation analyst.",
-      salaryIntelPrompt(input.jobTitle, input.company, input.location)
+      salaryIntelPrompt(input.jobTitle, input.company, input.location, input.jobDescription)
     );
     return {
       success: true,
@@ -167,12 +215,27 @@ export async function executeSalaryIntelTool(input: z.infer<typeof SalaryIntelSc
       confidence: result.confidence,
     };
   } catch {
+    const jd = input.jobDescription || "";
+    const disclosed = jd.match(/\$\s?\d[\d,]*k?\s*[-–]\s*\$\s?\d[\d,]*k?/i);
+    if (disclosed) {
+      return {
+        success: true,
+        role: input.jobTitle,
+        company: input.company,
+        estimatedRange: disclosed[0].replace(/\s+/g, " "),
+        confidence: "high",
+      };
+    }
+    const senior = /senior|lead|principal|staff|sr\.?/i.test(input.jobTitle) ? 1.25 : 1;
+    const base = /ai|ml|llm|machine|data/i.test(jd) ? 165000 : 140000;
+    const low = Math.round((base * senior) / 1000) * 1000;
+    const high = Math.round((base * senior * 1.35) / 1000) * 1000;
     return {
       success: true,
       role: input.jobTitle,
       company: input.company,
-      estimatedRange: "$100,000 - $150,000 USD",
-      confidence: "low",
+      estimatedRange: `$${low.toLocaleString()} - $${high.toLocaleString()} USD (market estimate)`,
+      confidence: "medium",
     };
   }
 }

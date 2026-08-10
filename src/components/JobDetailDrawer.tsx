@@ -25,6 +25,8 @@ import StatusSelect from "@/components/ui/StatusSelect";
 import { statusConfig } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toaster";
+import DateField from "@/components/ui/DateField";
+import Select from "@/components/ui/Select";
 import { scoreColor, cn } from "@/lib/utils";
 import MatchAnalysis from "@/components/match/MatchAnalysis";
 import DocumentsPanel from "@/components/documents/DocumentsPanel";
@@ -217,27 +219,23 @@ export default function JobDetailDrawer({
                 <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.15em] text-dim">
                   {label}
                 </span>
-                <input
-                  type="date"
-                  value={value ? value.slice(0, 10) : ""}
-                  onChange={(e) => patchDate(field)(e.target.value)}
-                  className="w-full rounded-lg border border-line bg-white/[0.03] px-2 py-1.5 text-xs text-paper outline-none transition-colors focus:border-chartreuse/50"
-                />
+                <DateField value={value ?? ""} onChange={patchDate(field)} />
               </label>
             ))}
           </div>
 
           <div className="mt-3 flex items-start gap-2">
-            <select
-              aria-label="Priority"
+            <Select
+              ariaLabel="Priority"
               value={job.priority ?? "medium"}
-              onChange={(e) => updateApplication(job.id, { priority: e.target.value as JobApplication["priority"] })}
-              className="shrink-0 rounded-lg border border-line bg-white/[0.03] px-2.5 py-1.5 text-xs text-paper outline-none transition-colors focus:border-chartreuse/50"
-            >
-              <option value="high">High priority</option>
-              <option value="medium">Medium priority</option>
-              <option value="low">Low priority</option>
-            </select>
+              onChange={(p) => updateApplication(job.id, { priority: p })}
+              className="w-32 shrink-0"
+              options={[
+                { value: "high", label: "High priority", dot: "var(--coral)" },
+                { value: "medium", label: "Medium priority", dot: "var(--amber)" },
+                { value: "low", label: "Low priority", dot: "var(--sky)" },
+              ]}
+            />
             <textarea
               rows={2}
               placeholder="Notes…"

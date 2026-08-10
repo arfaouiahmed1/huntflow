@@ -15,6 +15,8 @@ Available tools:
 - search_vault: semantic search over the user's uploaded documents (resume, cover letters). args: {"query": "..."}
 - remember: store a fact/note the user wants remembered. args: {"content": "..."}
 - access_email: read recent unseen emails or send an email. args: {"action": "read"} OR {"action": "send", "to": "...", "subject": "...", "body": "..."}
+- company_intel: employer review of a tracked company (ATS vendor, culture signals, summary). args: {"company": "..."}
+- salary_intel: market salary estimate for a tracked company's most recent open role. args: {"company": "..."}
 
 Routing rules:
 - The user's search context and memories are already included below — answer directly from context whenever you can; do not call a tool for a question you can already answer.

@@ -1,12 +1,14 @@
 import { Annotation, END, StateGraph, START } from "@langchain/langgraph";
 import { UserProfile } from "@/types";
 import { generateJSON, generateText } from "@/lib/llm/client";
+import { generateTextStream } from "@/lib/llm/stream";
 import { cleanAssistantDecision, CleanAssistantDecision } from "@/lib/llm/sanitize";
 import { buildSharedContext } from "@/lib/agents/context";
 import { remember } from "@/lib/agents/memory";
 import { searchVault } from "@/lib/vault";
 import { jobsRepo, emailsRepo, interviewsRepo, remindersRepo, settingsRepo, contactsRepo } from "@/lib/db";
 import { ORCHESTRATOR_TOOLS_PROMPT } from "@/lib/prompts/orchestratorPrompts";
+import { executeCompanyIntelTool, executeSalaryIntelTool } from "@/lib/agents/tools/multiAgentTools";
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -25,6 +27,16 @@ export interface AssistantResult {
   usedTools: string[];
   llm: boolean;
 }
+
+/**
+ * Live events emitted as the assistant works. The streamed route maps these to
+ * `reasoning` / `tool_call` / `token` SSE frames so the UI can show the agent at
+ * work in real time instead of waiting for a single JSON blob.
+ */
+export type AssistantStreamEvent =
+  | { kind: "reasoning"; note: string }
+  | { kind: "tool_call"; label: string; detail: string }
+  | { kind: "token"; delta: string };
 
 const MAX_ITERATIONS = 3;
 
@@ -93,7 +105,7 @@ PREVIOUS TOOL RESULTS (if any):\n${state.toolResult.slice(0, 1200) || "—"}`;
       };
     }
     const tool = decision.tool ?? "";
-    if (["pipeline_summary", "search_jobs", "search_vault", "remember", "access_email"].includes(tool)) {
+    if (["pipeline_summary", "search_jobs", "search_vault", "remember", "access_email", "company_intel", "salary_intel"].includes(tool)) {
       const lastRun = state.steps.filter((s) => s.kind === "tool").at(-1)?.label;
       if (lastRun === tool && state.toolResult) {
         return {
@@ -129,6 +141,12 @@ PREVIOUS TOOL RESULTS (if any):\n${state.toolResult.slice(0, 1200) || "—"}`;
   }
   if (/pipeline|status|tracked|how many|follow.?up|interview|reminder|offer|applied/.test(msg)) {
     return { iteration: iter, pendingTool: "pipeline_summary", pendingArgs: {}, steps: [{ kind: "tool", label: "pipeline_summary", detail: "state snapshot" }] };
+  }
+  if (/salary|comp|pay|what.*earn|market rate/.test(msg)) {
+    return { iteration: iter, pendingTool: "salary_intel", pendingArgs: {}, steps: [{ kind: "tool", label: "salary_intel", detail: "market comp estimate" }] };
+  }
+  if (/review|employer|company.*(culture|profile)|(review|assess|research).*(company|acme|employer)/.test(msg)) {
+    return { iteration: iter, pendingTool: "company_intel", pendingArgs: {}, steps: [{ kind: "tool", label: "company_intel", detail: "employer review" }] };
   }
   if (/find|job|company|role|position/.test(msg)) {
     return { iteration: iter, pendingTool: "search_jobs", pendingArgs: { query: state.message }, steps: [{ kind: "tool", label: "search_jobs", detail: "job lookup" }] };
@@ -279,27 +297,91 @@ async function executeTool(state: typeof AssistantState.State) {
         }
       }
     }
+    case "company_intel": {
+      // Employer review — runs the same CompanyIntel agent used downstream in
+      // auto-apply, sourcing the freshest tracked posting for the company so the
+      // result is grounded in real pipeline data rather than invented.
+      const company = String(args.company ?? "").trim() || inferCompany(state.message);
+      if (!company) return { toolResult: "Tell me which company to review — e.g. \"review Acme\"." };
+      const jd = latestJdFor(company);
+      if (!jd) return { toolResult: `I couldn't find a tracked posting for ${company}. Add that job to your pipeline first.` };
+      const res = await executeCompanyIntelTool({ company, jobDescription: jd });
+      return {
+        toolResult: `EMPLOYER REVIEW — ${company}\nATS: ${(res.atsType || "generic").toUpperCase()}\nCulture: ${(res.cultureKeywords ?? []).join(", ") || "not available"}\nSummary: ${res.summary}`,
+      };
+    }
+    case "salary_intel": {
+      const company = String(args.company ?? "").trim() || inferCompany(state.message);
+      if (!company) return { toolResult: "Tell me which company's salary to estimate — e.g. \"salary at Acme\"." };
+      const jd = latestJdFor(company);
+      if (!jd) return { toolResult: `I couldn't find a tracked posting for ${company}. Add that job to your pipeline first.` };
+      const job = [...jobsRepo.list()].reverse().find((j) => j.company.toLowerCase().includes(company.toLowerCase()));
+      const res = await executeSalaryIntelTool({
+        jobTitle: job?.title ?? inferTitle(jd),
+        company,
+        location: job?.location,
+        jobDescription: jd,
+      });
+      return {
+        toolResult: `SALARY ESTIMATE — ${res.role} @ ${res.company}\nRange: ${res.estimatedRange} (confidence: ${res.confidence})`,
+      };
+    }
     default:
       return { toolResult: "Unknown tool." };
   }
 }
 
-async function compose(state: typeof AssistantState.State) {
+/** Pull the company name out of a short user message like "review Acme" / "salary at Google". */
+function inferCompany(message: string): string {
+  const m = message.match(/(?:review|intel|salary|company|at|for)\s+([A-Z][A-Za-z0-9&.' -]{1,40})/i);
+  return m ? m[1].trim() : "";
+}
+
+/** Latest tracked job description for a company, or "" when none is found. */
+function latestJdFor(company: string): string {
+  const job = [...jobsRepo.list()].reverse().find((j) => j.company.toLowerCase().includes(company.toLowerCase()));
+  return (job?.jobDescription ?? "").trim().slice(0, 6000);
+}
+
+/** Crude title fallback when a tracked job isn't found by company name. */
+function inferTitle(jd: string): string {
+  const line = jd.split("\n").find((l) => /title|role|position/i.test(l));
+  return line ? line.replace(/title|role|position|[:|]/gi, "").trim().slice(0, 60) : "role";
+}
+
+async function compose(state: typeof AssistantState.State, onToken?: (delta: string) => void) {
   if (state.finalAnswer) return {};
   const transcript = state.steps
     .map((s) => `- ${s.label}: ${s.detail}`)
     .join("\n");
 
-  try {
-    const res = await generateText(
-      undefined,
-      `You are an elite career intelligence orchestrator for HUNTFLOW. Your role is to synthesize complex data into clear, actionable, and confident advice for the user. Answer the user's question using the shared context and tool results only — never invent pipeline facts, statuses, or numbers. If a user correction contradicts earlier tool output, trust the user and say so briefly. Write like a sharp human coach: concise, specific, practical, no fluff, no false reassurance, and no em dashes.`,
-      `USER MESSAGE: ${state.message}
+  const system = `You are an elite career intelligence orchestrator for HUNTFLOW. Your role is to synthesize complex data into clear, actionable, and confident advice for the user. Answer the user's question using the shared context and tool results only — never invent pipeline facts, statuses, or numbers. If a user correction contradicts earlier tool output, trust the user and say so briefly. Write like a sharp human coach: concise, specific, practical, no fluff, no false reassurance, and no em dashes.`;
+  const user = `USER MESSAGE: ${state.message}
 SHARED CONTEXT:\n${state.sharedContext.slice(0, 3000)}
 TOOLS RUN:\n${transcript || "none"}
 TOOL RESULTS:\n${state.toolResult.slice(0, 3000) || "—"}
-PREVIOUS CONVERSATION:\n${state.history.slice(-6).map((m) => `${m.role}: ${m.content.slice(0, 300)}`).join("\n")}`
-    );
+PREVIOUS CONVERSATION:\n${state.history.slice(-6).map((m) => `${m.role}: ${m.content.slice(0, 300)}`).join("\n")}`;
+
+  /* When a live token sink is present, prefer true token-by-token streaming so
+   * the client watches the reply form in real time. Any streaming failure falls
+   * back to the exact non-streaming path, so this is never a correctness risk. */
+  if (onToken) {
+    try {
+      let full = "";
+      for await (const delta of generateTextStream(undefined, system, user)) {
+        if (!delta) continue;
+        full += delta;
+        onToken(delta);
+      }
+      if (full.trim()) return { finalAnswer: full.trim(), llmUsed: true };
+      // empty streamed reply → fall through to the deterministic path
+    } catch {
+      /* stream unavailable — fall back below */
+    }
+  }
+
+  try {
+    const res = await generateText(undefined, system, user);
     return { finalAnswer: res.text.trim(), llmUsed: true };
   } catch {
     if (state.toolResult) {
@@ -309,31 +391,33 @@ PREVIOUS CONVERSATION:\n${state.history.slice(-6).map((m) => `${m.role}: ${m.con
   }
 }
 
-const assistantGraph = new StateGraph(AssistantState)
-  .addNode("route", route)
-  .addNode("executeTool", executeTool)
-  .addNode("compose", compose)
-  .addEdge(START, "route")
-  .addConditionalEdges("route", (state) => (state.pendingTool ? "executeTool" : "compose"))
-  .addEdge("executeTool", "route")
-  .addEdge("compose", END)
-  .compile();
+interface AssistantGraphOptions {
+  /** Called with each final-composition text delta while it's being generated. */
+  onComposeToken?: (delta: string) => void;
+}
 
-export async function runAssistant(input: {
+function createAssistantGraph(options: AssistantGraphOptions = {}) {
+  const { onComposeToken } = options;
+  return new StateGraph(AssistantState)
+    .addNode("route", route)
+    .addNode("executeTool", executeTool)
+    .addNode("compose", (state) => compose(state, onComposeToken))
+    .addEdge(START, "route")
+    .addConditionalEdges("route", (state) => (state.pendingTool ? "executeTool" : "compose"))
+    .addEdge("executeTool", "route")
+    .addEdge("compose", END)
+    .compile();
+}
+
+export interface AssistantInput {
   message: string;
   history?: ChatMessage[];
   profile: UserProfile;
-}): Promise<AssistantResult> {
-  const shared = buildSharedContext({
-    profile: input.profile,
-    jobs: jobsRepo.list(),
-    emails: emailsRepo.list(),
-    interviews: interviewsRepo.list(),
-    reminders: remindersRepo.list(),
-    maxTokens: 5000,
-  });
+}
 
-  const result = await assistantGraph.invoke({
+/** Shared open-state for a fresh assistant run; identical across stream/non-stream. */
+function initialState(input: AssistantInput, shared: { context: string }): typeof AssistantState.State {
+  return {
     message: input.message,
     profile: input.profile,
     sharedContext: shared.context,
@@ -345,8 +429,10 @@ export async function runAssistant(input: {
     pendingArgs: {},
     finalAnswer: "",
     llmUsed: false,
-  });
+  };
+}
 
+function summarizeResult(result: { finalAnswer?: string; steps: AssistantStep[]; llmUsed: boolean }, input: AssistantInput): AssistantResult {
   const usedTools = result.steps.filter((s: AssistantStep) => s.kind === "tool").map((s: AssistantStep) => s.label);
   if (usedTools.length && result.llmUsed !== false) {
     remember("insight", `Assistant handled "${input.message.slice(0, 120)}" using ${usedTools.join(", ")}`, {
@@ -354,11 +440,94 @@ export async function runAssistant(input: {
       importance: 1,
     });
   }
-
   return {
     reply: result.finalAnswer || "Done.",
     steps: result.steps,
     usedTools,
     llm: result.llmUsed === true,
   };
+}
+
+export async function runAssistant(input: AssistantInput): Promise<AssistantResult> {
+  const shared = buildSharedContext({
+    profile: input.profile,
+    jobs: jobsRepo.list(),
+    emails: emailsRepo.list(),
+    interviews: interviewsRepo.list(),
+    reminders: remindersRepo.list(),
+    maxTokens: 5000,
+  });
+
+  const graph = createAssistantGraph();
+  const result = await graph.invoke(initialState(input, shared));
+  return summarizeResult(result, input);
+}
+
+/**
+ * Streaming variant of `runAssistant`. Drives the exact same routing/tool graph
+ * but reports each working step to `onEvent` as it happens:
+ *  - reasoning: a routing note (before a tool runs / when answering directly)
+ *  - tool_call: a tool that actually executed (with its human detail)
+ *  - token:     a text delta of the final reply, as it's streamed
+ *
+ * `onEvent` is fire-and-forget (never awaited) so a slow consumer can't stall
+ * the graph. Returns the same `AssistantResult` as `runAssistant`.
+ */
+export async function runAssistantStream(
+  input: AssistantInput,
+  onEvent: (event: AssistantStreamEvent) => void
+): Promise<AssistantResult> {
+  const shared = buildSharedContext({
+    profile: input.profile,
+    jobs: jobsRepo.list(),
+    emails: emailsRepo.list(),
+    interviews: interviewsRepo.list(),
+    reminders: remindersRepo.list(),
+    maxTokens: 5000,
+  });
+
+  const graph = createAssistantGraph({
+    onComposeToken: (delta) => onEvent({ kind: "token", delta }),
+  });
+
+  const results: { finalAnswer?: string; steps: AssistantStep[]; llmUsed: boolean } = {
+    steps: [],
+    llmUsed: false,
+  };
+
+  // `updates` mode yields `{ nodeName: partialState }` for every executed node —
+  // the exact, dependency-free way to observe routing and tool activity live.
+  const stream = await graph.stream(initialState(input, shared), { streamMode: "updates" });
+  for await (const step of stream) {
+    if (!step || typeof step !== "object") continue;
+    const update = step as Record<string, Record<string, unknown>>;
+    for (const [node, partial] of Object.entries(update)) {
+      const pstate = partial as Record<string, unknown>;
+      if (node === "route") {
+        const pendingTool = typeof pstate.pendingTool === "string" ? pstate.pendingTool : "";
+        if (pendingTool) {
+          onEvent({ kind: "reasoning", note: `routing to ${pendingTool}` });
+        } else if (typeof pstate.finalAnswer === "string" && pstate.finalAnswer) {
+          onEvent({ kind: "reasoning", note: "composing answer" });
+          results.finalAnswer = pstate.finalAnswer;
+        }
+        if (Array.isArray(pstate.steps)) results.steps = pstate.steps as AssistantStep[];
+        if (typeof pstate.llmUsed === "boolean") results.llmUsed = pstate.llmUsed;
+      } else if (node === "executeTool") {
+        const steps = Array.isArray(pstate.steps) ? (pstate.steps as AssistantStep[]) : (results.steps ?? []);
+        const lastTool = [...steps].reverse().find((s) => s.kind === "tool");
+        if (lastTool) {
+          onEvent({ kind: "tool_call", label: lastTool.label, detail: lastTool.detail });
+        }
+      } else if (node === "compose") {
+        if (Array.isArray(pstate.steps)) results.steps = pstate.steps as AssistantStep[];
+        if (typeof pstate.finalAnswer === "string" && (pstate.finalAnswer || "").trim()) {
+          results.finalAnswer = pstate.finalAnswer;
+        }
+        if (typeof pstate.llmUsed === "boolean") results.llmUsed = pstate.llmUsed;
+      }
+    }
+  }
+
+  return summarizeResult(results, input);
 }

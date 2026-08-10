@@ -2,14 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Bot, Send, Loader2, Sparkles, Wrench, User } from "lucide-react";
+import { Bot, Send, Loader2, Sparkles, Wrench, User, Sparkle } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { cn } from "@/lib/utils";
+import { consumeAssistant } from "@/lib/assistant/streamClient";
 
 interface Msg {
   role: "user" | "assistant";
   content: string;
   steps?: { kind: string; label: string; detail: string }[];
+  /** Live "thinking" notes shown above the reply while the agent is working. */
+  reasoning?: string[];
 }
 
 const HISTORY_KEY = "huntflow_assistant_history";
@@ -33,6 +36,7 @@ export default function AssistantPage() {
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const liveIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     try {
@@ -46,6 +50,23 @@ export default function AssistantPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, thinking]);
 
+  /** Immutably replace one message while a stream is updating it in place. */
+  const patchLive = (patch: (m: { content: string; steps?: Msg["steps"]; reasoning?: string[] }) => void) => {
+    setMessages((prev) => {
+      const idx = liveIndexRef.current;
+      if (idx === null || idx < 0 || idx >= prev.length || prev[idx].role !== "assistant") return prev;
+      const next = prev.slice();
+      next[idx] = {
+        ...prev[idx],
+        content: prev[idx].content,
+        steps: prev[idx].steps,
+        reasoning: prev[idx].reasoning,
+      };
+      patch(next[idx]);
+      return next;
+    });
+  };
+
   const send = async (text?: string) => {
     const content = (text ?? input).trim();
     if (!content || thinking) return;
@@ -54,26 +75,58 @@ export default function AssistantPage() {
     const next: Msg[] = [...messages, { role: "user", content }];
     setMessages(next);
     setThinking(true);
-    try {
-      const res = await fetch("/api/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: content,
-          history: history.map((m) => ({ role: m.role, content: m.content })),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setMessages([...next, { role: "assistant", content: data.reply, steps: data.steps }]);
-    } catch (e) {
-      setMessages([
-        ...next,
-        { role: "assistant", content: e instanceof Error ? e.message : "Something went wrong." },
-      ]);
-    } finally {
-      setThinking(false);
-    }
+
+    // Seed an empty assistant bubble that the stream fills in live.
+    const liveIndex = next.length;
+    liveIndexRef.current = liveIndex;
+    setMessages((prev) => [...prev, { role: "assistant", content: "", steps: [], reasoning: [] }]);
+
+    await consumeAssistant(JSON.stringify({ message: content, history: history.map((m) => ({ role: m.role, content: m.content })) }), {
+      onEvent: {
+        onReasoning: (note) => {
+          patchLive((m) => {
+            m.reasoning = [...(m.reasoning ?? []), note];
+          });
+        },
+        onToolCall: (label, detail) => {
+          patchLive((m) => {
+            m.steps = [...(m.steps ?? []), { kind: "tool", label, detail }];
+          });
+        },
+        onToken: (delta) => {
+          patchLive((m) => {
+            m.content += delta;
+          });
+        },
+        onDone: (result) => {
+          setMessages((prev) => {
+            const idx = liveIndexRef.current;
+            if (idx === null || idx < 0 || idx >= prev.length) return prev;
+            const next = prev.slice();
+            const current = next[idx];
+            next[idx] = {
+              ...current,
+              content: result.reply || current.content,
+              steps: result.steps && result.steps.length ? result.steps : current.steps,
+            };
+            return next;
+          });
+          liveIndexRef.current = null;
+        },
+        onError: (message) => {
+          setMessages((prev) => {
+            const idx = liveIndexRef.current;
+            if (idx === null || idx < 0 || idx >= prev.length) return prev;
+            const next = prev.slice();
+            next[idx] = { ...next[idx], content: message || "Something went wrong." };
+            return next;
+          });
+          liveIndexRef.current = null;
+        },
+      },
+    });
+
+    setThinking(false);
   };
 
   return (
@@ -133,6 +186,18 @@ export default function AssistantPage() {
               </div>
             )}
             <div className={cn("max-w-[78%]", m.role === "user" && "order-first")}>
+              {m.role === "assistant" && m.reasoning && m.reasoning.length > 0 && (
+                <div className="mb-1.5 flex flex-wrap gap-1.5">
+                  {m.reasoning.map((r, k) => (
+                    <span
+                      key={k}
+                      className="inline-flex items-center gap-1 rounded-full border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/8 px-2 py-0.5 font-mono text-[9px] text-[var(--chartreuse)]"
+                    >
+                      <Sparkle className="h-2.5 w-2.5" /> {r}
+                    </span>
+                  ))}
+                </div>
+              )}
               {m.role === "assistant" && m.steps && m.steps.length > 0 && (
                 <div className="mb-1.5 flex flex-wrap gap-1.5">
                   {m.steps.map((s, j) => (
@@ -154,7 +219,14 @@ export default function AssistantPage() {
                     : "rounded-bl-md border border-[var(--line)] bg-[var(--ink-card)]/80 text-[var(--paper)]"
                 )}
               >
-                <p className="whitespace-pre-wrap">{m.content}</p>
+                {m.role === "assistant" && !m.content ? (
+                  <p className="min-w-40 text-xs text-dim">
+                    <Loader2 className="mr-1.5 inline h-3 w-3 animate-spin text-[var(--chartreuse)]" />
+                    thinking…
+                  </p>
+                ) : (
+                  <p className="whitespace-pre-wrap">{m.content}</p>
+                )}
               </div>
             </div>
             {m.role === "user" && (

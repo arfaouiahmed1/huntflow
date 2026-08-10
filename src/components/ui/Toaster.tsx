@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useCallback, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, AlertTriangle, Info, XCircle, X, type LucideIcon } from "lucide-react";
-import confetti from "canvas-confetti";
 import { cn } from "@/lib/utils";
 import { rawPalette } from "@/lib/theme";
 
@@ -57,16 +56,15 @@ export function ToasterProvider({ children }: { children: React.ReactNode }) {
       rawPalette.violet,
       rawPalette.coral,
     ];
-    confetti({
-      particleCount: 90,
-      spread: 75,
-      origin: { y: 0.7 },
-      colors,
+    // Lazy-load the confetti lib only when a celebration actually fires,
+    // keeping it out of the initial bundle.
+    void import("canvas-confetti").then(({ default: confetti }) => {
+      confetti({ particleCount: 90, spread: 75, origin: { y: 0.7 }, colors });
+      setTimeout(() => {
+        confetti({ particleCount: 50, angle: 60, spread: 60, origin: { x: 0 }, colors });
+        confetti({ particleCount: 50, angle: 120, spread: 60, origin: { x: 1 }, colors });
+      }, 180);
     });
-    setTimeout(() => {
-      confetti({ particleCount: 50, angle: 60, spread: 60, origin: { x: 0 }, colors });
-      confetti({ particleCount: 50, angle: 120, spread: 60, origin: { x: 1 }, colors });
-    }, 180);
   }, []);
 
   const api: ToastContextType = {

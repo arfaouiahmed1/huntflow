@@ -84,7 +84,6 @@ export async function POST(req: Request) {
       if (!res.ok) throw new Error(`Crawl HTTP ${res.status}`);
       const data = await res.json();
       crawledJobs = data.jobs || [];
-      console.log("CRAWL_DEBUG raw count", crawledJobs.length, JSON.stringify(crawledJobs.map((j) => ({ t: j.title, u: (j.url || "").slice(0, 60) }))));
     } catch {
       // Scrapling sidecar unreachable — report offline instead of fabricating mocks.
       return NextResponse.json({ success: true, count: 0, jobs: [], offline: true });

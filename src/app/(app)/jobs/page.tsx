@@ -42,7 +42,10 @@ export default function JobsPage() {
     () => new Set(applications.map((a) => dedupKey(a))),
     [applications]
   );
-  const skipKeys = useMemo(() => new Set(Object.keys(decisions)), [decisions]);
+  const skipKeys = useMemo(
+    () => new Set(Object.entries(decisions).filter(([, v]) => v === "skipped").map(([k]) => k)),
+    [decisions]
+  );
 
   /* Persist one crawl decision (saved | skipped) — pruned to ~500 keys. */
   const recordDecision = useCallback(

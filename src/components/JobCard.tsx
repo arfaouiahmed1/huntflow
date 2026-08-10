@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { MapPin, Bot, Clock, ArrowUpRight, Bell, GripVertical } from "lucide-react";
+import { MapPin, Bot, Clock, ArrowUpRight, Bell, GripVertical, Globe } from "lucide-react";
 import { JobApplication } from "@/types";
 import { cn, relativeDays, scoreColor } from "@/lib/utils";
 import { companyLogoUrl } from "@/lib/companyLogo";

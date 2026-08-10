@@ -29,13 +29,14 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import { JobSwipeDeck } from "@/components/crawler/JobSwipeDeck";
 import { EmployerReviewModal } from "@/components/crawler/EmployerReviewModal";
 import { palette } from "@/lib/theme";
+import { buildBoardGuidance, COLUMN_HINTS } from "@/lib/boardGuidance";
 
-const columns: { id: ApplicationStatus; label: string; accent: string }[] = [
-  { id: "wishlist", label: "Wishlist", accent: palette.sky },
-  { id: "applied", label: "Applied", accent: palette.violet },
-  { id: "interviewing", label: "Interviewing", accent: palette.amber },
-  { id: "offer", label: "Offer", accent: palette.chartreuse },
-  { id: "rejected", label: "Rejected", accent: palette.coral },
+const columns: { id: ApplicationStatus; label: string; accent: string; hint: string }[] = [
+  { id: "wishlist", label: "Wishlist", accent: palette.sky, hint: COLUMN_HINTS.wishlist },
+  { id: "applied", label: "Applied", accent: palette.violet, hint: COLUMN_HINTS.applied },
+  { id: "interviewing", label: "Interviewing", accent: palette.amber, hint: COLUMN_HINTS.interviewing },
+  { id: "offer", label: "Offer", accent: palette.chartreuse, hint: COLUMN_HINTS.offer },
+  { id: "rejected", label: "Rejected", accent: palette.coral, hint: COLUMN_HINTS.rejected },
 ];
 
 type SortKey = "newest" | "oldest" | "match" | "company" | "applied" | "followUp";
@@ -50,7 +51,7 @@ const SORT_OPTIONS: { id: SortKey; label: string }[] = [
 ];
 
 export default function TrackerPage() {
-  const { applications, activeJobId, setActiveJobId, searchLinkedInJobs, saveLinkedInJob, updateApplication, triggerAutoApply } = useApp();
+  const { applications, interviews, emails, activeJobId, setActiveJobId, searchLinkedInJobs, saveLinkedInJob, updateApplication, triggerAutoApply } = useApp();
   const { success, error } = useToast();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -68,6 +69,7 @@ export default function TrackerPage() {
   const [minMatch, setMinMatch] = useState(0);
   const [hasUrlOnly, setHasUrlOnly] = useState(false);
   const [autoAppliedOnly, setAutoAppliedOnly] = useState(false);
+  const [crawledOnly, setCrawledOnly] = useState(false);
   const [crawling, setCrawling] = useState(false);
 
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
@@ -182,9 +184,10 @@ export default function TrackerPage() {
         const matchesMatch = minMatch === 0 || (a.matchScore ?? 0) >= minMatch;
         const matchesUrl = !hasUrlOnly || Boolean(a.url);
         const matchesAuto = !autoAppliedOnly || a.autoApplyStatus === "applied";
-        return matchesQuery && matchesFilter && matchesMatch && matchesUrl && matchesAuto;
+        const matchesCrawled = !crawledOnly || Boolean(a.source);
+        return matchesQuery && matchesFilter && matchesMatch && matchesUrl && matchesAuto && matchesCrawled;
       }),
-    [applications, query, filter, minMatch, hasUrlOnly, autoAppliedOnly]
+    [applications, query, filter, minMatch, hasUrlOnly, autoAppliedOnly, crawledOnly]
   );
 
   const sorted = useMemo(() => {
@@ -214,10 +217,18 @@ export default function TrackerPage() {
   }, [filtered, sortKey]);
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: applications.length };
+    const c: Record<string, number> = {
+      all: applications.length,
+      crawled: applications.filter((a) => Boolean(a.source)).length,
+    };
     for (const col of columns) c[col.id] = applications.filter((a) => a.status === col.id).length;
     return c;
   }, [applications]);
+
+  const guidance = useMemo(
+    () => buildBoardGuidance(applications, interviews, emails),
+    [applications, interviews, emails]
+  );
 
   return (
     <div className="space-y-6">
@@ -231,7 +242,9 @@ export default function TrackerPage() {
             Application Tracker
           </h1>
           <p className="mt-1 text-sm text-dim" suppressHydrationWarning>
-            {mounted ? `${applications.length} opportunities · ${counts.applied + counts.interviewing + counts.offer} active pipelines` : "…"}
+            {mounted
+              ? `${applications.length} opportunities · ${counts.applied + counts.interviewing + counts.offer} active pipelines${counts.crawled ? ` · ${counts.crawled} crawler-sourced` : ""}`
+              : "…"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -261,6 +274,29 @@ export default function TrackerPage() {
       )}
       {mounted && (
       <>
+      {/* Coaching panel */}
+      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-[var(--chartreuse)]" />
+          <h2 className="text-sm font-bold text-[var(--paper)]">Coaching</h2>
+          <span className="text-[10px] text-dim">Deterministic insights from your live pipeline — updated as you move cards</span>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {columns.map((col) => {
+            const g = guidance[col.id];
+            return (
+              <div key={col.id} className="rounded-xl border border-[var(--line)] bg-white/[0.02] p-3">
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: col.accent }} />
+                  <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--paper)]">{col.label}</span>
+                </div>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-dim">{g.summary}</p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       {/* LinkedIn Jobs */}
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70">
         <button
@@ -450,6 +486,19 @@ export default function TrackerPage() {
           >
             Auto-applied
           </button>
+          <button
+            onClick={() => setCrawledOnly((v) => !v)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-semibold transition-colors",
+              crawledOnly
+                ? "border-[var(--sky)]/40 bg-[var(--sky)]/10 text-[var(--sky)]"
+                : "border-line text-dim hover:text-paper"
+            )}
+            title="Show only crawler-sourced jobs (source tag set)"
+          >
+            <Globe className="h-3.5 w-3.5" />
+            Crawled{counts.crawled > 0 ? ` · ${counts.crawled}` : ""}
+          </button>
         </div>
         <div className="ml-auto flex rounded-xl border border-[var(--line)] p-1">
           <button
@@ -526,6 +575,7 @@ export default function TrackerPage() {
                     {jobs.length}
                   </motion.span>
                 </div>
+                <p className="mb-3 px-0.5 text-[10px] leading-snug text-dim/70">{col.hint}</p>
                 <div className="flex flex-col gap-3">
                   <AnimatePresence mode="popLayout">
                     {jobs.map((job, i) => (
@@ -610,6 +660,7 @@ export default function TrackerPage() {
                   setMinMatch(0);
                   setHasUrlOnly(false);
                   setAutoAppliedOnly(false);
+                  setCrawledOnly(false);
                 }}
                 className="mt-3 rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-paper transition-colors hover:border-chartreuse/50 hover:text-chartreuse"
               >

@@ -12,6 +12,7 @@ const mockProfile: UserProfile = {
   skills: ["React", "TypeScript", "Node.js", "GraphQL", "AWS", "Docker", "Tailwind CSS"],
   experience: [
     {
+      id: "exp_1",
       company: "Acme Corp",
       role: "Senior Engineer",
       duration: "2021 - Present",
@@ -20,6 +21,7 @@ const mockProfile: UserProfile = {
   ],
   education: [
     {
+      id: "edu_1",
       school: "MIT",
       degree: "B.S. Computer Science",
       year: "2018",

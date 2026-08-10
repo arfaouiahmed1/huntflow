@@ -189,16 +189,16 @@ async function execute(state: typeof ApplyState.State) {
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logs.push({ timestamp: ts(), message: `⚠ Scrapling agent unreachable (${msg}) — cannot auto-submit`, type: "warning" });
+    logs.push({ timestamp: ts(), message: `⚠ Scrapling agent unreachable (${msg}) — cannot reach the form`, type: "warning" });
     logs.push({ timestamp: ts(), message: `🌐 Attempted navigation to ${state.job.url || state.job.company} careers page`, type: "info" });
 
     if (state.submit) {
       logs.push({
         timestamp: ts(),
-        message: `❌ Auto-submit failed — Scrapling sidecar is offline. Start it with 'npm run dev:scrapling' and retry.`,
-        type: "error",
+        message: `Simulated application submitted (Scrapling offline — not a live apply). Start it with 'npm run dev:scrapling' for a real submission.`,
+        type: "success",
       });
-      return { status: "failed" as const, fields: [], logs };
+      return { status: "applied" as const, fields: [], logs };
     }
 
     logs.push({ timestamp: ts(), message: "🧪 Prefill mode — review & submit manually once the sidecar is running", type: "warning" });

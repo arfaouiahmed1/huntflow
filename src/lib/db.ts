@@ -440,17 +440,17 @@ export const jobsRepo = {
       throw err;
     }
   },
-  removeAll() {
+  removeAll(insideTxn = false) {
     const db = getDb();
-    db.exec("BEGIN");
+    if (!insideTxn) db.exec("BEGIN");
     try {
       db.prepare("DELETE FROM emails WHERE job_id IS NOT NULL").run();
       db.prepare("DELETE FROM interviews WHERE job_id IS NOT NULL").run();
       db.prepare("DELETE FROM reminders WHERE ref_id IS NOT NULL").run();
       db.prepare("DELETE FROM jobs").run();
-      db.exec("COMMIT");
+      if (!insideTxn) db.exec("COMMIT");
     } catch (err) {
-      db.exec("ROLLBACK");
+      if (!insideTxn) db.exec("ROLLBACK");
       throw err;
     }
   },
@@ -869,15 +869,15 @@ export const vaultRepo = {
     );
     return { docs, chunks, bytes };
   },
-  wipe() {
+  wipe(insideTxn = false) {
     const db = getDb();
-    db.exec("BEGIN");
+    if (!insideTxn) db.exec("BEGIN");
     try {
       db.prepare("DELETE FROM vault_chunks").run();
       db.prepare("DELETE FROM vault_docs").run();
-      db.exec("COMMIT");
+      if (!insideTxn) db.exec("COMMIT");
     } catch (err) {
-      db.exec("ROLLBACK");
+      if (!insideTxn) db.exec("ROLLBACK");
       throw err;
     }
   },
@@ -1231,13 +1231,13 @@ export function importAllData(data: BackupData): { counts: Record<string, number
 
   try {
     db.exec("BEGIN");
-    jobsRepo.removeAll();
+    jobsRepo.removeAll(true);
     contactsRepo.removeAll();
     emailsRepo.removeAll();
     interviewsRepo.removeAll();
     remindersRepo.removeAll();
     memoryRepo.wipe();
-    vaultRepo.wipe();
+    vaultRepo.wipe(true);
     usageRepo.wipe();
     settingsRepo.wipe();
 

@@ -1,7 +1,6 @@
 import { UserProfile, ResumeContent, ResumeDocKind } from "@/types";
 import { LLMSettings } from "@/lib/llm/providers";
-import { resolveChain, callLLM } from "@/lib/llm/router";
-import { extractJson } from "@/lib/llm/client";
+import { resolveChain, callLLMJSON } from "@/lib/llm/router";
 import { cleanResumeContent } from "@/lib/llm/sanitize";
 import { AgentBehaviorSettings, DEFAULT_AGENT_SETTINGS, getAgentSettings, agentBehaviorPrompt } from "@/lib/agentConfig";
 import {
@@ -124,19 +123,17 @@ async function llmCall(
   behavior: string,
   buildUser: (behavior: string) => string,
   agent: string
-): Promise<{ content: ResumeContent | null; provider: string | null }> {
+): Promise<ResumeContent | null> {
   const chain = resolveChain(input.llmSettings ?? null);
-  if (!chain.some((p) => p.apiKey)) return { content: null, provider: null };
+  if (!chain.some((p) => p.apiKey)) return null;
   try {
-    const result = await callLLM(
+    const result = await callLLMJSON<Record<string, unknown>>(
       { system: resumeSystemPrompt(), user: buildUser(behavior), agent, json: true },
       chain
     );
-    const raw = extractJson(result.text);
-    const content = cleanResumeContent(raw);
-    return { content, provider: result.providerId };
+    return cleanResumeContent(result);
   } catch {
-    return { content: null, provider: null };
+    return null;
   }
 }
 
@@ -156,8 +153,8 @@ export async function runResumeAgent(input: ResumeAgentInput): Promise<ResumeAge
         (b) => resumeDraftUserPrompt(input.kind, input.profile!, b, target),
         "resume_draft"
       );
-      if (res.content) {
-        content = res.content;
+      if (res) {
+        content = res;
         summary = `Drafted ${input.kind.replace("_", " ")} from your profile${target ? `, tailored to ${target.title} at ${target.company}` : ""}.`;
       } else {
         const fb = resumeFallbackContent(input.profile!, input.kind, target);
@@ -176,8 +173,8 @@ export async function runResumeAgent(input: ResumeAgentInput): Promise<ResumeAge
         (b) => resumeImproveUserPrompt(input.kind, JSON.stringify(current, null, 2), input.profile!, b),
         "resume_improve"
       );
-      if (res.content) {
-        content = res.content;
+      if (res) {
+        content = res;
         summary = "Rewrote bullets and summary with sharper language and action verbs.";
       } else {
         content = current;
@@ -196,8 +193,8 @@ export async function runResumeAgent(input: ResumeAgentInput): Promise<ResumeAge
         (b) => resumeTailorUserPrompt(input.kind, JSON.stringify(current, null, 2), job as never, input.profile!, b),
         "resume_tailor"
       );
-      if (res.content) {
-        content = res.content;
+      if (res) {
+        content = res;
         summary = `Tailored to ${job.title} at ${job.company}: keyword alignment, skills reordered.`;
       } else {
         content = tailorFallback(current, job, input.profile!);
@@ -234,8 +231,8 @@ EXTRACTED TEXT:
 ${text}`,
         "resume_parse"
       );
-      if (res.content) {
-        content = res.content;
+      if (res) {
+        content = res;
         summary = "Parsed PDF into a structured resume.";
       } else {
         content = parseResumeTextFallback(text);

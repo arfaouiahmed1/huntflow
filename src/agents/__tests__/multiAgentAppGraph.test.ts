@@ -4,7 +4,7 @@ import { UserProfile } from "@/types";
 
 const mockProfile: UserProfile = {
   name: "Jane Dev",
-  title: "Senior Full Stack Engineer",
+  targetTitle: "Senior Full Stack Engineer",
   email: "jane@example.com",
   phone: "+1 555-0199",
   location: "New York, NY",
@@ -12,15 +12,17 @@ const mockProfile: UserProfile = {
   skills: ["React", "TypeScript", "Node.js", "GraphQL", "AWS", "Docker", "Tailwind CSS"],
   experience: [
     {
+      id: "exp_1",
       company: "Acme Corp",
       role: "Senior Engineer",
-      period: "2021 - Present",
-      bullets: ["Led frontend architecture overhaul using Next.js and React 19.", "Reduced LCP by 40%."],
+      duration: "2021 - Present",
+      bulletPoints: ["Led frontend architecture overhaul using Next.js and React 19.", "Reduced LCP by 40%."],
     },
   ],
   education: [
     {
-      institution: "MIT",
+      id: "edu_1",
+      school: "MIT",
       degree: "B.S. Computer Science",
       year: "2018",
     },

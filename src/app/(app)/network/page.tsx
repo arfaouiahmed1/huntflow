@@ -21,6 +21,7 @@ import {
 import { useApp } from "@/context/AppContext";
 import { Contact } from "@/types";
 import { Button } from "@/components/ui/Button";
+import Modal from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/utils";
 import { palette, tint } from "@/lib/theme";
@@ -358,31 +359,8 @@ export default function NetworkPage() {
       )}
 
       {/* Add/Edit modal */}
-      <AnimatePresence>
-        {formOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm"
-            onClick={() => setFormOpen(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.96, y: 12 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.96, y: 12 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]"
-            >
-              <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-4">
-                <p className="font-display text-sm font-semibold text-[var(--paper)]">
-                  {editing ? "Edit contact" : "New contact"}
-                </p>
-                <button onClick={() => setFormOpen(false)} className="text-xs text-dim hover:text-[var(--paper)]">
-                  Esc
-                </button>
-              </div>
-              <div className="grid gap-3 px-5 py-5 sm:grid-cols-2">
+      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editing ? "Edit contact" : "New contact"} wide>
+        <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block sm:col-span-2">
                   <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.15em] text-dim">Name *</span>
                   <input
@@ -468,16 +446,13 @@ export default function NetworkPage() {
                   />
                 </label>
               </div>
-              <div className="flex justify-end gap-2 border-t border-[var(--line)] bg-white/[0.02] px-5 py-4">
-                <Button variant="outline" onClick={() => setFormOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={submit}>{editing ? "Save changes" : "Add contact"}</Button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        <div className="flex justify-end gap-2 border-t border-[var(--line)] bg-white/[0.02] px-5 py-4">
+          <Button variant="outline" onClick={() => setFormOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={submit}>{editing ? "Save changes" : "Add contact"}</Button>
+        </div>
+      </Modal>
     </div>
   );
 }

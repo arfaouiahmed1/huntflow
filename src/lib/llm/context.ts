@@ -1,5 +1,5 @@
 import { UserProfile, JobApplication } from "@/types";
-import { truncateHeadTail, truncateToTokens, countTokens } from "./tokens";
+import { truncateHeadTail, truncateToTokens } from "./tokens";
 
 /** Per-generation-type context budgets (prompt side, in tokens).
  *  Keeps cheap fallback models (small contexts) and slow links in bounds. */
@@ -55,9 +55,4 @@ export function profileForBudget(profile: UserProfile, maxPrompt: number): UserP
     })),
     education: profile.education.slice(0, 4),
   };
-}
-
-/** Final guard: ensure the assembled prompt fits; warn-only (router retries). */
-export function fitsBudget(system: string, user: string, maxPrompt: number): boolean {
-  return countTokens(system) + countTokens(user) <= maxPrompt;
 }

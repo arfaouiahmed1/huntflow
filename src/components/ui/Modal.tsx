@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 export default function Modal({
@@ -21,8 +21,21 @@ export default function Modal({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     if (open) window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+
+    // Scroll lock: prevent background scroll while the dialog is open.
+    const prevOverflow = document.body.style.overflow;
+    if (open) document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", handler);
+      document.body.style.overflow = prevOverflow;
+    };
   }, [open, onClose]);
+
+  // Move focus into the dialog on open and restore it on close.
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (open) panelRef.current?.focus();
+  }, [open]);
 
   return (
     <AnimatePresence>
@@ -38,13 +51,15 @@ export default function Modal({
           onClick={onClose}
         >
           <motion.div
+            ref={panelRef}
+            tabIndex={-1}
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              "glass relative w-full rounded-2xl shadow-2xl",
+              "glass relative w-full rounded-2xl shadow-2xl outline-none",
               wide ? "max-w-3xl" : "max-w-lg"
             )}
           >

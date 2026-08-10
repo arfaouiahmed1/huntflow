@@ -43,16 +43,13 @@ export default function MemoryFeed({ limit = 12 }: { limit?: number }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/memory?limit=${limit}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (!cancelled && data?.memory) setItems(data.memory);
-      })
-      .catch(() => undefined)
-      .finally(() => !cancelled && setLoading(false));
+    load().finally(() => {
+      if (!cancelled) setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [limit]);
 
   const add = async () => {

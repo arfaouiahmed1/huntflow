@@ -1,7 +1,5 @@
 "use client";
 
-import { useSession, signIn, signOut } from "next-auth/react";
-
 import { useState, useEffect, useRef } from "react";
 import {
   Save,
@@ -46,11 +44,7 @@ export default function SettingsPage() {
   const { success, error } = useToast();
   const [form, setForm] = useState({ ...profile });
   const [saved, setSaved] = useState(false);
-  const { data: session, status } = useSession();
-  const authStatus = status === "loading" ? "checking" : status === "authenticated" ? "signed-in" : "signed-out";
-  const liStatus = authStatus;
-  const googleStatus = authStatus;
-
+  const [liStatus, setLiStatus] = useState<"checking" | "signed-in" | "signed-out">("checking");
   const [liBusy, setLiBusy] = useState(false);
   const [liHandle, setLiHandle] = useState("");
   const [armReset, setArmReset] = useState(false);
@@ -61,7 +55,6 @@ export default function SettingsPage() {
   const [testResults, setTestResults] = useState<Record<string, ProviderTestStatus>>({});
   const [backupBusy, setBackupBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
-  const [googleBusy, setGoogleBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const chain = providers;
@@ -115,9 +108,20 @@ export default function SettingsPage() {
     }
   };
 
-  const refreshLiStatus = async () => {};
+  const refreshLiStatus = async () => {
+    setLiStatus("checking");
+    try {
+      const ok = await checkLinkedInSession();
+      setLiStatus(ok ? "signed-in" : "signed-out");
+    } catch {
+      setLiStatus("signed-out");
+    }
+  };
 
-  const refreshGoogleStatus = async () => {};
+  useEffect(() => {
+    refreshLiStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const exportBackup = async () => {
     setBackupBusy(true);
@@ -164,20 +168,16 @@ export default function SettingsPage() {
     }
   };
 
-  useEffect(() => {
-    // Session state is handled by next-auth now
-  }, []);
-
   const onLinkedInLogin = async () => {
     setLiBusy(true);
-    await signIn("linkedin");
-    setLiBusy(false);
-  };
-
-  const onGoogleLogin = async () => {
-    setGoogleBusy(true);
-    await signIn("google");
-    setGoogleBusy(false);
+    try {
+      const ok = await openLinkedInLogin();
+      setLiStatus(ok ? "signed-in" : "signed-out");
+    } catch {
+      setLiStatus("signed-out");
+    } finally {
+      setLiBusy(false);
+    }
   };
 
   const onImportProfile = async () => {
@@ -361,7 +361,7 @@ export default function SettingsPage() {
               <LogIn className="h-3.5 w-3.5" /> Sign in to LinkedIn
             </Button>
           ) : (
-            <Button size="sm" onClick={() => signOut()} variant="outline">
+            <Button size="sm" onClick={() => setLiStatus("signed-out")} variant="outline">
               Sign out
             </Button>
           )}
@@ -401,55 +401,6 @@ export default function SettingsPage() {
         <p className="mt-2 text-[10px] text-dim">
           Fills name, headline, location, summary, skills, experience and education into the form below — press Save Profile to keep them.
         </p>
-      </section>
-
-      {/* Google */}
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
-        <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
-          <Mail className="h-4 w-4 text-[var(--chartreuse)]" /> Google Integration
-        </h2>
-        <p className="mb-4 text-xs leading-relaxed text-dim">
-          Sign in to your Google account to enable advanced features like Gmail outreach and Google Drive imports.
-        </p>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold",
-              googleStatus === "signed-in"
-                ? "border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
-                : googleStatus === "checking"
-                  ? "border-[var(--line)] bg-white/[0.03] text-dim"
-                  : "border-[var(--coral)]/40 bg-[var(--coral)]/10 text-[var(--coral)]"
-            )}
-          >
-            <span
-              className={cn(
-                "h-1.5 w-1.5 rounded-full",
-                googleStatus === "signed-in" ? "bg-[var(--chartreuse)]" : googleStatus === "checking" ? "bg-dim" : "bg-[var(--coral)]"
-              )}
-            />
-            {googleStatus === "signed-in" ? "Connected" : googleStatus === "checking" ? "Checking session…" : "Not signed in"}
-          </span>
-
-          {googleStatus !== "signed-in" ? (
-            <Button size="sm" onClick={onGoogleLogin} loading={googleBusy}>
-              <LogIn className="h-3.5 w-3.5" /> Sign in with Google
-            </Button>
-          ) : (
-            <Button size="sm" onClick={() => signOut()} variant="outline">
-              Sign out
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={refreshGoogleStatus} disabled={googleBusy}>
-            <RefreshCw className={cn("h-3.5 w-3.5", googleStatus === "checking" && "animate-spin")} /> Refresh
-          </Button>
-        </div>
-        {googleStatus !== "signed-in" && (
-          <p className="mt-3 text-[11px] leading-relaxed text-dim">
-            Connect your Google Workspace or personal Gmail account to unlock full email features and drive syncing.
-          </p>
-        )}
       </section>
 
       {/* Email */}

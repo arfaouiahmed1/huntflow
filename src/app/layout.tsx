@@ -3,7 +3,6 @@ import { Manrope, Unbounded, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/context/AppContext";
 import { ToasterProvider } from "@/components/ui/Toaster";
-import { NextAuthProvider } from "@/components/NextAuthProvider";
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -41,11 +40,9 @@ export default function RootLayout({
       className={`${manrope.variable} ${unbounded.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full scanlines">
-        <NextAuthProvider>
-          <AppProvider>
-            <ToasterProvider>{children}</ToasterProvider>
-          </AppProvider>
-        </NextAuthProvider>
+        <AppProvider>
+          <ToasterProvider>{children}</ToasterProvider>
+        </AppProvider>
       </body>
     </html>
   );

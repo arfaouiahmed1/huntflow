@@ -148,7 +148,7 @@ Pitch constraints: keep it grounded in the user's actual skills and accomplishme
       pitch = res.text.trim().slice(0, 2000);
       logs.push({ timestamp: ts(), message: `✨ AI crafted a tailored pitch via ${res.providerId}`, type: "info" });
     } catch {
-      logs.push({ timestamp: ts(), message: "⚠ LLM pitch failed — using profile summary instead", type: "warning" });
+      logs.push({ timestamp: ts(), message: "⚠ LLM pitch failed — using deterministic pitch fallback", type: "warning" });
     }
   }
 

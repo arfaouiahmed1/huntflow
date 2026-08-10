@@ -203,7 +203,13 @@ Key behaviors:
   capped at 40, experience bullets at 8).
 - **Final heuristic fallback**: with no working provider, `matchFallback`
   scores jobs locally and the assistant routes by regex keywords - the
-  app never hard-fails on a missing key.
+  app never hard-fails on a missing key. `matchFallback` runs a
+  deterministic fit engine (`scoreFit`): it checks profile dealbreakers
+  first (visa/clearance, on-site-only vs a remote preference, salary
+  below the stated minimum, no-relocation), then must-haves (core-skill
+  overlap + title family) and nice-to-haves, and returns a `fit` rating
+  (`high | medium | low | skip`) plus `dealbreakers[]` alongside the
+  numeric `matchScore`.
 
 ## 4. Apply agent
 
@@ -213,19 +219,21 @@ Key behaviors:
 stateDiagram-v2
   [*] --> analyze: local fit engine + skill extraction
   analyze --> decide
-  decide --> prepare: proceed (matchScore >= minMatch)
-  decide --> verify: skipped (below threshold)
-  prepare --> execute: pitch via LLM or profile summary
+  decide --> prepare: proceed (matchScore >= minMatch AND fit != skip)
+  decide --> verify: skipped (below threshold or fit = skip)
+  prepare --> execute: pitch via LLM or pitchFallback
   execute --> verify: POST /apply to Scrapling agent
   verify --> [*]: applied / manual_required / failed / skipped
 ```
 
-- `analyze` - scores the role with the local `matchFallback` engine if
-  the job has no score yet, and extracts JD terms vs. profile skills.
-- `decide` - compares score to `minMatch`; below threshold sets `skipped`
-  and jumps to `verify`.
+- `analyze` - runs the local `matchFallback` fit engine (score + `fit`
+  rating + dealbreakers) and extracts JD terms vs. profile skills.
+- `decide` - proceeds only when `matchScore >= minMatch` AND the profile
+  fit is not `skip` (dealbreaker gate); otherwise sets `skipped` and
+  jumps to `verify`.
 - `prepare` - writes a 3-sentence pitch through the LLM router (agent
-  type `pitch`); on failure falls back to the profile summary.
+  type `pitch`); on failure falls back to `pitchFallback` (grounded in
+  real skills + strongest bullet, not a raw summary slice).
 - `execute` - POSTs `{url, profile, documents, submit, min_match,
   match_score}` to `${SCRAPLING_AGENT_URL || http://127.0.0.1:8001}/apply`
   with a 90s abort timeout; the agent inspects the form and either fills

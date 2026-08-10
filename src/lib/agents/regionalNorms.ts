@@ -164,7 +164,7 @@ export const REGIONAL_RULES_DATA: Record<RegionCode, RegionalRules> = {
     closingFormat: "Warm regards,",
     mandatorySections: ["Executive Summary", "Core Competencies", "Work Experience", "Education & Credentials", "Visa & Contact Details"],
     restrictedFields: [],
-    recommendedTemplate: "executive-serif",
+    recommendedTemplate: "executive",
     letterKind: "cover_letter",
   },
   INTL: {

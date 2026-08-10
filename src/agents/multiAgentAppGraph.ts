@@ -126,7 +126,7 @@ async function piiSanitizerNode(state: typeof MultiAgentState.State) {
   if (res.hasRedactions) {
     logs.push({
       timestamp: ts(),
-      message: "⚠️ Sensitive fields (phone, address, DOB, SSN, nationality, gender, marital status, visa) detected — keep them out of generated documents where regional rules restrict them.",
+      message: "⚠️ SSN or date-of-birth patterns detected in the profile — these must never appear in generated documents. Full name, contact, and address fields may also be region-restricted.",
       type: "warning",
     });
   }

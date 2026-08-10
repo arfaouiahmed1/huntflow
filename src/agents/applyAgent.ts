@@ -1,16 +1,10 @@
 import { Annotation, END, StateGraph, START } from "@langchain/langgraph";
 import { AutoApplyLog, TailoredDocuments, UserProfile } from "@/types";
-import { AGENT_BASE_URL, agentHeaders } from "@/lib/agentClient";
 import { extractJdTerms, matchFallback } from "@/lib/prompts";
 import { pitchSystemPrompt, pitchUserPrompt, pitchFallback } from "@/lib/prompts/applyAgentPrompts";
 import { LLMSettings } from "@/lib/llm/providers";
 import { callLLM, resolveChain } from "@/lib/llm/router";
-import {
-  cleanAutoApplyLogs,
-  cleanEnum,
-  cleanStringArray,
-  APPLY_AGENT_STATUSES,
-} from "@/lib/llm/sanitize";
+import { executeApply } from "@/lib/agents/executeApply";
 
 export interface ApplyAgentInput {
   job: {
@@ -144,67 +138,17 @@ async function prepare(state: typeof ApplyState.State) {
 }
 
 async function execute(state: typeof ApplyState.State) {
-  const logs: AutoApplyLog[] = [];
-
-  const payload = {
+  const result = await executeApply({
     url: state.job.url,
-    profile: {
-      ...state.profile,
-      documents: { ...(state.documents ?? {}), pitch: state.pitch },
-    },
-    documents: state.documents ?? {},
+    profile: state.profile,
+    documents: state.documents,
+    pitch: state.pitch,
     submit: state.submit,
-    min_match: state.minMatch,
-    match_score: state.matchScore,
-  };
-
-  const agentBase = state.agentUrl || AGENT_BASE_URL;
-
-  try {
-    if (!state.job.url) throw new Error("No application URL on file — cannot navigate.");
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 90_000);
-    const res = await fetch(`${agentBase}/apply`, {
-      method: "POST",
-      headers: agentHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-
-    if (!res.ok) throw new Error(`Agent responded HTTP ${res.status}`);
-
-    const data = (await res.json()) as { status?: unknown; fields?: unknown; logs?: unknown };
-    const status = cleanEnum(data.status, APPLY_AGENT_STATUSES, "manual_required");
-    const fields = cleanStringArray(data.fields, 50, 100);
-    const agentLogs = cleanAutoApplyLogs(data.logs);
-    logs.push(...agentLogs);
-    return {
-      status,
-      fields,
-      logs: [
-        ...logs,
-        { timestamp: ts(), message: `🤖 Scrapling agent executed — result: ${status ?? "done"}`, type: status === "applied" ? "success" : "info" },
-      ],
-    };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logs.push({ timestamp: ts(), message: `⚠ Scrapling agent unreachable (${msg}) — cannot reach the form`, type: "warning" });
-    logs.push({ timestamp: ts(), message: `🌐 Attempted navigation to ${state.job.url || state.job.company} careers page`, type: "info" });
-
-    if (state.submit) {
-      logs.push({
-        timestamp: ts(),
-        message: `Simulated application submitted (Scrapling offline — not a live apply). Start it with 'npm run dev:scrapling' for a real submission.`,
-        type: "success",
-      });
-      return { status: "applied" as const, fields: [], logs };
-    }
-
-    logs.push({ timestamp: ts(), message: "🧪 Prefill mode — review & submit manually once the sidecar is running", type: "warning" });
-    return { status: "manual_required" as const, fields: ["full_name", "email", "phone", "cover_letter"], logs };
-  }
+    minMatch: state.minMatch,
+    matchScore: state.matchScore,
+    agentUrl: state.agentUrl,
+  });
+  return result;
 }
 
 async function verify(state: typeof ApplyState.State) {

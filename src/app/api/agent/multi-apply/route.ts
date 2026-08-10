@@ -56,12 +56,21 @@ export async function POST(req: NextRequest) {
       threadId,
     });
 
-    // Save outputs back to database
+    // Save outputs back to database so both the agent page and the drawer's
+    // AutoApplyPanel see the same persisted analysis + terminal status.
     jobsRepo.upsert({
       ...job,
       // Do not overwrite matchScore with atsScore; matchScore is the initial JD-profile fit.
       autoApplyStatus: result.status as JobApplication["autoApplyStatus"],
       autoApplyLogs: result.logs,
+      multiAgentOutputs: {
+        atsScore: result.atsScore,
+        recommendedTemplate: result.recommendedTemplate,
+        matchingSkills: result.matchingSkills,
+        missingSkills: result.missingSkills,
+        salaryEstimate: result.salaryEstimate,
+        outreachSubject: result.outreachSubject,
+      },
     });
 
     return NextResponse.json({

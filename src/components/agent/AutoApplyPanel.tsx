@@ -44,7 +44,7 @@ const REGIONS: { code: RegionCode; label: string; flag: string }[] = [
 ];
 
 export default function AutoApplyPanel({ job }: { job: JobApplication }) {
-  const { profile } = useApp();
+  const { profile, updateApplication } = useApp();
   const { success, error: errToast, warn, celebrate } = useToast();
   const [running, setRunning] = useState(false);
   const [runningStep, setRunningStep] = useState<string | null>(null);
@@ -58,7 +58,7 @@ export default function AutoApplyPanel({ job }: { job: JobApplication }) {
     missingSkills?: string[];
     salaryEstimate?: string;
     outreachSubject?: string;
-  } | null>(null);
+  } | null>(job.multiAgentOutputs || null);
 
   const status = statusConfig[job.autoApplyStatus || "idle"];
 
@@ -82,6 +82,21 @@ export default function AutoApplyPanel({ job }: { job: JobApplication }) {
       if (!res.ok) throw new Error(data.error || "Multi-agent run failed");
 
       setMultiAgentResult(data);
+
+      // Persist analysis + status onto the job so the tracker / agent page
+      // and this panel all see the same data.
+      updateApplication(job.id, {
+        autoApplyStatus: data.status,
+        autoApplyLogs: data.logs,
+        multiAgentOutputs: {
+          atsScore: data.atsScore,
+          recommendedTemplate: data.recommendedTemplate,
+          matchingSkills: data.matchingSkills,
+          missingSkills: data.missingSkills,
+          salaryEstimate: data.salaryEstimate,
+          outreachSubject: data.outreachSubject,
+        },
+      });
 
       if (data.status === "applied") {
         success(`Multi-agent pipeline complete! Application submitted via Scrapling.`);

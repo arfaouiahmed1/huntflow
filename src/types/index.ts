@@ -124,6 +124,14 @@ export interface JobApplication {
   salaryIntel?: SalaryIntel;
   autoApplyStatus?: 'idle' | 'queued' | 'processing' | 'applied' | 'failed' | 'manual_required';
   autoApplyLogs?: AutoApplyLog[];
+  multiAgentOutputs?: {
+    atsScore?: number;
+    recommendedTemplate?: string;
+    matchingSkills?: string[];
+    missingSkills?: string[];
+    salaryEstimate?: string;
+    outreachSubject?: string;
+  };
   createdDate: string;
   companyLogo?: string;
 }

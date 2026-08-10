@@ -13,6 +13,7 @@ import {
   executeAtsAuditTool,
 } from "@/lib/agents/tools/multiAgentTools";
 import { SqliteCheckpointSaver } from "@/lib/agents/checkpointer";
+import { executeApply } from "@/lib/agents/executeApply";
 import { agentRunHistoryRepo } from "@/lib/db";
 
 export interface MultiAgentInput {
@@ -52,6 +53,7 @@ export const MultiAgentState = Annotation.Root({
     reducer: (_a, b) => b,
     default: () => "manual_required",
   }),
+  fields: Annotation<string[]>({ reducer: (_a, b) => b ?? [], default: () => [] }),
 
   // Telemetry & Checkpoints
   logs: Annotation<AutoApplyLog[]>({
@@ -246,20 +248,26 @@ async function autoApplyExecutionNode(state: typeof MultiAgentState.State) {
   const logs: AutoApplyLog[] = [];
   logs.push({ timestamp: ts(), message: "🕷️ Agent #11 (AutoApplyExecution) driving Scrapling browser agent...", type: "info" });
 
-  let status: "applied" | "manual_required" | "skipped" = "manual_required";
   if (state.atsScore < state.minMatch) {
-    status = "skipped";
     logs.push({ timestamp: ts(), message: `🛑 Auto-apply skipped — ATS score ${state.atsScore}% below threshold ${state.minMatch}%`, type: "warning" });
-  } else if (state.submit) {
-    status = "manual_required";
-    logs.push({ timestamp: ts(), message: "🚀 Ready for Scrapling driver! (Delegating to auto-apply)", type: "info" });
-  } else {
-    status = "manual_required";
-    logs.push({ timestamp: ts(), message: "⏸ Prefill complete. Ready for human-in-the-loop review.", type: "warning" });
+    return { autoApplyStatus: "skipped", logs };
   }
 
+  // Actually drive the sidecar — same executor the single-agent path uses,
+  // so both auto-apply implementations behave identically.
+  const result = await executeApply({
+    url: state.job.url,
+    profile: state.profile,
+    pitch: state.tailoredPitch,
+    submit: state.submit,
+    minMatch: state.minMatch,
+    matchScore: state.atsScore,
+  });
+
+  logs.push(...result.logs);
   return {
-    autoApplyStatus: status,
+    autoApplyStatus: result.status,
+    fields: result.fields,
     logs,
   };
 }
@@ -347,6 +355,7 @@ export async function runMultiAgentApp(input: MultiAgentInput) {
     missingSkills: finalState.missingSkills,
     salaryEstimate: finalState.salaryEstimate,
     outreachSubject: finalState.outreachSubject,
+    fields: finalState.fields,
     logs: finalState.logs,
   };
 }

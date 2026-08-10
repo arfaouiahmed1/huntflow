@@ -62,7 +62,11 @@ export async function POST(req: NextRequest) {
       type?: string;
       job?: JobApplication;
       profile?: UserProfile;
-      options?: { tone?: string; focusSkills?: string[] };
+      options?: {
+        tone?: string;
+        focusSkills?: string[];
+        docType?: "tailoredResume" | "coverLetter" | "motivationLetter" | "followUpEmail";
+      };
       trackedJobs?: JobApplication[];
       gaps?: string[];
       llmSettings?: Partial<LLMSettings>;

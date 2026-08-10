@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { MessagesSquare, Sparkles, RefreshCw, ChevronDown, Lightbulb, Target } from "lucide-react";
+import { MessagesSquare, Sparkles, RefreshCw, ChevronDown, Lightbulb, Target, Plus } from "lucide-react";
 import { JobApplication, InterviewQuestion } from "@/types";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Button";
@@ -22,18 +22,26 @@ const diffColor: Record<InterviewQuestion["difficulty"], string> = {
   hard: "text-[var(--coral)]",
 };
 
+/** How many questions are revealed at once; the rest stay hidden behind "Load more". */
+const PAGE_SIZE = 4;
+
 export default function InterviewQuestionsPanel({ job }: { job: JobApplication }) {
   const { generateInterviewQuestions } = useApp();
   const { error: errToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [revealCount, setRevealCount] = useState(PAGE_SIZE);
 
   const questions = job.interviewQuestions || [];
+  const visible = questions.slice(0, revealCount);
+  const hidden = questions.length - visible.length;
 
   const run = async () => {
     setLoading(true);
     try {
       await generateInterviewQuestions(job.id);
+      setRevealCount(PAGE_SIZE);
+      setOpenId(null);
     } catch (e) {
       errToast(toErrorMessage(e));
     } finally {
@@ -67,7 +75,7 @@ export default function InterviewQuestionsPanel({ job }: { job: JobApplication }
         </Button>
       </div>
 
-      {questions.map((q, i) => (
+      {visible.map((q, i) => (
         <motion.div
           key={q.id}
           initial={{ opacity: 0, y: 8 }}
@@ -117,6 +125,16 @@ export default function InterviewQuestionsPanel({ job }: { job: JobApplication }
           )}
         </motion.div>
       ))}
+
+      {hidden > 0 && (
+        <button
+          onClick={() => setRevealCount((c) => c + PAGE_SIZE)}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-[var(--line)] py-3 text-xs font-semibold text-dim transition-colors hover:border-[var(--chartreuse)]/40 hover:text-[var(--paper)]"
+        >
+          <Plus className="h-4 w-4" /> Load {Math.min(hidden, PAGE_SIZE)} more question
+          {Math.min(hidden, PAGE_SIZE) === 1 ? "" : "s"} ({hidden} hidden)
+        </button>
+      )}
     </div>
   );
 }

@@ -15,6 +15,8 @@ import {
   Check,
   Copy,
   Trash2,
+  LayoutDashboard,
+  Cpu,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { JobApplication } from "@/types";
@@ -30,8 +32,11 @@ import FlashcardsPanel from "@/components/flashcards/FlashcardsPanel";
 import AutoApplyPanel from "@/components/agent/AutoApplyPanel";
 import IntelligencePanel from "@/components/intel/IntelligencePanel";
 import InterviewQuestionsPanel from "@/components/intel/InterviewQuestionsPanel";
+import OverviewPanel from "@/components/overview/OverviewPanel";
 
-type Tab = "match" | "docs" | "flashcards" | "intel" | "questions" | "agent";
+type Tab = "match" | "docs" | "flashcards" | "intel" | "questions" | "agent" | "overview";
+
+const BG_AGENT_SETTING = "bg_agent_mode";
 
 export default function JobDetailDrawer({
   jobId,
@@ -42,11 +47,44 @@ export default function JobDetailDrawer({
 }) {
   const { applications, deleteApplication, updateApplication } = useApp();
   const { success } = useToast();
-  const [tab, setTab] = useState<Tab>("match");
+  const [tab, setTab] = useState<Tab>("overview");
   const [copied, setCopied] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [notesDraft, setNotesDraft] = useState<string | null>(null);
+  const [bgAgent, setBgAgent] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem(BG_AGENT_SETTING) !== "manual";
+  });
+
+  /* Hydrate the persisted background-agent mode on mount, then keep it synced. */
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/data", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.settings) return;
+        const stored = d.settings[BG_AGENT_SETTING];
+        if (stored === undefined) return;
+        const next = stored !== "manual";
+        localStorage.setItem(BG_AGENT_SETTING, next ? "auto" : "manual");
+        setBgAgent(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggleBgAgent = (next: boolean) => {
+    setBgAgent(next);
+    localStorage.setItem(BG_AGENT_SETTING, next ? "auto" : "manual");
+    fetch("/api/data/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [BG_AGENT_SETTING]: next ? "auto" : "manual" }),
+    }).catch(() => undefined);
+  };
 
   const job = useMemo(
     () => applications.find((a) => a.id === jobId) || null,
@@ -69,6 +107,7 @@ export default function JobDetailDrawer({
   const logo = logoFailed ? null : companyLogoUrl(job.company, job.url);
 
   const tabs: { id: Tab; label: string; icon: typeof Target }[] = [
+    { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "match", label: "Match & Skills", icon: Target },
     { id: "docs", label: "Documents", icon: FileText },
     { id: "flashcards", label: "STAR Cards", icon: Layers },
@@ -214,6 +253,37 @@ export default function JobDetailDrawer({
           </div>
         </div>
 
+        {/* Background-agent mode toggle */}
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-white/[0.02] px-3 py-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Cpu className="h-4 w-4 shrink-0 text-[var(--chartreuse)]" />
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-[var(--paper)]">Background agents</p>
+              <p className="truncate text-[10px] text-dim">
+                {bgAgent ? "Run automatically in the background" : "Run only when you ask"}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={bgAgent}
+            aria-label="Background agent mode"
+            onClick={() => toggleBgAgent(!bgAgent)}
+            className={cn(
+              "relative h-6 w-11 shrink-0 rounded-full transition-colors",
+              bgAgent ? "bg-[var(--chartreuse)]" : "bg-white/10"
+            )}
+          >
+            <span
+              className={cn(
+                "absolute top-0.5 h-5 w-5 rounded-full bg-[var(--paper)] transition-transform",
+                bgAgent ? "translate-x-[22px]" : "translate-x-0.5"
+              )}
+            />
+          </button>
+        </div>
+
         {/* Tabs */}
         <div className="flex gap-1 overflow-x-auto border-b border-[var(--line)] px-4 py-2">
           {tabs.map(({ id, label, icon: Icon }) => {
@@ -250,6 +320,7 @@ export default function JobDetailDrawer({
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
             >
+              {tab === "overview" && <OverviewPanel job={job} />}
               {tab === "match" && <MatchAnalysis job={job} />}
               {tab === "docs" && <DocumentsPanel job={job} />}
               {tab === "flashcards" && <FlashcardsPanel job={job} />}

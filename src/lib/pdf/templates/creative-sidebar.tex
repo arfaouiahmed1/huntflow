@@ -1,0 +1,33 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{utf8}
+\usepackage[margin=0.75in]{geometry}
+\usepackage{titlesec}
+\usepackage{xcolor}
+
+\definecolor{accent}{RGB}{99, 102, 241}
+
+\pagestyle{empty}
+\titleformat{\section}{\large\bfseries\color{accent}}{}{0em}{}[\titlerule]
+\titlespacing*{\section}{0pt}{10pt}{6pt}
+
+\begin{document}
+
+\begin{center}
+    {\Huge \bfseries {{NAME}}}\\[4pt]
+    {\color{accent}\large {{TARGET_TITLE}}}\\[4pt]
+    \small {{CONTACT_LINE}}
+\end{center}
+
+\section*{Creative \& Technical Summary}
+{{SUMMARY_SECTION}}
+
+\section*{Key Projects \& Experience}
+{{EXPERIENCE_SECTION}}
+
+\section*{Education \& Certifications}
+{{EDUCATION_SECTION}}
+
+\section*{Skills Matrix}
+{{SKILLS_SECTION}}
+
+\end{document}

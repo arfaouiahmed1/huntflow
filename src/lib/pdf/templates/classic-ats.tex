@@ -1,0 +1,57 @@
+% ---------------------------------------------------------------------------
+% classic-ats — single-column, ATS-safe resume/CV
+% Adapted from sb2nov/resume (https://github.com/sb2nov/resume) — MIT License.
+% ATS notes: one column, standard section headers, no tables/images for
+% content, Helvetica (parseable everywhere), dates inline via \hfill.
+% Placeholders are substituted by the resume renderer.
+% ---------------------------------------------------------------------------
+\documentclass[10pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{letterpaper, margin=0.6in}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{enumitem}
+\setlist{nosep, leftmargin=1.25em, topsep=0.2em}
+\usepackage{xcolor}
+\usepackage{parskip}
+\usepackage{titlesec}
+\definecolor{accent}{HTML}{1F3A5F}
+\pagestyle{empty}
+
+\newcommand{\resumesection}[1]{%
+  \vspace{0.9em}%
+  {\color{accent}\bfseries\large #1}%
+  \vspace{0.15em}\hrule\vspace{0.45em}%
+}
+
+\newcommand{\resumeentry}[4]{%
+  {\bfseries #1} \hfill {\color{accent}#3}\\
+  {\itshape #2}\\[0.15em]
+  #4
+}
+
+\begin{document}
+
+{\LARGE\bfseries {{NAME}}}\par
+{\large {{TITLE}}}\par
+\vspace{0.15em}
+{{CONTACT}}
+\vspace{0.4em}
+
+{{SUMMARY}}
+
+{{EXPERIENCE}}
+
+{{PROJECTS}}
+
+{{EDUCATION}}
+
+{{SKILLS}}
+
+{{CERTIFICATIONS}}
+
+{{LANGUAGES}}
+
+\end{document}

@@ -1,0 +1,43 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{utf8}
+\usepackage[margin=0.75in]{geometry}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+
+\definecolor{primary}{RGB}{15,118,110} % Teal color, often professional in MENA
+
+\pagestyle{empty}
+\titleformat{\section}{\large\bfseries\color{primary}}{}{0em}{}[\titlerule]
+\titlespacing*{\section}{0pt}{10pt}{6pt}
+
+\begin{document}
+
+\begin{center}
+    {\Huge \bfseries {{NAME}}}\\[6pt]
+    \small {{CONTACT_LINE}}\\[2pt]
+    \small {{LOCATION_LINE}}\\[2pt]
+    \small Nationality: {{NATIONALITY}} | Date of Birth: {{DATE_OF_BIRTH}}
+\end{center}
+
+\vspace{10pt}
+
+\section*{Profil Professionnel / Summary}
+{{SUMMARY}}
+
+\section*{Expériences Professionnelles / Experience}
+{{EXPERIENCE_SECTION}}
+
+\section*{Formation / Education}
+{{EDUCATION_SECTION}}
+
+\section*{Compétences / Skills}
+{{SKILLS_SECTION}}
+
+\section*{Langues / Languages}
+{{LANGUAGES_SECTION}}
+
+\end{document}

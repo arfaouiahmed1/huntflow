@@ -36,6 +36,18 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local database + agent artifacts
+/data/
+/scrapling-agent/.venv/
+/scrapling-agent/.agent_runs/
+/scrapling-agent/.linkedin_session/
+/scrapling-agent/*.log
+/scrapling-agent/.agent_runs
+/scrapling-agent/__pycache__/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local claude settings (machine-specific)
+.claude/settings.local.json

@@ -1,0 +1,86 @@
+import { NextRequest, NextResponse } from "next/server";
+import { runMultiAgentApp } from "@/agents/multiAgentAppGraph";
+import { RegionCode } from "@/lib/agents/regionalNorms";
+import { jobsRepo, settingsRepo } from "@/lib/db";
+import { JobApplication, UserProfile } from "@/types";
+
+const inFlight = new Set<string>();
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { jobId, targetRegion, submit, minMatch, threadId } = body;
+
+    if (!jobId) {
+      return NextResponse.json({ error: "Missing required parameter: jobId" }, { status: 400 });
+    }
+
+    if (inFlight.has(jobId)) {
+      return NextResponse.json({ error: "Pipeline already running for this job" }, { status: 429 });
+    }
+    inFlight.add(jobId);
+
+    let profile: UserProfile;
+    try {
+      const rawProfile = settingsRepo.get("profile");
+      if (!rawProfile) throw new Error("No profile found");
+      profile = JSON.parse(rawProfile);
+    } catch {
+      inFlight.delete(jobId);
+      return NextResponse.json({ error: "Profile not found or invalid in database" }, { status: 400 });
+    }
+
+    const job = jobsRepo.get(jobId);
+    if (!job) {
+      inFlight.delete(jobId);
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
+    const jobInput = {
+      id: job.id,
+      title: job.title,
+      company: job.company,
+      url: job.url,
+      jobDescription: job.jobDescription,
+      matchScore: job.matchScore ?? undefined,
+    };
+
+    const result = await runMultiAgentApp({
+      job: jobInput,
+      profile,
+      targetRegion: (targetRegion as RegionCode) || "US",
+      submit: Boolean(submit),
+      minMatch: Number(minMatch) || 70,
+      threadId,
+    });
+
+    // Save outputs back to database
+    jobsRepo.upsert({
+      ...job,
+      // Do not overwrite matchScore with atsScore; matchScore is the initial JD-profile fit.
+      autoApplyStatus: result.status as JobApplication["autoApplyStatus"],
+      autoApplyLogs: result.logs,
+    });
+
+    return NextResponse.json({
+      success: true,
+      threadId: result.threadId,
+      status: result.status,
+      atsScore: result.atsScore,
+      recommendedTemplate: result.recommendedTemplate,
+      matchingSkills: result.matchingSkills,
+      missingSkills: result.missingSkills,
+      salaryEstimate: result.salaryEstimate,
+      outreachSubject: result.outreachSubject,
+      logs: result.logs,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: "Multi-agent execution failed", details: err instanceof Error ? err.message : typeof err === 'object' && err ? JSON.stringify(err) : String(err) },
+      { status: 500 }
+    );
+  } finally {
+    const { jobId } = await req.clone().json().catch(() => ({}));
+    if (jobId) inFlight.delete(jobId);
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "remote": [
+    {
+      "id": "remoteok",
+      "name": "RemoteOK",
+      "url": "https://remoteok.com/remote-dev-jobs",
+      "type": "static",
+      "selectors": {
+        "item": "tr.job",
+        "title": "h2[itemprop='title']",
+        "company": "h3[itemprop='name']",
+        "location": ".location",
+        "url": "a[itemprop='url']"
+      }
+    },
+    {
+      "id": "weworkremotely",
+      "name": "WeWorkRemotely",
+      "url": "https://weworkremotely.com/categories/remote-full-stack-programming-jobs",
+      "type": "static",
+      "selectors": {
+        "item": "section.jobs article li:not(.view-all)",
+        "title": "span.title",
+        "company": "span.company",
+        "location": "span.region",
+        "url": "a"
+      }
+    },
+    {
+      "id": "fmhy_remote",
+      "name": "FMHY Remote Directory",
+      "url": "https://fmhy.net/misc#remote-jobs",
+      "type": "static",
+      "selectors": {
+        "item": "a[href*='job'], a[href*='remote']",
+        "title": "text",
+        "company": "domain",
+        "location": "Remote",
+        "url": "href"
+      }
+    }
+  ],
+  "europe": [
+    {
+      "id": "wttj_eu",
+      "name": "Welcome to the Jungle Europe",
+      "url": "https://www.welcometothejungle.com/en/jobs?query=developer&page=1",
+      "type": "stealth",
+      "selectors": {
+        "item": "li[data-testid='search-results-item']",
+        "title": "h4",
+        "company": "span",
+        "location": "p",
+        "url": "a"
+      }
+    },
+    {
+      "id": "europeremotely",
+      "name": "EuropeRemotely",
+      "url": "https://europeremotely.com/",
+      "type": "static",
+      "selectors": {
+        "item": ".job-item",
+        "title": ".job-title",
+        "company": ".company-name",
+        "location": "Europe",
+        "url": "a"
+      }
+    }
+  ],
+  "mena": [
+    {
+      "id": "keejob_tn",
+      "name": "Keejob Tunisia",
+      "url": "https://www.keejob.com/offres-emploi/",
+      "type": "static",
+      "selectors": {
+        "item": ".block_recrutement",
+        "title": "a.title",
+        "company": ".company",
+        "location": "Tunisia",
+        "url": "a.title"
+      }
+    },
+    {
+      "id": "tanqeeb_mena",
+      "name": "Tanqeeb MENA & Qatar",
+      "url": "https://qatar.tanqeeb.com/en/jobs/search",
+      "type": "static",
+      "selectors": {
+        "item": ".job-box",
+        "title": "h2",
+        "company": ".company-name",
+        "location": "Qatar / MENA",
+        "url": "a"
+      }
+    }
+  ],
+  "global": [
+    {
+      "id": "hacker_news_hiring",
+      "name": "HackerNews Who is Hiring",
+      "url": "https://news.ycombinator.com/submitted?id=whoishiring",
+      "type": "static",
+      "selectors": {
+        "item": "tr.athing",
+        "title": "span.titleline > a",
+        "company": "YCombinator Network",
+        "location": "Global",
+        "url": "span.titleline > a"
+      }
+    }
+  ]
+}

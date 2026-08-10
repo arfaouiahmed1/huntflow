@@ -1,0 +1,56 @@
+% ---------------------------------------------------------------------------
+% executive — serif single-column CV/resume for senior roles
+% Adapted from RenderCV "classic" theme (https://github.com/rendercv/rendercv)
+% — MIT License. ATS notes: Times is a universal ATS font; single column;
+% section headers are bold small-caps + thin rule; dates inline via \hfill.
+% Placeholders are substituted by the resume renderer.
+% ---------------------------------------------------------------------------
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{letterpaper, margin=0.75in}
+\usepackage{mathptmx}
+\usepackage{enumitem}
+\setlist{nosep, leftmargin=1.25em, topsep=0.2em}
+\usepackage{xcolor}
+\usepackage{parskip}
+\usepackage{titlesec}
+\definecolor{accent}{HTML}{333333}
+\pagestyle{empty}
+
+\newcommand{\resumesection}[1]{%
+  \vspace{1.1em}%
+  {\scshape\bfseries\large #1}%
+  \vspace{0.2em}\hrule\vspace{0.55em}%
+}
+
+\newcommand{\resumeentry}[4]{%
+  {\bfseries #1} \hfill {\color{accent}#3}\\
+  {\itshape #2}\\[0.2em]
+  #4
+}
+
+\begin{document}
+
+{\LARGE\bfseries {{NAME}}}\par
+{\large\color{accent} {{TITLE}}}\par
+\vspace{0.2em}
+{{CONTACT}}
+\vspace{0.5em}
+
+{{SUMMARY}}
+
+{{EXPERIENCE}}
+
+{{PROJECTS}}
+
+{{EDUCATION}}
+
+{{SKILLS}}
+
+{{CERTIFICATIONS}}
+
+{{LANGUAGES}}
+
+\end{document}

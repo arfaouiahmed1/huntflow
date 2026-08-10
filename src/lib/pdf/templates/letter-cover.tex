@@ -1,0 +1,42 @@
+% ---------------------------------------------------------------------------
+% letter-cover — ATS-safe cover letter
+% Structure adapted from drevo (https://github.com/ozankiratli/Resume-ATS-Friendly)
+% — LPPL-1.3c. ATS notes: linear text flow, no tables, parseable contact block.
+% Placeholders are substituted by the resume renderer.
+% ---------------------------------------------------------------------------
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{letterpaper, margin=0.9in}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{xcolor}
+\usepackage{parskip}
+\definecolor{accent}{HTML}{1F3A5F}
+\pagestyle{empty}
+
+\newcommand{\coverparagraph}[1]{\vspace{0.85em}#1\par}
+
+\begin{document}
+
+{\LARGE\bfseries {{NAME}}}\par
+\vspace{0.1em}
+{\small {{SENDERCONTACT}}}\par
+\vspace{0.2em}
+{\small\color{accent} {{DATE}}}\par
+\vspace{1em}
+
+{{RECIPIENT}}
+
+\vspace{1.2em}
+{\bfseries {{SALUTATION}}}\par
+
+{{PARAGRAPHS}}
+
+\vspace{1.6em}
+{\bfseries {{CLOSING}}}\par
+\vspace{1em}
+{\normalsize {{NAME}}}
+
+\end{document}

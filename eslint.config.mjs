@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Python agent venv — not part of this app:
+    "scrapling-agent/**",
   ]),
 ]);
 

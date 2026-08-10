@@ -1,0 +1,34 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{utf8}
+\usepackage[margin=0.75in]{geometry}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\definecolor{navy}{RGB}{20, 80, 160}
+
+\pagestyle{empty}
+\titleformat{\section}{\large\bfseries\color{navy}}{}{0em}{}[\titlerule]
+\titlespacing*{\section}{0pt}{10pt}{6pt}
+
+\begin{document}
+
+\begin{center}
+    {\Huge \bfseries {{NAME}}}\\[4pt]
+    {\color{navy}\large {{TARGET_TITLE}}}\\[4pt]
+    \small {{CONTACT_LINE}}
+\end{center}
+
+\section*{Profil Professionnel}
+{{SUMMARY_SECTION}}
+
+\section*{Expériences Professionnelles}
+{{EXPERIENCE_SECTION}}
+
+\section*{Formation \& Diplômes}
+{{EDUCATION_SECTION}}
+
+\section*{Compétences Technique \& Langues}
+{{SKILLS_SECTION}}
+
+\end{document}

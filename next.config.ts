@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  /* pdf-parse resolves its pdf.worker.mjs relative to the package at
+     runtime — externalizing keeps that relative import intact. */
+  serverExternalPackages: ["pdf-parse"],
 };
 
 export default nextConfig;

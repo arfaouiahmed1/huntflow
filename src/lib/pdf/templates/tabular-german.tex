@@ -1,0 +1,41 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{utf8}
+\usepackage[margin=0.75in]{geometry}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\definecolor{primary}{RGB}{30,58,138}
+
+\pagestyle{empty}
+\titleformat{\section}{\large\bfseries\color{primary}}{}{0em}{}[\titlerule]
+\titlespacing*{\section}{0pt}{10pt}{6pt}
+
+\begin{document}
+
+\begin{center}
+    {\Huge \bfseries {{NAME}}}\\[4pt]
+    \small {{CONTACT_LINE}}\\[2pt]
+    \small {{LOCATION_LINE}}
+\end{center}
+
+\vspace{10pt}
+
+\section*{Berufserfahrung}
+{{EXPERIENCE_SECTION}}
+
+\section*{Ausbildung}
+{{EDUCATION_SECTION}}
+
+\section*{Kenntnisse \& Skills}
+{{SKILLS_SECTION}}
+
+\section*{Sprachen}
+{{LANGUAGES_SECTION}}
+
+\vspace{20pt}
+\noindent
+{{LOCATION_LINE}}, den \today
+
+\end{document}

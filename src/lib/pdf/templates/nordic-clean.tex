@@ -1,0 +1,33 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{utf8}
+\usepackage[margin=0.8in]{geometry}
+\usepackage{titlesec}
+\usepackage{xcolor}
+
+\definecolor{slate}{RGB}{70, 80, 95}
+
+\pagestyle{empty}
+\titleformat{\section}{\large\bfseries\color{slate}}{}{0em}{}
+\titlespacing*{\section}{0pt}{12pt}{4pt}
+
+\begin{document}
+
+{\Huge \bfseries {{NAME}}}\\[2pt]
+{\color{slate}\large {{TARGET_TITLE}}}\\[4pt]
+\small {{CONTACT_LINE}}
+
+\vspace{12pt}
+
+\section*{Summary}
+{{SUMMARY_SECTION}}
+
+\section*{Work Experience}
+{{EXPERIENCE_SECTION}}
+
+\section*{Education}
+{{EDUCATION_SECTION}}
+
+\section*{Skills \& Initiatives}
+{{SKILLS_SECTION}}
+
+\end{document}

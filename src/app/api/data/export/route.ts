@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { toErrorMessage } from "@/lib/errors";
 import { exportAllData } from "@/lib/db";
+import { redactSettings } from "@/lib/masking";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
     const snapshot = exportAllData();
+    /* Redact provider keys + mail passwords so the downloadable backup
+       never contains plaintext secrets. Internal backup/restore keeps
+       real keys via exportAllData() itself. */
+    snapshot.settings = redactSettings(snapshot.settings);
     const payload = {
       app: "huntflow",
       format: 1,

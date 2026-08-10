@@ -63,6 +63,8 @@ export function migrate(database: DatabaseSync) {
       salary_intel TEXT,
       auto_apply_status TEXT NOT NULL DEFAULT 'idle',
       auto_apply_logs TEXT,
+      employer_review TEXT,
+      fit_category TEXT,
       created_date TEXT NOT NULL,
       company_logo TEXT,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -229,12 +231,15 @@ export function migrate(database: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_agent_run_history_thread ON agent_run_history(thread_id);
   `);
   /* Idempotent column additions for databases created before a column existed */
-  const vaultCols = new Set(
-    (database.prepare("PRAGMA table_info(vault_docs)").all() as Record<string, unknown>[]).map((r) => String(r.name))
-  );
-  if (!vaultCols.has("label")) {
-    database.exec("ALTER TABLE vault_docs ADD COLUMN label TEXT NOT NULL DEFAULT ''");
-  }
+  const addColumn = (table: string, column: string, ddl: string) => {
+    const cols = new Set(
+      (database.prepare(`PRAGMA table_info(${table})`).all() as Record<string, unknown>[]).map((r) => String(r.name))
+    );
+    if (!cols.has(column)) database.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  };
+  addColumn("vault_docs", "label", "label TEXT NOT NULL DEFAULT ''");
+  addColumn("jobs", "employer_review", "employer_review TEXT");
+  addColumn("jobs", "fit_category", "fit_category TEXT");
 }
 
 // ---------------------------------------------------------------------------
@@ -246,7 +251,7 @@ const JOB_COLUMNS = [
   "applied_date", "deadline", "follow_up_due", "priority", "job_description",
   "notes", "match_score", "skills_gap", "documents", "star_flashcards",
   "interview_questions", "job_brief", "salary_intel", "auto_apply_status",
-  "auto_apply_logs", "created_date", "company_logo",
+  "auto_apply_logs", "employer_review", "fit_category", "created_date", "company_logo",
 ] as const;
 
 function rowToJob(row: Record<string, unknown>): JobApplication {
@@ -281,6 +286,8 @@ function rowToJob(row: Record<string, unknown>): JobApplication {
     salaryIntel: json(row.salary_intel, undefined),
     autoApplyStatus: (row.auto_apply_status as JobApplication["autoApplyStatus"]) ?? "idle",
     autoApplyLogs: json(row.auto_apply_logs, []),
+    employerReview: json(row.employer_review, undefined),
+    fitCategory: (row.fit_category as JobApplication["fitCategory"]) || undefined,
     createdDate: String(row.created_date),
     companyLogo: (row.company_logo as string) || undefined,
   };
@@ -310,6 +317,8 @@ function jobToRow(job: JobApplication): Record<string, unknown> {
     salary_intel: job.salaryIntel ? JSON.stringify(job.salaryIntel) : null,
     auto_apply_status: job.autoApplyStatus ?? "idle",
     auto_apply_logs: job.autoApplyLogs?.length ? JSON.stringify(job.autoApplyLogs) : null,
+    employer_review: job.employerReview ? JSON.stringify(job.employerReview) : null,
+    fit_category: job.fitCategory ?? null,
     created_date: job.createdDate,
     company_logo: job.companyLogo ?? null,
     updated_at: new Date().toISOString(),

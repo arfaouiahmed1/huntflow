@@ -7,9 +7,11 @@ import { JobApplication, UserProfile } from "@/types";
 const inFlight = new Set<string>();
 
 export async function POST(req: NextRequest) {
+  let jobId: string | undefined;
   try {
     const body = await req.json();
-    const { jobId, targetRegion, submit, minMatch, threadId } = body;
+    const { jobId: id, targetRegion, submit, minMatch, threadId } = body;
+    jobId = id;
 
     if (!jobId) {
       return NextResponse.json({ error: "Missing required parameter: jobId" }, { status: 400 });
@@ -80,7 +82,6 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   } finally {
-    const { jobId } = await req.clone().json().catch(() => ({}));
     if (jobId) inFlight.delete(jobId);
   }
 }

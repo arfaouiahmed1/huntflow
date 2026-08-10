@@ -11,3 +11,32 @@ export function maskSecret(secret?: string): string {
 export function isMasked(value: string | undefined | null): boolean {
   return Boolean(value && value.startsWith(MASK_PREFIX));
 }
+
+/** Redact provider API keys and mail passwords in a settings map (for client delivery / export). */
+export function redactSettings(all: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(all)) {
+    if (k === "llm_providers") {
+      try {
+        const chain = JSON.parse(v) as { apiKey?: string }[];
+        out[k] = JSON.stringify(chain.map((p) => ({ ...p, apiKey: p.apiKey ? maskSecret(p.apiKey) : "" })));
+      } catch {
+        out[k] = v;
+      }
+    } else if (k === "mail_settings") {
+      try {
+        const ms = JSON.parse(v) as { imapPass?: string; smtpPass?: string };
+        out[k] = JSON.stringify({
+          ...ms,
+          imapPass: ms.imapPass ? maskSecret(ms.imapPass) : "",
+          smtpPass: ms.smtpPass ? maskSecret(ms.smtpPass) : "",
+        });
+      } catch {
+        out[k] = v;
+      }
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}

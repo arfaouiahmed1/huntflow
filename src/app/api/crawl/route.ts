@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { jobsRepo, settingsRepo } from "@/lib/db";
 import { matchFallback } from "@/lib/prompts/generationPrompts";
 import { JobApplication, UserProfile } from "@/types";
+import { AGENT_BASE_URL as agentBase, agentHeaders } from "@/lib/agentClient";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const category = body.category || "all";
     const keyword = body.keyword || "developer";
-    const limit = body.limit || 8;
+    const limit = Math.min(Math.max(Number(body.limit) || 8, 1), 50);
 
     // Load candidate profile
     const fallbackProfile = {
@@ -40,13 +41,12 @@ export async function POST(req: Request) {
       jobDescription?: string;
     }
 
-    const agentBase = process.env.SCRAPLING_AGENT_URL || "http://127.0.0.1:8001";
     let crawledJobs: CrawledJob[] = [];
 
     try {
       const res = await fetch(`${agentBase}/crawl`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: agentHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ category, keyword, limit }),
       });
       if (res.ok) {

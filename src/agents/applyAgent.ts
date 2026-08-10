@@ -1,5 +1,6 @@
 import { Annotation, END, StateGraph, START } from "@langchain/langgraph";
 import { AutoApplyLog, TailoredDocuments, UserProfile } from "@/types";
+import { AGENT_BASE_URL, agentHeaders } from "@/lib/agentClient";
 import { extractJdTerms, matchFallback } from "@/lib/prompts";
 import { pitchSystemPrompt, pitchUserPrompt, pitchFallback } from "@/lib/prompts/applyAgentPrompts";
 import { LLMSettings } from "@/lib/llm/providers";
@@ -157,7 +158,7 @@ async function execute(state: typeof ApplyState.State) {
     match_score: state.matchScore,
   };
 
-  const agentBase = state.agentUrl || process.env.SCRAPLING_AGENT_URL || "http://127.0.0.1:8001";
+  const agentBase = state.agentUrl || AGENT_BASE_URL;
 
   try {
     if (!state.job.url) throw new Error("No application URL on file — cannot navigate.");
@@ -166,7 +167,7 @@ async function execute(state: typeof ApplyState.State) {
     const timer = setTimeout(() => controller.abort(), 90_000);
     const res = await fetch(`${agentBase}/apply`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: agentHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
       signal: controller.signal,
     });

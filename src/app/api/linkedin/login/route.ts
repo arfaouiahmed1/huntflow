@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
+import { AGENT_BASE_URL as AGENT_URL, agentHeaders } from '@/lib/agentClient';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const AGENT_URL = process.env.SCRAPLING_AGENT_URL || 'http://127.0.0.1:8001';
 
 export async function POST() {
   try {
     const res = await fetch(`${AGENT_URL}/linkedin/login`, {
       method: 'POST',
+      headers: agentHeaders(),
       signal: AbortSignal.timeout(300_000),
     });
     if (!res.ok) throw new Error(`Agent returned HTTP ${res.status}`);

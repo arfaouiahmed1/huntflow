@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -15,10 +16,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+AGENT_TOKEN = os.environ.get("HUNTFLOW_AGENT_TOKEN", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("huntflow-agent")
@@ -116,10 +120,27 @@ def shot(run_id: str, page, label: str) -> Optional[str]:
 app = FastAPI(title="HUNTFLOW Agent", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3999",
+        "http://127.0.0.1:3999",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def require_token(x_huntflow_token: Optional[str] = Header(default=None)) -> None:
+    """Reject calls from anything that isn't the Next.js app.
+
+    When HUNTFLOW_AGENT_TOKEN is set, every automation endpoint requires
+    the same token in the X-Huntflow-Token header — otherwise any webpage
+    could drive this local browser-automation agent. If the token is empty
+    (default local dev), requests are accepted for backward compat.
+    """
+    if AGENT_TOKEN and x_huntflow_token != AGENT_TOKEN:
+        raise HTTPException(status_code=401, detail="Missing or invalid X-Huntflow-Token")
 
 
 def ts() -> str:
@@ -240,7 +261,7 @@ def _scrape_dynamic(url: str) -> dict[str, str]:
 
 
 @app.post("/scrape")
-def scrape(req: ScrapeRequest):
+def scrape(req: ScrapeRequest, _auth: None = Depends(require_token)):
     run_id = start_run("scrape", req.url, "Scrape")
     try:
         record(run_id, "⚡ Static fetch via TLS impersonation…", "info")
@@ -267,7 +288,7 @@ class CrawlRequest(BaseModel):
 
 
 @app.post("/crawl")
-def crawl(req: CrawlRequest):
+def crawl(req: CrawlRequest, _auth: None = Depends(require_token)):
     run_id = start_run("crawl", f"category={req.category}", f"Crawl ({req.category})")
     sources_file = Path(__file__).resolve().parent / "sources.json"
     if not sources_file.exists():
@@ -465,7 +486,7 @@ def _detect_and_fill(page, profile: dict, documents: dict, logs: list, submit: b
 
 
 @app.post("/apply")
-def apply(req: ApplyRequest):
+def apply(req: ApplyRequest, _auth: None = Depends(require_token)):
     logs: list[dict[str, str]] = []
     run_id = start_run("apply", req.url, "Auto-apply")
 
@@ -580,7 +601,7 @@ def _li_is_logged_in(page) -> bool:
 
 
 @app.post("/linkedin/login")
-def linkedin_login():
+def linkedin_login(_auth: None = Depends(require_token)):
     """Open a visible Chromium window so the user can sign in manually.
     The session is persisted on disk; closes after login or 4 minutes."""
     from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
@@ -605,7 +626,7 @@ def linkedin_login():
 
 
 @app.get("/linkedin/session")
-def linkedin_session():
+def linkedin_session(_auth: None = Depends(require_token)):
     """Report whether a persistent logged-in LinkedIn session exists."""
     return {"authenticated": _li_session_status()}
 
@@ -688,7 +709,7 @@ def _li_parse_profile(page) -> dict[str, Any]:
 
 
 @app.post("/linkedin/profile")
-def linkedin_profile(req: ScrapeRequest):
+def linkedin_profile(req: ScrapeRequest, _auth: None = Depends(require_token)):
     """Fetch a public LinkedIn profile with the persisted session and parse it."""
     from playwright.sync_api import sync_playwright
 
@@ -718,7 +739,7 @@ def linkedin_profile(req: ScrapeRequest):
 
 
 @app.post("/linkedin/jobs")
-def linkedin_jobs_search(req: ScrapeRequest):
+def linkedin_jobs_search(req: ScrapeRequest, _auth: None = Depends(require_token)):
     """Search LinkedIn Jobs with the persisted session. URL must be a linkedin.com/jobs/search URL."""
     from playwright.sync_api import sync_playwright
 
@@ -766,6 +787,20 @@ def linkedin_jobs_search(req: ScrapeRequest):
 
 
 app.mount("/screenshots", StaticFiles(directory=RUN_DIR), name="screenshots")
+
+
+@app.middleware("http")
+async def protect_screenshots(request: Request, call_next):  # noqa: ANN001
+    """Guard the /screenshots static mount (holds user's browser screenshots).
+
+    The token check is duplicated here because FastAPI mount routes do not
+    participate in the endpoint dependency injection. When a token is set,
+    a missing/invalid X-Huntflow-Token is rejected for screenshot paths.
+    """
+    if request.url.path.startswith("/screenshots") and AGENT_TOKEN:
+        if request.headers.get("x-huntflow-token") != AGENT_TOKEN:
+            return JSONResponse(status_code=401, content={"detail": "Missing or invalid X-Huntflow-Token"})
+    return await call_next(request)
 
 
 if __name__ == "__main__":

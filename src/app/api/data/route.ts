@@ -9,36 +9,7 @@ import {
   settingsRepo,
   bootstrapSeed,
 } from "@/lib/db";
-import { LLMProvider } from "@/lib/llm/providers";
-import { maskSecret } from "@/lib/masking";
-
-function redactSettings(all: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(all)) {
-    if (k === "llm_providers") {
-      try {
-        const chain = JSON.parse(v) as LLMProvider[];
-        out[k] = JSON.stringify(chain.map((p) => ({ ...p, apiKey: p.apiKey ? maskSecret(p.apiKey) : "" })));
-      } catch {
-        out[k] = v;
-      }
-    } else if (k === "mail_settings") {
-      try {
-        const ms = JSON.parse(v) as { imapPass?: string; smtpPass?: string };
-        out[k] = JSON.stringify({
-          ...ms,
-          imapPass: ms.imapPass ? maskSecret(ms.imapPass) : "",
-          smtpPass: ms.smtpPass ? maskSecret(ms.smtpPass) : "",
-        });
-      } catch {
-        out[k] = v;
-      }
-    } else {
-      out[k] = v;
-    }
-  }
-  return out;
-}
+import { redactSettings } from "@/lib/masking";
 
 export async function GET() {
   try {

@@ -53,34 +53,47 @@ async function embedOpenAICompatible(baseURL: string, apiKey: string, model: str
  * space used when the text was indexed — mismatched spaces score ~0.
  * Falls back to the built-in local hash embedding when no key/provider works.
  */
+/** Default real embedding model name per provider (the chain only stores chat models).
+    OpenRouter/Groq/etc. do not run embeddings; OpenAI and Ollama do. */
+const EMBEDDING_MODEL_BY_ID: Record<string, string> = {
+  openai: "text-embedding-3-small",
+  ollama: "nomic-embed-text",
+};
+
 export async function embedTexts(texts: string[], modelHint?: string): Promise<EmbeddingResult> {
   const chain = resolveChain();
   const started = Date.now();
   const hintModel = modelHint && modelHint.includes("|") ? modelHint.split("|").pop() : modelHint;
+  const hintProvider = modelHint && modelHint.includes("|") ? modelHint.split("|")[0] : undefined;
 
   for (const provider of chain) {
     const cfg = getProvider(provider.id);
     if (!cfg.capabilities?.includes("embeddings")) continue;
     if (cfg.kind !== "openai") continue;
     const baseURL = provider.baseURL || cfg.baseURL;
-    if (!baseURL || !provider.model) continue;
+    if (!baseURL) continue;
     if (cfg.needsKey && !provider.apiKey) continue;
-    if (hintModel && provider.model !== hintModel && provider.id !== hintModel && provider.id !== modelHint) continue;
+    // The stored chain's `model` is a CHAT model — never a valid /embeddings
+    // model. Map to a real embedding model; honor the exact hint when it was
+    // pinned (same embedding space), otherwise skip mismatched spaces.
+    const model = EMBEDDING_MODEL_BY_ID[provider.id];
+    if (!model) continue;
+    if (hintModel && (model !== hintModel || (hintProvider && hintProvider !== provider.id))) continue;
 
     try {
-      const vectors = await embedOpenAICompatible(baseURL, provider.apiKey ?? "", provider.model, texts);
+      const vectors = await embedOpenAICompatible(baseURL, provider.apiKey ?? "", model, texts);
       usageRepo.log({
         agent: "vault",
         kind: "embedding",
         provider: provider.id,
-        model: provider.model,
+        model,
         status: "ok",
         promptTokens: 0,
         completionTokens: 0,
         latencyMs: Date.now() - started,
         costEst: 0,
       });
-      return { vectors, model: `${provider.id}|${provider.model}` };
+      return { vectors, model: `${provider.id}|${model}` };
     } catch {
       /* try next embedding-capable provider */
     }

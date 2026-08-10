@@ -1,32 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
+import { isIP } from 'node:net';
+import { AGENT_BASE_URL as AGENT_URL, agentHeaders } from '@/lib/agentClient';
 
-const AGENT_URL = process.env.SCRAPLING_AGENT_URL || 'http://127.0.0.1:8001';
+/** Block SSRF targets: localhost, loopback, link-local, private + reserved IPs.
 
-/** Block SSRF targets: localhost, link-local and private IPv4 ranges. */
+    Uses node:net to catch obfuscations (decimal/hex IPs, IPv4-mapped IPv6,
+    trailing-dot hostnames) that a textual check misses. DNS names are
+    resolved by the fetch itself; literal IPs are validated directly.
+ */
 function assertPublicUrl(raw: string): URL {
-  const u = new URL(raw);
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    throw new Error('Invalid URL');
+  }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') {
     throw new Error('Only http(s) URLs are supported');
   }
-  const hostname = u.hostname.toLowerCase();
-  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]') {
+
+  let hostname = u.hostname.toLowerCase();
+  // strip trailing dot(s) — "localhost." and "127.0.0.1." are the same host
+  hostname = hostname.replace(/\.+$/, '');
+
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
     throw new Error('Local addresses are not allowed');
   }
-  const ipv4 = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (ipv4) {
-    const [a, b] = ipv4.slice(1).map(Number);
+
+  const ipVersion = isIP(hostname);
+  if (ipVersion === 4) {
+    const [a, b] = hostname.split('.').map(Number);
     if (
       a === 0 ||
       a === 10 ||
       a === 127 ||
       (a === 169 && b === 254) ||
       (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168)
+      (a === 192 && b === 168) ||
+      a >= 224 // multicast + reserved
     ) {
-      throw new Error('Private IP ranges are not allowed');
+      throw new Error('Private/reserved IP ranges are not allowed');
+    }
+  } else if (ipVersion === 6) {
+    const norm = hostname.replace(/^\[|\]$/g, '');
+    const lower = norm.toLowerCase();
+    if (
+      lower === '::1' ||
+      lower.startsWith('::ffff:') || // IPv4-mapped
+      lower.startsWith('fe80:') || // link-local
+      lower.startsWith('fc') ||
+      lower.startsWith('fd') // unique local
+    ) {
+      throw new Error('Loopback/link-local/private IPv6 is not allowed');
     }
   }
+
   return u;
 }
 
@@ -50,7 +79,7 @@ export async function POST(req: NextRequest) {
       const timer = setTimeout(() => controller.abort(), 60_000);
       const res = await fetch(`${AGENT_URL}/scrape`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: agentHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ url }),
         signal: controller.signal,
       });
@@ -92,7 +121,28 @@ async function scrapeWithCheerio(url: string) {
     throw new Error(`Failed to fetch page: HTTP ${response.status}`);
   }
 
-  const html = await response.text();
+  // Cap the body so a huge/unbounded response can't blow up memory.
+  const MAX_BYTES = 2 * 1024 * 1024;
+  const reader = response.body?.getReader();
+  let html = '';
+  if (reader) {
+    const decoder = new TextDecoder();
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_BYTES) {
+        await reader.cancel();
+        html += decoder.decode(value.slice(0, Math.max(0, MAX_BYTES - (total - value.byteLength))), { stream: false });
+        break;
+      }
+      html += decoder.decode(value, { stream: true });
+    }
+    html += decoder.decode();
+  } else {
+    html = (await response.text()).slice(0, MAX_BYTES);
+  }
   const $ = cheerio.load(html);
 
   let title = '';

@@ -5,7 +5,7 @@ import { cleanAssistantDecision, CleanAssistantDecision } from "@/lib/llm/saniti
 import { buildSharedContext } from "@/lib/agents/context";
 import { remember } from "@/lib/agents/memory";
 import { searchVault } from "@/lib/vault";
-import { jobsRepo, emailsRepo, interviewsRepo, remindersRepo, settingsRepo } from "@/lib/db";
+import { jobsRepo, emailsRepo, interviewsRepo, remindersRepo, settingsRepo, contactsRepo } from "@/lib/db";
 import { ORCHESTRATOR_TOOLS_PROMPT } from "@/lib/prompts/orchestratorPrompts";
 
 export interface ChatMessage {
@@ -211,6 +211,18 @@ async function executeTool(state: typeof AssistantState.State) {
         if (!args.to || !args.subject || !args.body) {
            return { toolResult: "Missing 'to', 'subject', or 'body' for sending email." };
         }
+        // Anti-exfiltration gate: only send to an email that already exists in
+        // the user's contacts, never to an address the model invented from
+        // scraped/job/vault content. Prevents prompt-injection exfiltration.
+        const to = String(args.to).trim();
+        const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+        if (!EMAIL_RE.test(to)) {
+          return { toolResult: "Refusing to send: recipient is not a valid email address." };
+        }
+        const known = contactsRepo.list().some((c) => c.email && c.email.toLowerCase() === to.toLowerCase());
+        if (!known) {
+          return { toolResult: `Refusing to send: "${to}" is not a saved contact. Add them under Network first, or confirm the address.` };
+        }
         try {
           const nodemailer = (await import("nodemailer")).default;
           const transporter = nodemailer.createTransport({
@@ -221,11 +233,11 @@ async function executeTool(state: typeof AssistantState.State) {
           });
           await transporter.sendMail({
             from: `"${mailSettings.fromName || mailSettings.smtpUser}" <${mailSettings.fromEmail || mailSettings.smtpUser}>`,
-            to: args.to,
-            subject: args.subject,
-            text: args.body,
+            to,
+            subject: String(args.subject).slice(0, 200),
+            text: String(args.body).slice(0, 10_000),
           });
-          return { toolResult: `Successfully sent email to ${args.to}.` };
+          return { toolResult: `Successfully sent email to ${to}.` };
         } catch (e) {
           const msg = (e instanceof Error ? e.message : String(e)).replace(/pass(?:word)?[=:\s]+\S+/gi, '[REDACTED]');
           return { toolResult: `Failed to send email: ${msg}` };

@@ -24,9 +24,10 @@ import { toErrorMessage } from "@/lib/errors";
 type DocType = "tailoredResume" | "coverLetter" | "motivationLetter" | "followUpEmail";
 
 export default function DocumentsPanel({ job }: { job: JobApplication }) {
-  const { generateDocuments, profile } = useApp();
+  const { generateDocuments, generateDocument, profile } = useApp();
   const { success, error: errToast, celebrate } = useToast();
   const [loading, setLoading] = useState(false);
+  const [singleLoading, setSingleLoading] = useState<DocType | null>(null);
   const [pdfLoading, setPdfLoading] = useState<DocType | null>(null);
   const [activeDoc, setActiveDoc] = useState<DocType>("tailoredResume");
   const [copied, setCopied] = useState(false);
@@ -44,6 +45,20 @@ export default function DocumentsPanel({ job }: { job: JobApplication }) {
       errToast(toErrorMessage(e));
     } finally {
       setLoading(false);
+    }
+  };
+
+  /* Generate just the selected document instead of the whole set. */
+  const runSingle = async (docType: DocType) => {
+    setSingleLoading(docType);
+    try {
+      await generateDocument(job.id, docType);
+      setActiveDoc(docType);
+      success(`${docList.find((d) => d.id === docType)?.label} tailored.`);
+    } catch (e) {
+      errToast(toErrorMessage(e));
+    } finally {
+      setSingleLoading(null);
     }
   };
 
@@ -150,6 +165,23 @@ export default function DocumentsPanel({ job }: { job: JobApplication }) {
                   {label}
                 </p>
                 <p className="mt-0.5 text-[10px] text-dim">{hint}</p>
+                {!docs[id] && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void runSingle(id);
+                    }}
+                    disabled={singleLoading === id}
+                    className={
+                      "mt-2 w-full rounded-lg border px-2 py-1 text-[10px] font-semibold transition-colors " +
+                      (singleLoading === id
+                        ? "cursor-wait border-[var(--line)] text-dim"
+                        : "border-[var(--chartreuse)]/30 text-[var(--chartreuse)] hover:bg-[var(--chartreuse)]/10")
+                    }
+                  >
+                    {singleLoading === id ? <Loader2 className="mx-auto h-3 w-3 animate-spin" /> : "Generate this one"}
+                  </button>
+                )}
               </button>
             ))}
           </div>

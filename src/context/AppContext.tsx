@@ -62,7 +62,11 @@ interface GeneratePayload {
   type: string;
   job: Partial<JobApplication>;
   profile: UserProfile;
-  options?: { tone?: string; focusSkills?: string[] };
+  options?: {
+    tone?: string;
+    focusSkills?: string[];
+    docType?: "tailoredResume" | "coverLetter" | "motivationLetter" | "followUpEmail";
+  };
   trackedJobs?: JobApplication[];
   gaps?: string[];
   llmSettings: LLMSettings;
@@ -112,6 +116,11 @@ interface AppContextType {
   saveMailSettings: (s: MailSettings) => void;
   scrapeJobOffer: (url: string) => Promise<ScrapedJob>;
   generateDocuments: (jobId: string, options?: { tone?: string; focusSkills?: string[] }) => Promise<TailoredDocuments>;
+  generateDocument: (
+    jobId: string,
+    docType: "tailoredResume" | "coverLetter" | "motivationLetter" | "followUpEmail",
+    options?: { tone?: string; focusSkills?: string[] }
+  ) => Promise<TailoredDocuments>;
   generateMatchAnalysis: (jobId: string) => Promise<SkillsGapAnalysis>;
   generateSTARCards: (jobId: string) => Promise<STARCard[]>;
   generateInterviewQuestions: (jobId: string) => Promise<InterviewQuestion[]>;
@@ -570,6 +579,25 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     return docs;
   };
 
+  const generateDocument = async (
+    jobId: string,
+    docType: "tailoredResume" | "coverLetter" | "motivationLetter" | "followUpEmail",
+    options?: { tone?: string; focusSkills?: string[] }
+  ): Promise<TailoredDocuments> => {
+    const job = applications.find(a => a.id === jobId);
+    if (!job) throw new Error('Job not found.');
+    const data = await callGenerate({
+      type: 'documents',
+      job: jobPayload(job),
+      profile,
+      options: { ...options, docType },
+      llmSettings,
+    });
+    const docs: TailoredDocuments = data.documents || {};
+    updateApplication(jobId, { documents: { ...job.documents, ...docs } });
+    return docs;
+  };
+
   const generateMatchAnalysis = async (jobId: string): Promise<SkillsGapAnalysis> => {
     const job = applications.find(a => a.id === jobId);
     if (!job) throw new Error('Job not found.');
@@ -880,6 +908,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       saveMailSettings,
       scrapeJobOffer,
       generateDocuments,
+      generateDocument,
       generateMatchAnalysis,
       generateSTARCards,
       generateInterviewQuestions,
@@ -933,6 +962,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       saveMailSettings,
       scrapeJobOffer,
       generateDocuments,
+      generateDocument,
       generateMatchAnalysis,
       generateSTARCards,
       generateInterviewQuestions,

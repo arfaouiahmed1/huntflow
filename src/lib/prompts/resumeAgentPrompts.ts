@@ -23,9 +23,44 @@ You are also a senior executive resume writer and a partner-track recruiter who 
 ${JSON_RULE}`;
 }
 
-export function documentsUserPrompt(job: JobApplication, profile: UserProfile, options?: { tone?: string; focusSkills?: string[] }): string {
+export type DocumentKind = "tailoredResume" | "coverLetter" | "motivationLetter" | "followUpEmail";
+
+export function documentsUserPrompt(
+  job: JobApplication,
+  profile: UserProfile,
+  options?: { tone?: string; focusSkills?: string[]; docType?: DocumentKind }
+): string {
   const tone = options?.tone || "professional and confident";
   const focus = options?.focusSkills?.length ? `\nFOCUS SKILLS TO HIGHLIGHT: ${options.focusSkills.join(", ")}` : "";
+
+  /* -------- Request a single document (Generate This One) -------- */
+  if (options?.docType) {
+    const specFor: Record<DocumentKind, string> = {
+      tailoredResume:
+        `a complete, ATS-optimized markdown CV. Rewrite experience bullets to echo the job description's requirements, leading with the candidate's matching skills. Quantify achievements. Max 700 words. Mirror the posting's terminology only for skills the candidate actually has; never invent or inflate scope.`,
+      coverLetter: `3 short paragraphs, ${tone}. Hook = the candidate's strongest relevant achievement. Reference the company and role by name. Must read like natural human writing, not a template.`,
+      motivationLetter:
+        `a compelling 3-paragraph motivation letter focused on why the candidate genuinely wants THIS company and role, not generic fluff.`,
+      followUpEmail:
+        `a concise, warm 4-day follow-up email to the recruiter, referencing the application and one key value point. No em dashes.`,
+    };
+    const letterPreamble =
+      options.docType === "coverLetter" || options.docType === "motivationLetter"
+        ? `\n\n${NATURAL_LETTER_RULES}`
+        : "";
+
+    return `${buildProfileContext(profile)}
+
+${buildJobContext(job)}
+${focus}
+
+TASK: Tailor a single document for THIS job:
+"${options.docType}": ${specFor[options.docType]}${letterPreamble}
+
+Respond as JSON with exactly one key: "${options.docType}".`;
+  }
+
+  /* -------- Request all four documents (default) -------- */
   return `${buildProfileContext(profile)}
 
 ${buildJobContext(job)}

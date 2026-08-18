@@ -269,14 +269,14 @@ export default function JobDetailDrawer({
             aria-label="Background agent mode"
             onClick={() => toggleBgAgent(!bgAgent)}
             className={cn(
-              "relative h-6 w-11 shrink-0 rounded-full transition-colors",
-              bgAgent ? "bg-[var(--chartreuse)]" : "bg-white/10"
+              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full p-0.5 transition-colors focus:outline-none",
+              bgAgent ? "bg-[var(--chartreuse)]" : "bg-white/15"
             )}
           >
             <span
               className={cn(
-                "absolute top-0.5 h-5 w-5 rounded-full bg-[var(--paper)] transition-transform",
-                bgAgent ? "translate-x-[22px]" : "translate-x-0.5"
+                "pointer-events-none inline-block h-5 w-5 rounded-full bg-[var(--paper)] shadow-sm transition-transform duration-200 ease-in-out",
+                bgAgent ? "translate-x-5" : "translate-x-0"
               )}
             />
           </button>

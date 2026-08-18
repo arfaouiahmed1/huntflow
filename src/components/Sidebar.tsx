@@ -18,12 +18,14 @@ import {
   MessagesSquare,
   Archive,
   Radar,
+  FileSignature,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/", label: "Command Deck", icon: LayoutDashboard },
   { href: "/tracker", label: "Applications", icon: KanbanSquare },
+  { href: "/resume", label: "Resume & CV Studio", icon: FileSignature },
   { href: "/jobs", label: "Job Finder", icon: Radar },
   { href: "/agent", label: "Auto-Apply Agent", icon: Bot },
   { href: "/assistant", label: "Assistant", icon: MessagesSquare },

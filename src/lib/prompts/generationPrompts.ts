@@ -401,44 +401,126 @@ export function briefFallback(job: JobApplication): JobBrief {
 
 export function salarySystemPrompt(): string {
   return `${SYSTEM_PREAMBLE}
-You are a compensation analyst who knows 2026 market rates for engineering roles across the US and EU.
+You are a global compensation analyst who specializes in accurate 2026 tech market rates across all regions (US, Europe, UK, MENA, LATAM, APAC, and Global Remote).
+
+CRITICAL COMPENSATION RULES:
+1. ALWAYS localize compensation to the company and job's geographic location (${"job.location"}).
+   - North America (US/Canada): $120,000 - $240,000 USD/year
+   - Western Europe / UK / Germany / France / Nordics: $65,000 - $140,000 USD/year
+   - MENA / North Africa / Tunisia / Gulf / Eastern Europe / LATAM: $25,000 - $80,000 USD/year (or local purchasing power parity)
+   - Worldwide Remote: $70,000 - $160,000 USD/year
+2. If the posting has a disclosed salary:
+   - If stated per month (e.g. "$4,000 - $6,000 / month"), multiply by 12 to provide the annualized USD range ($48,000 - $72,000).
+   - If stated per hour, multiply by 2080 annual hours.
+   - Anchor directly to the disclosed range.
+3. Factor in seniority (Junior/Mid/Senior/Staff) and tech specialization (AI/ML, Systems, Cloud, Full Stack).
 
 ${JSON_RULE}`;
 }
 
 export function salaryUserPrompt(job: JobApplication, profile: UserProfile): string {
   return `${buildJobContext(job)}
-Candidate seniority: ${profile.targetTitle} — ${profile.experience.length} role(s), latest: ${profile.experience[0]?.duration ?? "n/a"}.
-Location: ${profile.location}
+Target Role: ${job.title}
+Company: ${job.company}
+Job Location & Work Policy: ${job.location || "Remote"}
+Disclosed Salary in Posting: ${job.salary || "None specified"}
+Candidate Seniority: ${profile.targetTitle} (${profile.experience.length} recorded positions)
+Candidate Location: ${profile.location}
 
-TASK: Estimate fair compensation. Respond as JSON:
-- "estimateLow": number (USD annual).
-- "estimateHigh": number (USD annual).
+TASK: Estimate fair annualized market compensation (in USD) tailored to this specific location and seniority. Respond as JSON:
+- "estimateLow": number (annual USD integer).
+- "estimateHigh": number (annual USD integer).
 - "basis": "posting" | "market" | "hybrid" — whether the posting disclosed a range.
 - "disclosedRange": string | null — exact range from the posting if present.
-- "factors": string[] — 3 factors that push the estimate up or down (location, seniority, equity, industry).
-- "negotiationTips": string[] — 4 tactical negotiation plays (anchor, leverage, timing, non-cash).`;
+- "factors": string[] — 3 concrete factors that determine this compensation band (localized cost of labor for ${job.location || "region"}, seniority level, tech stack demand).
+- "negotiationTips": string[] — 4 tactical negotiation plays tailored for this role and regional market.`;
 }
 
 export function salaryFallback(job: JobApplication): SalaryIntel {
   const disclosed = job.salary && /[\d,]/.test(job.salary) ? job.salary : null;
-  const senior = /senior|lead|principal|staff/i.test(job.title + job.jobDescription.replace(/<[^>]*>/g, "")) ? 1.25 : 1;
-  const base = /ai|ml|llm|machine/i.test(job.jobDescription) ? 165000 : 140000;
+  const isMonthly = disclosed && /month|mo|\/m/i.test(disclosed);
+  const isHourly = disclosed && /hour|hr|\/h/i.test(disclosed);
+
+  // Try to parse numbers from disclosed salary
+  let parsedLow: number | null = null;
+  let parsedHigh: number | null = null;
+
+  if (disclosed) {
+    const nums = disclosed.replace(/,/g, "").match(/\d+(?:\.\d+)?/g);
+    if (nums && nums.length >= 2) {
+      parsedLow = parseFloat(nums[0]);
+      parsedHigh = parseFloat(nums[1]);
+    } else if (nums && nums.length === 1) {
+      parsedLow = parseFloat(nums[0]) * 0.9;
+      parsedHigh = parseFloat(nums[0]) * 1.15;
+    }
+
+    if (parsedLow !== null && parsedHigh !== null) {
+      // Check if numbers are in 'k' (e.g. 4k - 6k)
+      if (parsedLow < 1000 && /k\b/i.test(disclosed)) {
+        parsedLow *= 1000;
+        parsedHigh *= 1000;
+      }
+      // If monthly rate (e.g. 4000 - 6000 / month)
+      if (isMonthly) {
+        parsedLow *= 12;
+        parsedHigh *= 12;
+      } else if (isHourly) {
+        parsedLow *= 2080;
+        parsedHigh *= 2080;
+      }
+    }
+  }
+
+  // Determine regional base if not parsed from posting
+  const loc = (job.location + " " + job.company + " " + job.title).toLowerCase();
+  let regionalMultiplier = 1.0;
+  let regionLabel = "US/Global Baseline";
+
+  if (/tunis|mena|morocco|egypt|algeria|north africa|africa/i.test(loc)) {
+    regionalMultiplier = 0.35; // ~$45k-$70k for senior/AI tech roles in MENA
+    regionLabel = "MENA & North Africa Market Rates";
+  } else if (/india|pakistan|bangladesh|philippines|latam|brazil|argentina/i.test(loc)) {
+    regionalMultiplier = 0.40;
+    regionLabel = "LATAM / South Asia Regional Rates";
+  } else if (/poland|romania|bulgaria|czech|hungary|ukraine|estonia|eastern europe/i.test(loc)) {
+    regionalMultiplier = 0.55;
+    regionLabel = "Eastern Europe Regional Rates";
+  } else if (/uk|london|germany|berlin|france|paris|netherlands|amsterdam|sweden|switzerland|ireland|dublin|europe/i.test(loc)) {
+    regionalMultiplier = 0.75;
+    regionLabel = "Western Europe / UK Market Rates";
+  } else if (/us|united states|san francisco|sf|new york|nyc|seattle|austin|california/i.test(loc)) {
+    regionalMultiplier = 1.15;
+    regionLabel = "US Tech Hub Market Rates";
+  } else if (/remote/i.test(loc)) {
+    regionalMultiplier = 0.70;
+    regionLabel = "Global Remote Baseline";
+  }
+
+  const senior = /senior|lead|principal|staff|architect/i.test(job.title + " " + (job.jobDescription || "")) ? 1.3 : /intern|junior|entry|graduate/i.test(job.title) ? 0.75 : 1.0;
+  const aiPremium = /ai|ml|llm|machine learning|deep learning|agent/i.test(job.title + " " + (job.jobDescription || "")) ? 1.2 : 1.0;
+
+  const baseLow = 110000 * regionalMultiplier * senior * aiPremium;
+  const baseHigh = baseLow * 1.35;
+
+  const finalLow = parsedLow ? Math.round(parsedLow / 1000) * 1000 : Math.round(baseLow / 1000) * 1000;
+  const finalHigh = parsedHigh ? Math.round(parsedHigh / 1000) * 1000 : Math.round(baseHigh / 1000) * 1000;
+
   return {
-    estimateLow: Math.round((base * senior) / 1000) * 1000,
-    estimateHigh: Math.round((base * senior * 1.35) / 1000) * 1000,
+    estimateLow: finalLow,
+    estimateHigh: Math.max(finalHigh, finalLow + 5000),
     basis: disclosed ? "posting" : "market",
     disclosedRange: disclosed,
     factors: [
-      "Seniority signaled by the title and description",
-      "Location & remote policy (hybrid vs fully remote)",
-      "AI specialization premiums when relevant",
+      `Localized compensation benchmarks for ${job.location || "target location"} (${regionLabel})`,
+      `Seniority and experience tier: ${senior >= 1.3 ? "Senior/Lead" : senior < 1.0 ? "Junior/New Grad" : "Mid-Level"}`,
+      aiPremium > 1 ? "AI & Agentic systems specialization market premium (+20%)" : "Standard engineering market demand",
     ],
     negotiationTips: [
-      "Ask for the band before sharing your number.",
-      "Anchor at the top of the disclosed range plus 10%.",
-      "Leverage competing timelines to accelerate decisions.",
-      "Negotiate equity and flexible work before signing.",
+      disclosed ? `Anchor negotiation near the top of the disclosed band ($${Math.round(finalHigh).toLocaleString()}).` : "Request the official salary band before disclosing your target number.",
+      "Highlight specific agentic AI, tool-use, and full-stack deliverables to justify top-of-band placement.",
+      "Leverage competing opportunities to accelerate timeline and secure sign-on bonuses.",
+      "Negotiate equity, remote flexibility, and performance review cadence before signing.",
     ],
   };
 }

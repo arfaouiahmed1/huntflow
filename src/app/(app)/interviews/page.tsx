@@ -21,6 +21,7 @@ import { useApp } from "@/context/AppContext";
 import { InterviewEvent } from "@/types";
 import { Button } from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
+import Select from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/utils";
 import { palette } from "@/lib/theme";
@@ -308,18 +309,16 @@ export default function InterviewsPage() {
         <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block sm:col-span-2">
                   <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.15em] text-dim">Linked application</span>
-                  <select
-                    value={form.jobId}
-                    onChange={(e) => setForm({ ...form, jobId: e.target.value })}
-                    className="w-full rounded-lg border border-[var(--line)] bg-[var(--ink-soft)] px-3 py-2 text-sm text-[var(--paper)] focus:border-[var(--chartreuse)]/50 focus:outline-none"
-                  >
-                    <option value="">No linked application…</option>
-                    {applications.map((j) => (
-                      <option key={j.id} value={j.id}>
-                        {j.company} — {j.title.slice(0, 42)}
-                      </option>
-                    ))}
-                  </select>
+                  <Select
+                    value={form.jobId || undefined}
+                    onChange={(v) => setForm({ ...form, jobId: v })}
+                    placeholder="No linked application…"
+                    className="w-full"
+                    options={applications.map((j) => ({
+                      value: j.id,
+                      label: `${j.company} — ${j.title.slice(0, 42)}`,
+                    }))}
+                  />
                 </label>
                 <label className="block sm:col-span-2">
                   <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.15em] text-dim">Title</span>
@@ -332,17 +331,16 @@ export default function InterviewsPage() {
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.15em] text-dim">Type</span>
-                  <select
+                  <Select
                     value={form.type}
-                    onChange={(e) => setForm({ ...form, type: e.target.value as InterviewEvent["type"] })}
-                    className="w-full rounded-lg border border-[var(--line)] bg-[var(--ink-soft)] px-3 py-2 text-sm text-[var(--paper)] focus:border-[var(--chartreuse)]/50 focus:outline-none"
-                  >
-                    {TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {TYPE_META[t].label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => setForm({ ...form, type: v })}
+                    className="w-full"
+                    options={TYPES.map((t) => ({
+                      value: t,
+                      label: TYPE_META[t].label,
+                      dot: TYPE_META[t].color,
+                    }))}
+                  />
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.15em] text-dim">When</span>

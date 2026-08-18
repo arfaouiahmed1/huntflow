@@ -4,9 +4,11 @@ import { useState } from "react";
 import { Link2, FileText, Sparkles } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import Select from "@/components/ui/Select";
 import { useApp } from "@/context/AppContext";
 import { ApplicationStatus } from "@/types";
 import { cn } from "@/lib/utils";
+import { statusConfig, STATUS_ORDER } from "@/components/ui/StatusBadge";
 
 interface ScrapedJob {
   title: string;
@@ -161,13 +163,14 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
         </div>
         <div className="sm:col-span-2">
           <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-dim">Status</label>
-          <select className={field} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as ApplicationStatus })}>
-            <option value="wishlist">Wishlist</option>
-            <option value="applied">Applied</option>
-            <option value="interviewing">Interviewing</option>
-            <option value="offer">Offer</option>
-            <option value="rejected">Rejected</option>
-          </select>
+          <Select
+            ariaLabel="Status"
+            value={form.status}
+            onChange={(s: ApplicationStatus) => setForm({ ...form, status: s })}
+            options={STATUS_ORDER.map((s) => ({ value: s, label: statusConfig[s].label, dot: statusConfig[s].dot }))}
+            className="w-full [&>button]:px-3.5 [&>button]:py-2.5 [&>button]:text-sm [&>button]:rounded-xl"
+            placeholder="Select status…"
+          />
         </div>
         <div className="sm:col-span-2">
           <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-dim">

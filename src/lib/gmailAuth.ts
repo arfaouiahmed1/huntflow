@@ -24,16 +24,43 @@ const REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke";
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
 const DEFAULT_REDIRECT_URI = "http://localhost:3000/api/auth/gmail/callback";
 
+const GOOGLE_CLIENT_ID_KEY = "google_client_id";
+const GOOGLE_CLIENT_SECRET_KEY = "google_client_secret";
+
 export function gmailEnv(): {
   clientId?: string;
   clientSecret?: string;
   redirectUri: string;
   configured: boolean;
 } {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const envId = process.env.GOOGLE_CLIENT_ID;
+  const envSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const dbId = settingsRepo.get(GOOGLE_CLIENT_ID_KEY);
+  const dbSecret = settingsRepo.get(GOOGLE_CLIENT_SECRET_KEY);
+
+  const clientId = (envId && envId.trim()) || (dbId && dbId.trim()) || undefined;
+  const clientSecret = (envSecret && envSecret.trim()) || (dbSecret && dbSecret.trim()) || undefined;
   const redirectUri = process.env.GOOGLE_REDIRECT_URI || DEFAULT_REDIRECT_URI;
   return { clientId, clientSecret, redirectUri, configured: Boolean(clientId && clientSecret) };
+}
+
+export function storeGoogleCredentials(clientId: string, clientSecret: string) {
+  if (clientId) settingsRepo.set(GOOGLE_CLIENT_ID_KEY, clientId.trim());
+  if (clientSecret) settingsRepo.set(GOOGLE_CLIENT_SECRET_KEY, clientSecret.trim());
+}
+
+export function getGoogleClientStatus(): { configured: boolean; clientId?: string; source: "env" | "db" | "none" } {
+  const envId = process.env.GOOGLE_CLIENT_ID;
+  const envSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (envId && envSecret) {
+    return { configured: true, clientId: `${envId.slice(0, 12)}...`, source: "env" };
+  }
+  const dbId = settingsRepo.get(GOOGLE_CLIENT_ID_KEY);
+  const dbSecret = settingsRepo.get(GOOGLE_CLIENT_SECRET_KEY);
+  if (dbId && dbSecret) {
+    return { configured: true, clientId: `${dbId.slice(0, 12)}...`, source: "db" };
+  }
+  return { configured: false, source: "none" };
 }
 
 export function storeGmailTokens(t: GmailOAuthTokens) {
@@ -128,10 +155,17 @@ export async function getGmailAuth(): Promise<GmailAuthBundle | null> {
 }
 
 /** Connection status for the browser — no secrets. */
-export function gmailStatus(): { connected: boolean; email?: string; expiry?: number } {
+export function gmailStatus(): {
+  connected: boolean;
+  email?: string;
+  expiry?: number;
+  clientConfigured: boolean;
+  redirectUri: string;
+} {
+  const { configured, redirectUri } = gmailEnv();
   const tokens = loadGmailTokens();
-  if (!tokens) return { connected: false };
-  return { connected: true, email: tokens.email, expiry: tokens.expiry };
+  if (!tokens) return { connected: false, clientConfigured: configured, redirectUri };
+  return { connected: true, email: tokens.email, expiry: tokens.expiry, clientConfigured: configured, redirectUri };
 }
 
 /** Revoke the current access token at Google, then clear the stored credentials. */

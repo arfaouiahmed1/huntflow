@@ -87,8 +87,6 @@ interface AppContextType {
   setLLMSettings: (s: LLMSettings) => void;
   providers: LLMProvider[];
   updateProviders: (chain: LLMProvider[]) => void;
-  activeJobId: string | null;
-  setActiveJobId: (id: string | null) => void;
   dataReady: boolean;
   contacts: Contact[];
   emails: EmailMessage[];
@@ -206,7 +204,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const first = chain.find((p) => p.enabled);
     if (first) setLLMSettings(llmSettingsFrom(first));
   };
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [dataReady, setDataReady] = useState(false);
 
   /* ------------------------- DB collections ------------------------- */
@@ -367,7 +364,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       autoApplyLogs: data.autoApplyLogs || [],
     };
     setApplications(prev => [newApp, ...prev]);
-    setActiveJobId(newApp.id);
     persist('jobs', newApp);
     return newApp;
   };
@@ -406,10 +402,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteApplication = (id: string) => {
     setApplications(prev => prev.filter(app => app.id !== id));
-    if (activeJobId === id) {
-      const remaining = applications.filter(app => app.id !== id);
-      setActiveJobId(remaining.length > 0 ? remaining[0].id : null);
-    }
     fetch(`/api/data/jobs/${id}`, { method: 'DELETE' }).catch(() => undefined);
     refreshStats();
   };
@@ -879,8 +871,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setLLMSettings,
       providers,
       updateProviders,
-      activeJobId,
-      setActiveJobId,
       dataReady,
       contacts,
       emails,
@@ -931,7 +921,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       loadingInsights,
       llmSettings,
       providers,
-      activeJobId,
       dataReady,
       contacts,
       emails,
@@ -940,7 +929,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       stats,
       mailSettings,
       setLLMSettings,
-      setActiveJobId,
       updateProviders,
       refreshStats,
       addApplication,

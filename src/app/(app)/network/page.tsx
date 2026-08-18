@@ -15,12 +15,11 @@ import {
   Building2,
   UserPlus,
   BadgeCheck,
-  ArrowUpDown,
-  ChevronDown,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { Contact } from "@/types";
 import { Button } from "@/components/ui/Button";
+import Select from "@/components/ui/Select";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/utils";
@@ -221,18 +220,17 @@ export default function NetworkPage() {
             className="w-full rounded-xl border border-[var(--line)] bg-white/[0.03] py-2.5 pl-10 pr-4 text-sm text-[var(--paper)] placeholder:text-dim/60 focus:border-[var(--chartreuse)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--chartreuse)]/20"
           />
         </div>
-        <div className="relative sm:w-48">
-          <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-dim" />
-          <select
+        <div className="sm:w-48">
+          <Select
             value={sort}
-            onChange={(e) => setSort(e.target.value as "newest" | "name" | "priority")}
-            className="w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--ink-card)] py-2.5 pl-9 pr-8 text-sm font-semibold text-[var(--paper)] outline-none transition-colors focus:border-[var(--chartreuse)]/50"
-          >
-            <option value="newest">Recently added</option>
-            <option value="name">Name A–Z</option>
-            <option value="priority">Priority (high first)</option>
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-dim" />
+            onChange={(v) => setSort(v)}
+            className="w-full"
+            options={[
+              { value: "newest", label: "Recently added" },
+              { value: "name", label: "Name A–Z" },
+              { value: "priority", label: "Priority (high first)" },
+            ]}
+          />
         </div>
       </div>
 
@@ -408,31 +406,25 @@ export default function NetworkPage() {
                 <div className="grid grid-cols-2 gap-3 sm:col-span-2">
                   <label className="block">
                     <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.15em] text-dim">Relationship</span>
-                    <select
+                    <Select
                       value={form.relationship}
-                      onChange={(e) => setForm({ ...form, relationship: e.target.value as Contact["relationship"] })}
-                      className="w-full rounded-lg border border-[var(--line)] bg-[var(--ink-soft)] px-3 py-2 text-sm text-[var(--paper)] focus:border-[var(--chartreuse)]/50 focus:outline-none"
-                    >
-                      {RELATIONSHIPS.map((r) => (
-                        <option key={r} value={r}>
-                          {RELATIONSHIP_META[r].label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => setForm({ ...form, relationship: v })}
+                      className="w-full"
+                      options={RELATIONSHIPS.map((r) => ({
+                        value: r,
+                        label: RELATIONSHIP_META[r].label,
+                        dot: RELATIONSHIP_META[r].color,
+                      }))}
+                    />
                   </label>
                   <label className="block">
                     <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.15em] text-dim">Source</span>
-                    <select
+                    <Select
                       value={form.source}
-                      onChange={(e) => setForm({ ...form, source: e.target.value as Contact["source"] })}
-                      className="w-full rounded-lg border border-[var(--line)] bg-[var(--ink-soft)] px-3 py-2 text-sm text-[var(--paper)] focus:border-[var(--chartreuse)]/50 focus:outline-none"
-                    >
-                      {SOURCES.map((s) => (
-                        <option key={s} value={s}>
-                          {s[0].toUpperCase() + s.slice(1)}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => setForm({ ...form, source: v })}
+                      className="w-full"
+                      options={SOURCES.map((s) => ({ value: s, label: s[0].toUpperCase() + s.slice(1) }))}
+                    />
                   </label>
                 </div>
                 <label className="block sm:col-span-2">

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Button";
+import Select from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/utils";
 
@@ -202,33 +203,29 @@ export default function OutreachPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.15em] text-dim">To (contact)</span>
-              <select
-                value={contactId}
-                onChange={(e) => setContactId(e.target.value)}
-                className="w-full rounded-lg border border-[var(--line)] bg-[var(--ink-soft)] px-3 py-2 text-sm text-[var(--paper)] focus:border-[var(--chartreuse)]/50 focus:outline-none"
-              >
-                <option value="">Select a contact…</option>
-                {contacts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.email ? `· ${c.email}` : ""}
-                  </option>
-                ))}
-              </select>
+              <Select
+                value={contactId || undefined}
+                onChange={(v) => setContactId(v)}
+                placeholder="Select a contact…"
+                className="w-full"
+                options={contacts.map((c) => ({
+                  value: c.id,
+                  label: `${c.name}${c.email ? ` · ${c.email}` : ""}`,
+                }))}
+              />
             </label>
             <label className="block">
               <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.15em] text-dim">Linked job</span>
-              <select
-                value={jobId}
-                onChange={(e) => setJobId(e.target.value)}
-                className="w-full rounded-lg border border-[var(--line)] bg-[var(--ink-soft)] px-3 py-2 text-sm text-[var(--paper)] focus:border-[var(--chartreuse)]/50 focus:outline-none"
-              >
-                <option value="">No linked application…</option>
-                {applications.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {j.company} — {j.title.slice(0, 40)}
-                  </option>
-                ))}
-              </select>
+              <Select
+                value={jobId || undefined}
+                onChange={(v) => setJobId(v)}
+                placeholder="No linked application…"
+                className="w-full"
+                options={applications.map((j) => ({
+                  value: j.id,
+                  label: `${j.company} — ${j.title.slice(0, 40)}`,
+                }))}
+              />
             </label>
           </div>
 

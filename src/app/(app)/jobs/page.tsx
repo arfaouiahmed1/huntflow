@@ -20,13 +20,12 @@ export default function JobsPage() {
   const {
     applications,
     profile,
-    activeJobId,
     addApplication,
     triggerAutoApply,
-    setActiveJobId,
   } = useApp();
   const { success, error } = useToast();
 
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [jobs, setJobs] = useState<JobApplication[]>([]);
   const [crawling, setCrawling] = useState(false);
   const [offline, setOffline] = useState(false);

@@ -27,6 +27,8 @@ import {
 import { useApp } from "@/context/AppContext";
 import { useToast } from "@/components/ui/Toaster";
 import { Button } from "@/components/ui/Button";
+import Select from "@/components/ui/Select";
+import DateField from "@/components/ui/DateField";
 import ProfileCoach from "@/components/ProfileCoach";
 import { cn } from "@/lib/utils";
 import { palette } from "@/lib/theme";
@@ -367,17 +369,18 @@ export default function VaultPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <label className="text-xs font-medium text-dim mb-1 block">Work Permit Status</label>
-                  <select
-                    value={profileForm.workPermitStatus || "authorized"}
-                    onChange={(e) => setProfileForm({ ...profileForm, workPermitStatus: e.target.value as UserProfile["workPermitStatus"] })}
-                    className={inputClass}
-                  >
-                    <option value="authorized">Authorized to work (No sponsorship needed)</option>
-                    <option value="sponsorship_required">Requires Visa Sponsorship</option>
-                    <option value="citizen">Citizen / Permanent Resident</option>
-                    <option value="green_card">Green Card Holder</option>
-                    <option value="eu_passport">EU Passport Holder</option>
-                  </select>
+                  <Select
+                    value={profileForm.workPermitStatus}
+                    onChange={(v) => setProfileForm({ ...profileForm, workPermitStatus: v })}
+                    className="w-full"
+                    options={[
+                      { value: "authorized", label: "Authorized to work (No sponsorship needed)" },
+                      { value: "sponsorship_required", label: "Requires Visa Sponsorship" },
+                      { value: "citizen", label: "Citizen / Permanent Resident" },
+                      { value: "green_card", label: "Green Card Holder" },
+                      { value: "eu_passport", label: "EU Passport Holder" },
+                    ]}
+                  />
                 </div>
 
                 <div>
@@ -406,28 +409,30 @@ export default function VaultPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <label className="text-xs font-medium text-dim mb-1 block">Preferred Work Mode</label>
-                  <select
-                    value={profileForm.preferredWorkMode || "hybrid"}
-                    onChange={(e) => setProfileForm({ ...profileForm, preferredWorkMode: e.target.value as UserProfile["preferredWorkMode"] })}
-                    className={inputClass}
-                  >
-                    <option value="remote">Remote Only</option>
-                    <option value="hybrid">Hybrid</option>
-                    <option value="onsite">Onsite</option>
-                  </select>
+                  <Select
+                    value={profileForm.preferredWorkMode}
+                    onChange={(v) => setProfileForm({ ...profileForm, preferredWorkMode: v })}
+                    className="w-full"
+                    options={[
+                      { value: "remote", label: "Remote Only" },
+                      { value: "hybrid", label: "Hybrid" },
+                      { value: "onsite", label: "Onsite" },
+                    ]}
+                  />
                 </div>
 
                 <div>
                   <label className="text-xs font-medium text-dim mb-1 block">Willingness to Relocate</label>
-                  <select
-                    value={profileForm.willingnessToRelocate || "yes"}
-                    onChange={(e) => setProfileForm({ ...profileForm, willingnessToRelocate: e.target.value as UserProfile["willingnessToRelocate"] })}
-                    className={inputClass}
-                  >
-                    <option value="yes">Yes</option>
-                    <option value="no">No</option>
-                    <option value="remote_only">Remote Only</option>
-                  </select>
+                  <Select
+                    value={profileForm.willingnessToRelocate}
+                    onChange={(v) => setProfileForm({ ...profileForm, willingnessToRelocate: v })}
+                    className="w-full"
+                    options={[
+                      { value: "yes", label: "Yes" },
+                      { value: "no", label: "No" },
+                      { value: "remote_only", label: "Remote Only" },
+                    ]}
+                  />
                 </div>
 
                 <div>
@@ -451,11 +456,10 @@ export default function VaultPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <label className="text-xs font-medium text-dim mb-1 block">Date of Birth</label>
-                  <input
-                    type="date"
-                    value={profileForm.dateOfBirth || ""}
-                    onChange={(e) => setProfileForm({ ...profileForm, dateOfBirth: e.target.value })}
-                    className={inputClass}
+                  <DateField
+                    value={profileForm.dateOfBirth}
+                    onChange={(iso) => setProfileForm({ ...profileForm, dateOfBirth: iso })}
+                    className="w-full"
                   />
                 </div>
 

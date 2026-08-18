@@ -1,11 +1,46 @@
 import { extractJdTerms, normalizeSkill } from "@/lib/prompts";
-import { texToText } from "@/lib/pdf/resumeTemplates";
+import { texToText } from "@/lib/pdf/sanitize";
+import { ResumeContent } from "@/types";
 
-/**
- * Rule-based ATS audit engine. Checks a resume (LaTeX or plain text) against
- * the rules ATS systems actually use to rank candidates, and optionally
- * against a target job description for keyword coverage.
- */
+export function resumeContentToText(content: ResumeContent): string {
+  const parts: string[] = [];
+  if (content.header) {
+    parts.push(
+      [content.header.name, content.header.title, content.header.email, content.header.phone, content.header.location]
+        .filter(Boolean)
+        .join(" ")
+    );
+  }
+  if (content.summary) {
+    parts.push("Summary\n" + content.summary);
+  }
+  if (content.skills && content.skills.length > 0) {
+    parts.push("Skills\n" + content.skills.join(", "));
+  }
+  if (content.experience && content.experience.length > 0) {
+    parts.push(
+      "Experience\n" +
+        content.experience
+          .map((e) => `${e.role} at ${e.company} (${e.duration || ""}):\n${(e.bullets || []).join("\n")}`)
+          .join("\n\n")
+    );
+  }
+  if (content.education && content.education.length > 0) {
+    parts.push(
+      "Education\n" +
+        content.education.map((ed) => `${ed.degree} from ${ed.school} (${ed.year || ""})`).join("\n")
+    );
+  }
+  if (content.projects && content.projects.length > 0) {
+    parts.push(
+      "Projects\n" +
+        content.projects
+          .map((p) => `${p.name} (${p.tech}):\n${(p.bullets || []).join("\n")}`)
+          .join("\n")
+    );
+  }
+  return parts.join("\n\n");
+}
 
 export interface AtsCheck {
   id: string;
@@ -23,20 +58,23 @@ export interface AtsReport {
   estimatedPages: number;
 }
 
-const ACTION_VERBS = [
+export const ACTION_VERBS = [
   "led", "built", "shipped", "designed", "developed", "launched", "scaled", "drove",
   "improved", "increased", "reduced", "automated", "migrated", "architected", "spearheaded",
   "implemented", "optimized", "delivered", "created", "owned", "mentored", "negotiated",
   "refactored", "redesigned", "secured", "streamlined", "cut", "boosted", "grew", "saved",
 ];
 
-const SECTION_HEADERS = ["summary", "experience", "education", "skills", "projects", "certifications", "languages", "objective", "work", "employment"];
+export const SECTION_HEADERS = ["summary", "experience", "education", "skills", "projects", "certifications", "languages", "objective", "work", "employment"];
 
 /** The four headers ATS systems actually require. */
-const CORE_HEADERS = ["summary", "experience", "education", "skills"];
+export const CORE_HEADERS = ["summary", "experience", "education", "skills"];
 
-export function analyzeAts(texOrText: string, jobDescription?: string): AtsReport {
-  const text = texToText(texOrText);
+export function analyzeAts(texOrContent: string | ResumeContent, jobDescription?: string): AtsReport {
+  const rawString = typeof texOrContent === "object" && texOrContent !== null
+    ? resumeContentToText(texOrContent)
+    : String(texOrContent || "");
+  const text = texToText(rawString);
   const lower = text.toLowerCase();
   const words = text.split(/\s+/).filter(Boolean);
   const wordCount = words.length;
@@ -110,7 +148,7 @@ export function analyzeAts(texOrText: string, jobDescription?: string): AtsRepor
   }, 10);
 
   /* 6. No tables / images for content */
-  const hasLayoutBreakers = /\\begin\{tabular\}|\\includegraphics|\\begin\{multicols\}|\\begin\{tikzpicture\}/.test(texOrText);
+  const hasLayoutBreakers = /\\begin\{tabular\}|\\includegraphics|\\begin\{multicols\}|\\begin\{tikzpicture\}/.test(rawString);
   add({
     id: "layout",
     label: "ATS-safe layout",

@@ -14,24 +14,6 @@ cat << "EOF"
 EOF
 echo -e "\033[0m"
 
-echo -e "\033[1;32mStarting Scrapling Agent server...\033[0m"
-(cd scrapling-agent && uv run uvicorn server:app --port 8001) &
-PYTHON_PID=$!
+echo -e "\033[1;32mStarting HUNTFLOW (Next.js + Scrapling Agent)...\033[0m"
+npm run dev
 
-echo -e "\033[1;32mStarting Next.js dev server...\033[0m"
-npm run dev &
-NEXT_PID=$!
-
-echo -e "\033[1;33mBoth servers are running. Press Ctrl+C to stop.\033[0m"
-
-cleanup() {
-    echo -e "\n\033[1;33mStopping servers...\033[0m"
-    kill $PYTHON_PID 2>/dev/null
-    kill $NEXT_PID 2>/dev/null
-    echo -e "\033[1;32mAll servers stopped.\033[0m"
-    exit 0
-}
-
-trap cleanup SIGINT SIGTERM
-
-wait

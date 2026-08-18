@@ -21,6 +21,12 @@ import {
   ChevronUp,
   ChevronDown,
   Power,
+  Key,
+  Cookie,
+  ExternalLink,
+  ShieldCheck,
+  HelpCircle,
+  Copy,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Button";
@@ -48,14 +54,34 @@ export default function SettingsPage() {
   const [liStatus, setLiStatus] = useState<"checking" | "signed-in" | "signed-out">("checking");
   const [liBusy, setLiBusy] = useState(false);
   const [liHandle, setLiHandle] = useState("");
+  const [liCookie, setLiCookie] = useState("");
+  const [liCookieOpen, setLiCookieOpen] = useState(false);
+  const [liCookieBusy, setLiCookieBusy] = useState(false);
   const [armReset, setArmReset] = useState(false);
   const [mailForm, setMailForm] = useState<MailSettings>({ ...mailSettings });
   const [testingMail, setTestingMail] = useState(false);
   const [mailResult, setMailResult] = useState<"untested" | "ok" | "failed">("untested");
-  const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; email?: string; expiry?: number }>({
+  const [gmailStatus, setGmailStatus] = useState<{
+    connected: boolean;
+    email?: string;
+    expiry?: number;
+    clientConfigured?: boolean;
+    redirectUri?: string;
+  }>({
     connected: false,
   });
   const [gmailBusy, setGmailBusy] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState("");
+  const [googleClientSecret, setGoogleClientSecret] = useState("");
+  const [googleConfigOpen, setGoogleConfigOpen] = useState(false);
+  const [googleConfigBusy, setGoogleConfigBusy] = useState(false);
+  const [googleClientStatus, setGoogleClientStatus] = useState<{
+    configured: boolean;
+    clientId?: string;
+    source?: string;
+    redirectUri?: string;
+  }>({ configured: false });
+  const [copiedRedirect, setCopiedRedirect] = useState(false);
   const [addId, setAddId] = useState("");
   const [testResults, setTestResults] = useState<Record<string, ProviderTestStatus>>({});
   const [backupBusy, setBackupBusy] = useState(false);
@@ -155,6 +181,76 @@ export default function SettingsPage() {
     }
   };
 
+  const refreshGoogleConfig = async () => {
+    try {
+      const res = await fetch("/api/auth/gmail/config", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setGoogleClientStatus(data);
+      }
+    } catch {}
+  };
+
+  const onSaveGoogleConfig = async () => {
+    if (!googleClientId.trim() || !googleClientSecret.trim()) {
+      error("Both Client ID and Client Secret are required.");
+      return;
+    }
+    setGoogleConfigBusy(true);
+    try {
+      const res = await fetch("/api/auth/gmail/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: googleClientId, clientSecret: googleClientSecret }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Failed to save Google credentials");
+      }
+      success("Google OAuth client credentials saved! Click 'Connect Gmail' to authorize.");
+      setGoogleClientId("");
+      setGoogleClientSecret("");
+      setGoogleConfigOpen(false);
+      await refreshGoogleConfig();
+      await refreshGmailStatus();
+    } catch (err: unknown) {
+      error(err instanceof Error ? err.message : "Failed to save Google credentials");
+    } finally {
+      setGoogleConfigBusy(false);
+    }
+  };
+
+  const onLinkedInCookieAuth = async () => {
+    if (!liCookie.trim()) {
+      error("Please paste your li_at session cookie.");
+      return;
+    }
+    setLiCookieBusy(true);
+    try {
+      const res = await fetch("/api/linkedin/cookie", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cookie: liCookie.trim() }),
+      });
+      const data = await res.json();
+      if (data.authenticated) {
+        setLiStatus("signed-in");
+        setLiCookie("");
+        setLiCookieOpen(false);
+        success("LinkedIn session verified and saved successfully!");
+        if (liHandle.trim()) {
+          onImportProfile();
+        }
+      } else {
+        error(data.error || "LinkedIn session cookie could not be verified. Ensure your cookie is active.");
+      }
+    } catch (err: unknown) {
+      error(err instanceof Error ? err.message : "LinkedIn cookie login failed");
+    } finally {
+      setLiCookieBusy(false);
+    }
+  };
+
   /* Gmail OAuth: reflect connect/disconnect (and the /settings?gmail=… redirect) into the UI. */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -163,10 +259,12 @@ export default function SettingsPage() {
       success("Gmail connected — IMAP + SMTP now use OAuth.");
       window.history.replaceState({}, "", "/settings");
     } else if (gmail === "error") {
-      error("Gmail connection failed — check the OAuth client and redirect URI.");
+      const reason = params.get("reason") || "unknown";
+      error(`Gmail connection failed (${reason}) — check OAuth Client ID / Secret and redirect URI.`);
       window.history.replaceState({}, "", "/settings");
     }
     refreshGmailStatus();
+    refreshGoogleConfig();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -430,7 +528,7 @@ export default function SettingsPage() {
           <Link2 className="h-4 w-4 text-[var(--chartreuse)]" /> LinkedIn
         </h2>
         <p className="mb-4 text-xs leading-relaxed text-dim">
-          Sign in once in a real browser window — HUNTFLOW keeps the session and uses it to import your profile and look up job offers.
+          Connect your real LinkedIn account. Authenticate via a real browser login window or directly paste your session cookie (<code className="font-mono text-xs text-[var(--chartreuse)]">li_at</code>).
         </p>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -454,9 +552,14 @@ export default function SettingsPage() {
           </span>
 
           {liStatus !== "signed-in" ? (
-            <Button size="sm" onClick={onLinkedInLogin} loading={liBusy}>
-              <LogIn className="h-3.5 w-3.5" /> Sign in to LinkedIn
-            </Button>
+            <>
+              <Button size="sm" onClick={onLinkedInLogin} loading={liBusy}>
+                <LogIn className="h-3.5 w-3.5" /> Browser Login Window
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setLiCookieOpen(!liCookieOpen)}>
+                <Cookie className="h-3.5 w-3.5" /> {liCookieOpen ? "Hide Cookie Input" : "Connect with Session Cookie"}
+              </Button>
+            </>
           ) : (
             <Button size="sm" onClick={onLinkedInLogout} variant="outline" loading={liBusy}>
               Sign out
@@ -466,10 +569,31 @@ export default function SettingsPage() {
             <RefreshCw className={cn("h-3.5 w-3.5", liStatus === "checking" && "animate-spin")} /> Refresh
           </Button>
         </div>
-        {liStatus !== "signed-in" && (
-          <p className="mt-3 text-[11px] leading-relaxed text-dim">
-            A browser window opens — log in there manually, then close it. The session is stored locally and reused on later runs.
-          </p>
+
+        {liCookieOpen && liStatus !== "signed-in" && (
+          <div className="mt-4 rounded-xl border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/5 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-[var(--paper)] flex items-center gap-1.5">
+                <Cookie className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> LinkedIn Session Cookie (<code className="font-mono text-[11px] text-[var(--chartreuse)]">li_at</code>)
+              </p>
+              <span className="text-[10px] text-dim">100% Reliable Local Session</span>
+            </div>
+            <p className="text-[11px] text-dim leading-relaxed">
+              Open linkedin.com in your browser, press F12 → Application → Cookies → copy the value of <code className="font-mono text-[var(--paper)]">li_at</code> and paste it below:
+            </p>
+            <div className="flex gap-2">
+              <input
+                className={cn(field, "flex-1 font-mono text-xs")}
+                placeholder="AQEDATk... (paste your li_at cookie here)"
+                type="password"
+                value={liCookie}
+                onChange={(e) => setLiCookie(e.target.value)}
+              />
+              <Button size="sm" onClick={onLinkedInCookieAuth} loading={liCookieBusy}>
+                <ShieldCheck className="h-3.5 w-3.5" /> Authenticate
+              </Button>
+            </div>
+          </div>
         )}
 
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -502,14 +626,86 @@ export default function SettingsPage() {
 
       {/* Email */}
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
-        <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
-          <Mail className="h-4 w-4 text-[var(--chartreuse)]" /> Email
-        </h2>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
+            <Mail className="h-4 w-4 text-[var(--chartreuse)]" /> Email & Gmail Integration
+          </h2>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-xs text-dim hover:text-[var(--paper)]"
+            onClick={() => setGoogleConfigOpen(!googleConfigOpen)}
+          >
+            <Key className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
+            {googleConfigOpen ? "Hide Google Credentials" : "Google Cloud OAuth Config"}
+          </Button>
+        </div>
         <p className="mb-4 text-xs leading-relaxed text-dim">
-          Connect a mailbox to send outreach from the composer and auto-scan replies. Gmail works best via OAuth —
-          or fall back to an app password (Google Account → Security → App passwords). Other providers use their
-          IMAP/SMTP settings directly.
+          Connect your Gmail account via official Google OAuth 2.0 (XOAUTH2) to send applications, recruiter emails, and sync incoming responses.
         </p>
+
+        {/* Google OAuth Credentials Configuration Panel */}
+        {googleConfigOpen && (
+          <div className="mb-5 rounded-xl border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/5 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-[var(--paper)] flex items-center gap-1.5">
+                <Key className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> Google Cloud OAuth Credentials
+              </p>
+              <span className="text-[10px] font-mono text-[var(--chartreuse)]">
+                {googleClientStatus.configured ? `Configured via ${googleClientStatus.source}` : "Not configured yet"}
+              </span>
+            </div>
+            <p className="text-[11px] text-dim leading-relaxed">
+              Create an OAuth 2.0 Client ID in your Google Cloud Console (Type: Web Application) and add the Authorized Redirect URI below:
+            </p>
+            <div className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-black/40 px-3 py-1.5 text-xs font-mono text-[var(--paper)]">
+              <span className="text-dim text-[10px] uppercase">Redirect URI:</span>
+              <span className="flex-1 truncate">{googleClientStatus.redirectUri || "http://localhost:3000/api/auth/gmail/callback"}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(googleClientStatus.redirectUri || "http://localhost:3000/api/auth/gmail/callback");
+                  setCopiedRedirect(true);
+                  setTimeout(() => setCopiedRedirect(false), 2000);
+                }}
+                className="text-[11px] font-sans text-[var(--chartreuse)] hover:underline flex items-center gap-1"
+              >
+                {copiedRedirect ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                {copiedRedirect ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 pt-1">
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
+                  Google Client ID
+                </label>
+                <input
+                  className={cn(field, "font-mono text-xs")}
+                  placeholder="xxxxx.apps.googleusercontent.com"
+                  value={googleClientId}
+                  onChange={(e) => setGoogleClientId(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
+                  Google Client Secret
+                </label>
+                <input
+                  className={cn(field, "font-mono text-xs")}
+                  type="password"
+                  placeholder="GOCSPX-xxxxxx"
+                  value={googleClientSecret}
+                  onChange={(e) => setGoogleClientSecret(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button size="sm" onClick={onSaveGoogleConfig} loading={googleConfigBusy}>
+                <Save className="h-3.5 w-3.5" /> Save Google Credentials
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <span
@@ -544,8 +740,18 @@ export default function SettingsPage() {
               <Unplug className="h-3.5 w-3.5" /> Disconnect
             </Button>
           ) : (
-            <Button size="sm" onClick={() => window.location.assign("/api/auth/gmail/authorize")}>
-              <PlugZap className="h-3.5 w-3.5" /> Connect Gmail
+            <Button
+              size="sm"
+              onClick={() => {
+                if (!googleClientStatus.configured && !gmailStatus.clientConfigured) {
+                  setGoogleConfigOpen(true);
+                  error("Please enter your Google Client ID & Secret first or set them in .env.local.");
+                  return;
+                }
+                window.location.assign("/api/auth/gmail/authorize");
+              }}
+            >
+              <PlugZap className="h-3.5 w-3.5" /> Connect with Google OAuth
             </Button>
           )}
           {mailResult === "ok" && <span className="text-[11px] font-bold text-[var(--chartreuse)]">✓ Connection verified</span>}

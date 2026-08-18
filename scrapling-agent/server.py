@@ -980,6 +980,55 @@ def linkedin_login(_auth: None = Depends(require_token)):
     return {"authenticated": ok, "state": state, "checkpoint": state == "checkpoint"}
 
 
+class LinkedInCookiePayload(BaseModel):
+    cookie: str
+
+
+@app.post("/linkedin/cookie")
+def linkedin_cookie(payload: LinkedInCookiePayload, _auth: None = Depends(require_token)):
+    """Authenticate LinkedIn using a user-provided li_at session cookie."""
+    from playwright.sync_api import sync_playwright
+
+    raw_cookie = payload.cookie.strip()
+    if not raw_cookie:
+        raise HTTPException(status_code=400, detail="Cookie string is required")
+    if "li_at=" in raw_cookie:
+        match = re.search(r'li_at=([^;]+)', raw_cookie)
+        li_at = match.group(1).strip('"\' ') if match else raw_cookie
+    else:
+        li_at = raw_cookie.strip('"\' ')
+
+    run_id = start_run("linkedin", LINKEDIN_LOGIN_URL, "LinkedIn cookie authentication")
+    record(run_id, "🍪 Injecting LinkedIn session cookie...", "info")
+    state = "signed_out"
+    with sync_playwright() as p:
+        context = _li_launch(p, headless=True)
+        try:
+            context.add_cookies([
+                {
+                    "name": "li_at",
+                    "value": li_at,
+                    "domain": ".linkedin.com",
+                    "path": "/",
+                    "httpOnly": True,
+                    "secure": True,
+                    "sameSite": "None",
+                }
+            ])
+            page = context.new_page()
+            state = _li_login_state(page)
+        except Exception as e:
+            record(run_id, f"⚠ Error verifying cookie: {e}", "warning")
+            state = "signed_out"
+        finally:
+            context.close()
+
+    ok = state == "signed_in"
+    end_run(run_id, "success" if ok else "failed",
+            "✅ LinkedIn session authenticated via cookie" if ok else "⚠ Cookie authentication failed or expired")
+    return {"authenticated": ok, "state": state, "checkpoint": state == "checkpoint"}
+
+
 @app.get("/linkedin/session")
 def linkedin_session(_auth: None = Depends(require_token)):
     """Report whether a persistent logged-in LinkedIn session exists."""

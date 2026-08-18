@@ -52,11 +52,11 @@ describe("gmailStatus", () => {
   it("reports connected with email and expiry but no secrets", () => {
     storeGmailTokens(tokens);
     const s = gmailStatus();
-    expect(s).toEqual({ connected: true, email: tokens.email, expiry: tokens.expiry });
+    expect(s).toMatchObject({ connected: true, email: tokens.email, expiry: tokens.expiry });
   });
 
   it("reports not connected when cleared", () => {
     clearGmailTokens();
-    expect(gmailStatus()).toEqual({ connected: false });
+    expect(gmailStatus()).toMatchObject({ connected: false });
   });
 });

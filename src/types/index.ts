@@ -101,6 +101,15 @@ export interface EmployerReview {
   riskFactors: string[];
   actionableFixes: string[];
   reviewedAt: string;
+  companyIntel?: {
+    history?: string;
+    headquarters?: string;
+    foundingYear?: string;
+    stage?: string;
+    products?: string[];
+    techStack?: string[];
+    cultureSignals?: string[];
+  };
 }
 
 export interface JobApplication {

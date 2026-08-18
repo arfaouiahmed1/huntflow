@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Plus,
@@ -24,7 +25,6 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/Toaster";
 import JobCard from "@/components/JobCard";
 import AddJobModal from "@/components/AddJobModal";
-import JobDetailDrawer from "@/components/JobDetailDrawer";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { JobSwipeDeck } from "@/components/crawler/JobSwipeDeck";
 import { EmployerReviewModal } from "@/components/crawler/EmployerReviewModal";
@@ -51,7 +51,9 @@ const SORT_OPTIONS: { id: SortKey; label: string }[] = [
 ];
 
 export default function TrackerPage() {
-  const { applications, interviews, emails, activeJobId, setActiveJobId, searchLinkedInJobs, saveLinkedInJob, updateApplication, triggerAutoApply } = useApp();
+  const { applications, interviews, emails, searchLinkedInJobs, saveLinkedInJob, updateApplication, triggerAutoApply } = useApp();
+  const router = useRouter();
+  const openJob = (id: string) => router.push(`/jobs/${id}`);
   const { success, error } = useToast();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -90,7 +92,7 @@ export default function TrackerPage() {
     const params = new URLSearchParams(window.location.search);
     const open = params.get("open");
     if (open && applications.some((a) => a.id === open)) {
-      setActiveJobId(open);
+      openJob(open);
     }
     if (window.location.search) {
       window.history.replaceState({}, "", "/tracker");
@@ -579,7 +581,7 @@ export default function TrackerPage() {
                 <div className="flex flex-col gap-3">
                   <AnimatePresence mode="popLayout">
                     {jobs.map((job, i) => (
-                      <JobCard key={job.id} job={job} index={i} onOpen={(id) => setActiveJobId(id)} />
+                      <JobCard key={job.id} job={job} index={i} onOpen={(id) => openJob(id)} />
                     ))}
                   </AnimatePresence>
                   {jobs.length === 0 && (
@@ -625,7 +627,7 @@ export default function TrackerPage() {
               {sorted.map((job) => (
                 <tr
                   key={job.id}
-                  onClick={() => setActiveJobId(job.id)}
+                  onClick={() => openJob(job.id)}
                   className="cursor-pointer border-b border-[var(--line)]/50 transition-colors hover:bg-white/[0.02]"
                 >
                   <td className="px-4 py-3">
@@ -673,20 +675,19 @@ export default function TrackerPage() {
         <JobSwipeDeck
           jobs={sorted}
           onAutoApply={(j) => triggerAutoApply(j.id, { submit: false })}
-          onTailor={(j) => setActiveJobId(j.id)}
+          onTailor={(j) => openJob(j.id)}
           onRunEmployerReview={handleRunEmployerReview}
           onCrawlMore={handleCrawlWeb}
         />
       )}
 
       <AddJobModal open={showAdd} onClose={() => setShowAdd(false)} />
-      <JobDetailDrawer key={activeJobId ?? "closed"} jobId={activeJobId} onClose={() => setActiveJobId(null)} />
       <EmployerReviewModal
         open={reviewModalOpen}
         job={reviewJob}
         review={reviewData}
         onClose={() => setReviewModalOpen(false)}
-        onTailor={(j) => setActiveJobId(j.id)}
+        onTailor={(j) => openJob(j.id)}
       />
       </>
       )}

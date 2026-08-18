@@ -20,33 +20,8 @@ if ($existing8001) {
     Start-Sleep -Seconds 1
 }
 
-$pythonJob = $null
-$nextJob = $null
+$npmExecutable = if ($IsWindows -or $env:OS -like "*Windows*") { "npm.cmd" } else { "npm" }
 
-try {
-    Write-Host "Starting Scrapling Agent server..." -ForegroundColor Green
-    $pythonJob = Start-Process -FilePath "uv" -ArgumentList "run uvicorn server:app --port 8001" -WorkingDirectory "$PSScriptRoot/scrapling-agent" -PassThru -NoNewWindow
+Write-Host "Starting HUNTFLOW (Next.js + Scrapling Agent)..." -ForegroundColor Green
+& $npmExecutable run dev
 
-    Write-Host "Starting Next.js dev server..." -ForegroundColor Green
-    $npmExecutable = if ($IsWindows -or $env:OS -like "*Windows*") { "npm.cmd" } else { "npm" }
-    $nextJob = Start-Process -FilePath $npmExecutable -ArgumentList "run dev" -WorkingDirectory $PSScriptRoot -PassThru -NoNewWindow
-
-    Write-Host "Both servers are running. Press Ctrl+C to stop." -ForegroundColor Yellow
-
-    while ($true) {
-        Start-Sleep -Seconds 1
-    }
-} finally {
-    Write-Host "`nStopping servers..." -ForegroundColor Yellow
-    if ($pythonJob -and -not $pythonJob.HasExited) {
-        Stop-Process -Id $pythonJob.Id -Force -ErrorAction SilentlyContinue
-    }
-    if ($nextJob -and -not $nextJob.HasExited) {
-        Stop-Process -Id $nextJob.Id -Force -ErrorAction SilentlyContinue
-    }
-    $leftover8001 = Get-NetTCPConnection -LocalPort 8001 -ErrorAction SilentlyContinue
-    if ($leftover8001) {
-        Stop-Process -Id $leftover8001.OwningProcess -Force -ErrorAction SilentlyContinue
-    }
-    Write-Host "All servers stopped." -ForegroundColor Green
-}

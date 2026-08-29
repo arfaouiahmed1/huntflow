@@ -63,3 +63,9 @@ TEST_READY.md
 tmp/
 output/
 tsc_errors.log
+# build/test logs at repo root
+tsc.log
+vitest*.log
+/task-19/
+/task-20/
+/task-*/

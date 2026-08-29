@@ -1,4 +1,5 @@
 "use client";
+import Select from "@/components/ui/Select";
 
 import { useState } from "react";
 import {
@@ -135,17 +136,19 @@ export function JobMatrixView({
           {/* Min Score Filter */}
           <div className="flex items-center gap-2 text-xs text-dim">
             <span>Min Fit:</span>
-            <select
-              value={filterScore}
-              onChange={(e) => setFilterScore(Number(e.target.value))}
-              className="rounded-lg border border-[var(--line)] bg-black/60 px-2 py-1 font-mono text-xs text-[var(--paper)]"
-            >
-              <option value="0">All Scores</option>
-              <option value="60">≥ 60% Match</option>
-              <option value="70">≥ 70% Match</option>
-              <option value="80">≥ 80% Match</option>
-              <option value="90">≥ 90% Match</option>
-            </select>
+            <Select
+              value={String(filterScore) as "0" | "60" | "70" | "80" | "90"}
+              onChange={(v) => setFilterScore(Number(v))}
+              options={[
+                { value: "0", label: "All Scores" },
+                { value: "60", label: "≥ 60% Match" },
+                { value: "70", label: "≥ 70% Match" },
+                { value: "80", label: "≥ 80% Match" },
+                { value: "90", label: "≥ 90% Match" },
+              ]}
+              ariaLabel="Min Fit"
+              className="w-36"
+            />
           </div>
         </div>
 

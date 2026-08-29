@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["pdf-parse"],
   outputFileTracingIncludes: {
     "/api/resume/*": ["./src/lib/pdf/templates/*.tex"],
+    "/api/pdf": ["./src/lib/pdf/templates/*.tex"],
   },
 };
 

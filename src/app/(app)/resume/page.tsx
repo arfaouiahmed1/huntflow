@@ -634,15 +634,18 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         </div>
       )}
 
-      {/* Top Header / Control Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+      {/* Studio Header — improved hierarchy & spacing */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/60 px-3 py-2.5 backdrop-blur">
         <div className="flex items-center gap-3">
-          <h1 className="font-display text-lg font-bold tracking-tight text-[var(--paper)] flex items-center gap-2">
-            <FileText className="h-4.5 w-4.5 text-[var(--chartreuse)]" /> Resume & CV Studio
+          <h1 className="font-display text-[15px] font-bold tracking-tight text-[var(--paper)] flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-lg border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10">
+              <FileText className="h-4 w-4 text-[var(--chartreuse)]" />
+            </span>
+            Resume & CV Studio
           </h1>
 
           {/* Resume vs CV Toggle Pill */}
-          <div className="flex items-center rounded-lg border border-[var(--line)] bg-black/40 p-0.5">
+          <div className="flex items-center rounded-xl border border-[var(--line)] bg-black/40 p-0.5 shadow-inner">
             <button
               onClick={() => handleToggleDocKind("resume")}
               className={cn(
@@ -669,53 +672,54 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 rounded-full border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 px-2.5 py-0.5 text-[11px] font-bold text-[var(--chartreuse)]">
-            <Award className="h-3 w-3" /> ATS: {atsReport.score}/100
+          <div className="flex items-center gap-1.5 rounded-full border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 px-2.5 py-1 text-[11px] font-bold tracking-tight text-[var(--chartreuse)] shadow-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--chartreuse)] animate-pulse" aria-hidden />
+            <Award className="h-3 w-3" /> ATS {atsReport.score}/100
           </div>
         </div>
 
         {/* Action Controls & Zoom Toolbar */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           {history.length > 0 && (
-            <Button size="sm" variant="outline" onClick={undoLast} title="Undo last change">
+            <Button size="sm" variant="outline" onClick={undoLast} title="Undo last change" className="border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]">
               <Undo2 className="h-3.5 w-3.5" /> Undo
             </Button>
           )}
 
           {/* Zoom Controls */}
-          <div className="flex items-center gap-1 rounded-lg border border-[var(--line)] bg-black/40 px-1.5 py-1">
+          <div className="flex items-center gap-1 rounded-xl border border-[var(--line)] bg-black/40 px-1.5 py-1 shadow-inner">
             <button
               onClick={() => setZoom((z) => Math.max(z - 10, 50))}
-              className="p-1 text-dim hover:text-[var(--paper)] rounded hover:bg-white/[0.05]"
+              className="grid h-6 w-6 place-items-center rounded-md text-dim hover:text-[var(--paper)] hover:bg-white/[0.06] transition-colors"
               title="Zoom Out"
             >
               <ZoomOut className="h-3.5 w-3.5" />
             </button>
-            <span className="font-mono text-[11px] text-[var(--paper)] min-w-[36px] text-center">
+            <span className="font-mono text-[11px] font-semibold tabular-nums text-[var(--paper)] min-w-[36px] text-center">
               {zoom}%
             </span>
             <button
               onClick={() => setZoom((z) => Math.min(z + 10, 150))}
-              className="p-1 text-dim hover:text-[var(--paper)] rounded hover:bg-white/[0.05]"
+              className="grid h-6 w-6 place-items-center rounded-md text-dim hover:text-[var(--paper)] hover:bg-white/[0.06] transition-colors"
               title="Zoom In"
             >
               <ZoomIn className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => setZoom(100)}
-              className="p-1 text-dim hover:text-[var(--paper)] rounded hover:bg-white/[0.05]"
+              className="grid h-6 w-6 place-items-center rounded-md text-dim hover:text-[var(--paper)] hover:bg-white/[0.06] transition-colors"
               title="Reset Zoom (100%)"
             >
               <RotateCcw className="h-3 w-3" />
             </button>
           </div>
 
-          <Button size="sm" variant="outline" onClick={copyMarkdown} title="Copy Markdown">
+          <Button size="sm" variant="outline" onClick={copyMarkdown} title="Copy Markdown" className="border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]">
             {copied ? <Check className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> : <Copy className="h-3.5 w-3.5" />}
             <span className="hidden sm:inline">{copied ? "Copied" : "Copy MD"}</span>
           </Button>
 
-          <Button size="sm" onClick={downloadPdf} loading={compilingPdf}>
+          <Button size="sm" onClick={downloadPdf} loading={compilingPdf} className="shadow-[var(--glow)]">
             <Download className="h-3.5 w-3.5" /> Export PDF
           </Button>
 
@@ -742,15 +746,15 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         </div>
       </div>
 
-      {/* Main Resizable Studio Canvas */}
-      <div className="relative flex flex-1 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/50">
+      {/* Main Resizable Studio Canvas — elevated preview prominence */}
+      <div className="relative flex flex-1 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink)] shadow-[0_12px_40px_rgba(0,0,0,0.22)]">
         {/* LEFT PANE: AI Resume Copilot */}
         <div
           style={{ width: `${leftWidthPercent}%` }}
-          className="flex flex-col h-full border-r border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl shrink-0"
+          className="flex flex-col h-full border-r border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl shrink-0 shadow-[4px_0_20px_rgba(0,0,0,0.12)]"
         >
           {/* Copilot Header */}
-          <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
+          <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--ink-soft)]/60 px-4 py-3.5">
             <div className="flex items-center gap-2">
               <div className="relative grid h-7 w-7 place-items-center rounded-lg border border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10">
                 <Bot className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
@@ -771,13 +775,13 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           </div>
 
           {/* Quick Prompts Chips */}
-          <div className="flex gap-1.5 overflow-x-auto border-b border-[var(--line)] p-2 bg-black/20 no-scrollbar">
+          <div className="flex gap-1.5 overflow-x-auto border-b border-[var(--line)] p-2.5 bg-black/20 no-scrollbar">
             {QUICK_PROMPTS.map((qp, idx) => (
               <button
                 key={idx}
                 disabled={copilotBusy}
                 onClick={() => handleSendMessage(qp.prompt)}
-                className="shrink-0 rounded-full border border-[var(--line)] bg-white/[0.03] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--paper)] transition-colors hover:border-[var(--chartreuse)]/40 hover:bg-[var(--chartreuse)]/10 disabled:opacity-50 cursor-pointer"
+                className="shrink-0 rounded-full border border-[var(--line)] bg-white/[0.03] px-3 py-1 text-[10px] font-semibold tracking-tight text-[var(--paper)] transition-all hover:border-[var(--chartreuse)]/40 hover:bg-[var(--chartreuse)]/10 hover:text-[var(--chartreuse)] active:scale-[0.98] disabled:opacity-50 cursor-pointer shadow-sm"
               >
                 {qp.label}
               </button>
@@ -785,7 +789,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           </div>
 
           {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {chatMessages.map((msg) => {
               const isAssistant = msg.sender === "assistant";
               return (

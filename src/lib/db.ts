@@ -49,6 +49,7 @@ export function migrate(database: DatabaseSync) {
       title TEXT NOT NULL,
       company TEXT NOT NULL,
       location TEXT NOT NULL DEFAULT '',
+      postal_code TEXT,
       salary TEXT,
       url TEXT,
       status TEXT NOT NULL DEFAULT 'wishlist',
@@ -288,6 +289,7 @@ export function migrate(database: DatabaseSync) {
   addColumn("jobs", "screenshot_url", "screenshot_url TEXT");
   addColumn("jobs", "cloudinary_url", "cloudinary_url TEXT");
   addColumn("jobs", "skip_reason", "skip_reason TEXT");
+  addColumn("jobs", "postal_code", "postal_code TEXT");
   addColumn("memory", "expires_at", "expires_at TEXT");
   addColumn("memory", "run_id", "run_id TEXT");
   database.exec("CREATE INDEX IF NOT EXISTS idx_memory_expires_at ON memory(expires_at);");
@@ -305,6 +307,7 @@ const JOB_COLUMNS = [
   "interview_questions", "job_brief", "salary_intel", "auto_apply_status",
   "auto_apply_logs", "employer_review", "fit_category", "multi_agent_outputs",
   "source", "hiring_post", "created_date", "company_logo",
+  "postal_code",
   "screenshot_url", "cloudinary_url", "skip_reason",
 ] as const;
 
@@ -350,6 +353,7 @@ function rowToJob(row: Record<string, unknown>): JobApplication {
     screenshotUrl: (row.screenshot_url as string) || undefined,
     cloudinaryUrl: (row.cloudinary_url as string) || undefined,
     skipReason: (row.skip_reason as string) || undefined,
+    postalCode: (row.postal_code as string) || undefined,
   };
 }
 
@@ -387,6 +391,7 @@ function jobToRow(job: JobApplication): Record<string, unknown> {
     screenshot_url: job.screenshotUrl ?? null,
     cloudinary_url: job.cloudinaryUrl ?? null,
     skip_reason: job.skipReason ?? null,
+    postal_code: job.postalCode ?? null,
     updated_at: new Date().toISOString(),
   };
 }

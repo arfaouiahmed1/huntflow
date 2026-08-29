@@ -22,6 +22,7 @@ import { InterviewEvent } from "@/types";
 import { Button } from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import Select from "@/components/ui/Select";
+import DateTimeField from "@/components/ui/DateTimeField";
 import { useToast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/utils";
 import { palette } from "@/lib/theme";
@@ -344,11 +345,11 @@ export default function InterviewsPage() {
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.15em] text-dim">When</span>
-                  <input
-                    type="datetime-local"
+                  <DateTimeField
                     value={form.scheduledAt}
-                    onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })}
-                    className="w-full rounded-lg border border-[var(--line)] bg-white/[0.03] px-3 py-2 text-sm text-[var(--paper)] focus:border-[var(--chartreuse)]/50 focus:outline-none"
+                    onChange={(v) => setForm({ ...form, scheduledAt: v })}
+                    placeholder="Pick date & time…"
+                    className="w-full"
                   />
                 </label>
                 <label className="block">

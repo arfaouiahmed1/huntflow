@@ -24,6 +24,7 @@ import {
   Copy,
   Quote,
   Check,
+  Link2,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { useToast } from "@/components/ui/Toaster";
@@ -116,14 +117,16 @@ function ProfileSyncBadge({ saving }: { saving: boolean }) {
 }
 
 export default function VaultPage() {
-  const { profile, updateProfile } = useApp();
-  const { success, error } = useToast();
+  const { profile, updateProfile, importLinkedInProfile } = useApp();
+  const { success, error, warn } = useToast();
   const [activeTab, setActiveTab] = useState<"info" | "documents">("info");
 
   // Profile Form State
   const [profileForm, setProfileForm] = useState(profile);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
+  const [importingProfile, setImportingProfile] = useState(false);
+  const resumeImportRef = useRef<HTMLInputElement>(null);
 
   // Vault State
   const [docs, setDocs] = useState<VaultDoc[]>([]);
@@ -460,7 +463,98 @@ export default function VaultPage() {
                   Used by Auto-Apply Agent to automatically populate live application form fields.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input ref={resumeImportRef} type="file" accept=".pdf,.docx,.txt,.md" className="hidden" onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  setImportingProfile(true);
+                  try {
+                    const txt = await f.text().catch(async () => {
+                      // pdf/docx will be handled server-side via vault upload; fallback to upload then parse
+                      const fd = new FormData();
+                      fd.append("file", f);
+                      fd.append("label", "resume");
+                      const up = await fetch("/api/vault", { method: "POST", body: fd });
+                      if (!up.ok) throw new Error("Upload failed");
+                      const j = await up.json().catch(() => ({}));
+                      // try to refetch docs and use first chunk as preview
+                      return j?.doc?.filename || f.name;
+                    });
+                    // heuristic extraction — keeps it local-first without LLM
+                    const emailMatch = txt.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+                    const phoneMatch = txt.match(/(\+?\d[\d\s\-.()]{7,}\d)/);
+                    const zipMatch = txt.match(/\b\d{4,6}\b/);
+                    const patch: Record<string, string> = {};
+                    if (emailMatch) patch.email = emailMatch[0];
+                    if (phoneMatch) patch.phone = phoneMatch[0].trim().slice(0, 30);
+                    if (zipMatch) patch.postalCode = zipMatch[0];
+                    // name heuristic: first non-empty line
+                    const firstLine = txt.split("\n").map((s: string)=>s.trim()).find(Boolean);
+                    if (firstLine && firstLine.length < 60 && !firstLine.includes("@")) patch.name = firstLine;
+                    if (Object.keys(patch).length) {
+                      setProfileForm((prev) => ({ ...prev, ...patch }));
+                      success(`Resume parsed — ${Object.keys(patch).join(", ")} prefilled. Review and save.`);
+                    } else {
+                      warn("Resume uploaded — no fields auto-detected. Fill ZIP/state manually then save.");
+                      // still upload to vault for RAG
+                      const fd = new FormData();
+                      fd.append("file", f);
+                      fd.append("label", "resume");
+                      await fetch("/api/vault", { method: "POST", body: fd });
+                      loadDocs();
+                    }
+                  } catch (err) {
+                    error(err instanceof Error ? err.message : "Resume import failed");
+                  } finally {
+                    setImportingProfile(false);
+                    if (e.target) e.target.value = "";
+                  }
+                }} />
+                <Button variant="outline" size="sm" loading={importingProfile} onClick={async () => {
+                  const handleRaw = profileForm.linkedin || "";
+                  let handle = handleRaw.trim();
+                  if (!handle) {
+                    const input = window.prompt("Paste your LinkedIn profile URL or handle (e.g. https://linkedin.com/in/ahmed-arfaoui or ahmed-arfaoui):");
+                    if (!input) return;
+                    handle = input.trim();
+                  }
+                  // extract handle from URL
+                  try {
+                    const u = new URL(handle);
+                    const parts = u.pathname.split("/").filter(Boolean);
+                    const idx = parts.indexOf("in");
+                    handle = idx >= 0 && parts[idx+1] ? parts[idx+1] : parts[parts.length-1] || handle;
+                  } catch { /* not a URL, treat as handle */ handle = handle.split("/").filter(Boolean).pop() || handle; }
+                  handle = handle.replace(/^@/, "");
+                  if (!handle) { error("Invalid LinkedIn handle"); return; }
+                  setImportingProfile(true);
+                  try {
+                    const data = await importLinkedInProfile(handle);
+                    const patch: Record<string, string> = {};
+                    if (data.name) patch.name = data.name;
+                    if (data.headline) patch.headline = data.headline;
+                    // location often contains city + country; split heuristic
+                    if (data.location) {
+                      const loc = data.location;
+                      patch.location = loc;
+                      const locParts = loc.split(",").map(s=>s.trim());
+                      if (locParts[0]) patch.city = locParts[0];
+                      if (locParts[1]) patch.country = locParts[1];
+                    }
+                    if (data.about) patch.summary = data.about.slice(0, 3000);
+                    if (data.skills?.length) patch.skills = data.skills as unknown as string;
+                    // experience/education are arrays — show toast but keep form for manual review if large
+                    setProfileForm((prev) => ({ ...prev, ...patch } as typeof prev));
+                    success(`LinkedIn import — ${data.name || handle} (${data.experience?.length || 0} roles, ${data.skills?.length || 0} skills) prefilled. Review ZIP/state then save.`);
+                  } catch (err) {
+                    error(err instanceof Error ? err.message : "LinkedIn import failed — check sidecar and handle");
+                  } finally { setImportingProfile(false); }
+                }}>
+                  <Link2 className="h-3.5 w-3.5" /> Import from LinkedIn
+                </Button>
+                <Button variant="outline" size="sm" loading={importingProfile} onClick={() => resumeImportRef.current?.click()}>
+                  <UploadCloud className="h-3.5 w-3.5" /> Import from Resume
+                </Button>
                 <ProfileSyncBadge saving={savingProfile} />
                 <Button onClick={saveProfileInfo} loading={savingProfile} disabled={savingProfile}>
                   <Save className="h-4 w-4" /> Save Profile Info
@@ -519,7 +613,7 @@ export default function VaultPage() {
               </div>
             </div>
 
-            {/* Address */}
+            {/* Address — Street, City, State, ZIP, Country (ZIP required for Auto-Apply form fills) */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
               <div className="sm:col-span-2">
                 <label className="text-xs font-medium text-dim mb-1 block">Street Address</label>
@@ -544,6 +638,30 @@ export default function VaultPage() {
               </div>
 
               <div>
+                <label className="text-xs font-medium text-dim mb-1 block">State / Governorate</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Tunis"
+                  value={profileForm.state || ""}
+                  onChange={(e) => setProfileForm({ ...profileForm, state: e.target.value })}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+              <div>
+                <label className="text-xs font-medium text-dim mb-1 block">Postal Code <span className="text-[10px] text-[var(--chartreuse)]">(ZIP)</span></label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="e.g. 1000"
+                  value={profileForm.postalCode || ""}
+                  onChange={(e) => setProfileForm({ ...profileForm, postalCode: e.target.value })}
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
                 <label className="text-xs font-medium text-dim mb-1 block">Country</label>
                 <input
                   type="text"
@@ -552,6 +670,10 @@ export default function VaultPage() {
                   onChange={(e) => setProfileForm({ ...profileForm, country: e.target.value })}
                   className={inputClass}
                 />
+              </div>
+
+              <div className="sm:col-span-2 flex items-end">
+                <p className="text-[11px] leading-relaxed text-dim">ZIP + State are used by the Auto-Apply agent to fill <span className="text-[var(--paper)]">address / city / zip / country</span> fields on external ATS forms.</p>
               </div>
             </div>
 

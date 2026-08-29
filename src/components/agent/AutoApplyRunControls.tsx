@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Bot, CheckCircle2, Ellipsis, Globe, Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
+import Checkbox from "@/components/ui/Checkbox";
 import { RegionCode } from "@/lib/agents/regionalNorms";
 import { cn } from "@/lib/utils";
 
@@ -132,18 +133,13 @@ export default function AutoApplyRunControls({
       </div>
 
       <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-[var(--line)] bg-white/[0.02] p-4 text-xs">
-        <label className="flex cursor-pointer items-center gap-3">
-          <input
-            type="checkbox"
-            checked={submit}
-            onChange={(event) => onSubmitChange(event.target.checked)}
-            className="rounded border-[var(--line)] accent-[var(--chartreuse)]"
-          />
-          <div>
-            <span className="font-medium text-[var(--paper)]">Allow submission after review</span>
-            <p className="text-dim text-[10px]">Unchecked keeps every run in prepare-only mode</p>
-          </div>
-        </label>
+        <Checkbox
+          checked={submit}
+          onChange={onSubmitChange}
+          label="Allow submission after review"
+          description="Unchecked keeps every run in prepare-only mode"
+          className="flex-1 min-w-[220px]"
+        />
         <label className="ml-auto flex items-center gap-2">
           <Globe className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
           <span className="text-[10px] font-semibold uppercase tracking-wider text-dim">Region norms</span>

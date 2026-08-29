@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Edit3, ExternalLink, Send, ShieldAlert } from "lucide-react";
 import { getApprovalDecision } from "@/lib/agents/approvalDecision";
 import { Button } from "@/components/ui/Button";
+import Checkbox from "@/components/ui/Checkbox";
 
 interface ApprovalReviewPanelProps {
   header: string;
@@ -82,15 +83,14 @@ export default function ApprovalReviewPanel({
         {pitchActions && <div className="flex flex-wrap gap-1.5 pt-1">{pitchActions}</div>}
       </div>
 
-      <label className="flex cursor-pointer items-start gap-2 text-[11px] leading-relaxed text-dim">
-        <input
-          type="checkbox"
-          checked={submitAcknowledged}
-          onChange={(event) => onSubmitAcknowledgedChange(event.target.checked)}
-          className="mt-0.5 accent-[var(--chartreuse)]"
-        />
-        {acknowledgement}
-      </label>
+      <Checkbox
+        checked={submitAcknowledged}
+        onChange={onSubmitAcknowledgedChange}
+        className="items-start text-[11px] leading-relaxed text-dim [&_span]:!text-dim"
+        boxClassName="mt-0.5"
+      >
+        <span className="text-[11px] leading-relaxed text-dim">{acknowledgement}</span>
+      </Checkbox>
 
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" loading={isResuming} disabled={!decision.canApproveAndSubmit} onClick={onApproveAndSubmit}>

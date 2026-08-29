@@ -221,6 +221,8 @@ export interface JobApplication {
   cloudinaryUrl?: string;
   /** Feedback reason when a candidate skips or rejects a job in HITL deck */
   skipReason?: string;
+  /** Job location postal code / ZIP — used for filtering and Auto-Apply location fills */
+  postalCode?: string;
 }
 
 export interface CloudinarySettings {

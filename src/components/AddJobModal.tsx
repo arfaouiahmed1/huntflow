@@ -37,6 +37,7 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
     title: "",
     company: "",
     location: "Remote",
+    postalCode: "",
     salary: "",
     description: "",
     status: "wishlist" as ApplicationStatus,
@@ -60,6 +61,7 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
         title: result.title,
         company: result.company,
         location: result.location || "Remote",
+        postalCode: "",
         salary: result.salary,
         description: result.description,
         status: "wishlist",
@@ -77,7 +79,7 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
     setScraped(null);
     setScrapeError("");
     setErrors({});
-    setForm({ title: "", company: "", location: "Remote", salary: "", description: "", status: "wishlist" });
+    setForm({ title: "", company: "", location: "Remote", postalCode: "", salary: "", description: "", status: "wishlist" });
   };
 
   const handleSubmit = () => {
@@ -92,6 +94,7 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
       title: result.data.title,
       company: result.data.company,
       location: result.data.location || "Remote",
+      postalCode: result.data.postalCode,
       salary: result.data.salary,
       url: scraped ? url.trim() : result.data.url,
       status: result.data.status,
@@ -219,6 +222,24 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
           />
         </div>
         <div>
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-dim">Postal Code (ZIP)</label>
+          <input
+            className={cn(field, errors.postalCode && "border-[var(--coral)] focus:border-[var(--coral)]")}
+            value={form.postalCode ?? ""}
+            placeholder="e.g. 75001 or 10001"
+            onChange={(e) => {
+              setForm({ ...form, postalCode: e.target.value });
+              if (errors.postalCode) setErrors((err) => { const n = { ...err }; delete n.postalCode; return n; });
+            }}
+          />
+          {errors.postalCode && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-[var(--coral)]">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              <span>{errors.postalCode}</span>
+            </p>
+          )}
+        </div>
+        <div>
           <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-dim">Salary Range</label>
           <input
             className={field}
@@ -227,7 +248,7 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
             onChange={(e) => setForm({ ...form, salary: e.target.value })}
           />
         </div>
-        <div className="sm:col-span-2">
+        <div>
           <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-dim">Status</label>
           <Select
             ariaLabel="Status"

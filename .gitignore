@@ -69,3 +69,7 @@ vitest*.log
 /task-19/
 /task-20/
 /task-*/
+# one-off helper scripts (local only)
+fix_*.py
+new_readme_snippet.txt
+old_readme_snippet.txt

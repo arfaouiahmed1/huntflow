@@ -5,6 +5,7 @@ import { Globe, ShieldAlert } from "lucide-react";
 import { JobApplication } from "@/types";
 import AgentRunMonitor from "@/components/agent/AgentRunMonitor";
 import Select from "@/components/ui/Select";
+import Checkbox from "@/components/ui/Checkbox";
 import { RegionCode } from "@/lib/agents/regionalNorms";
 
 const REGIONS: { code: RegionCode; label: string }[] = [
@@ -28,18 +29,13 @@ export default function JobDetailAgentRun({ job }: { job: JobApplication }) {
   return (
     <div className="space-y-4">
       <section className="flex flex-wrap items-end gap-4 rounded-2xl border border-[var(--line)] bg-white/[0.02] p-4 text-xs">
-        <label className="flex cursor-pointer items-center gap-3">
-          <input
-            type="checkbox"
-            checked={submitAfterReview}
-            onChange={(event) => setSubmitAfterReview(event.target.checked)}
-            className="rounded border-[var(--line)] accent-[var(--chartreuse)]"
-          />
-          <div>
-            <span className="font-medium text-[var(--paper)]">Allow submission after review</span>
-            <p className="text-[10px] text-dim">Every run still pauses for your explicit approval.</p>
-          </div>
-        </label>
+        <Checkbox
+          checked={submitAfterReview}
+          onChange={setSubmitAfterReview}
+          label="Allow submission after review"
+          description="Every run still pauses for your explicit approval."
+          className="flex-1 min-w-[220px]"
+        />
         <label className="ml-auto flex items-center gap-2">
           <Globe className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
           <span className="text-[10px] font-semibold uppercase tracking-wider text-dim">Region norms</span>

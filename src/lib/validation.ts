@@ -46,6 +46,12 @@ export const AddJobSchema = z.object({
     .trim()
     .max(100, "Location cannot exceed 100 characters")
     .default("Remote"),
+  postalCode: z
+    .string()
+    .trim()
+    .max(20, "Postal code cannot exceed 20 characters")
+    .optional()
+    .or(z.literal("")),
   salary: z
     .string()
     .trim()

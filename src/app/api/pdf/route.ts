@@ -20,6 +20,33 @@ async function resolveEngine(): Promise<string> {
  * when a `templateId` is supplied, seeding a ResumeContent from the profile and
  * folding the tailored-markdown body into it. Letters keep the letter template.
  */
+const DOC_TYPE_TEMPLATE_DEFAULT: Record<string, string> = {
+  tailoredResume: "classic-ats",
+  resume: "classic-ats",
+  cv: "classic-ats",
+  coverLetter: "letter-cover",
+  motivationLetter: "letter-motivation",
+  followUpEmail: "letter-cover",
+};
+
+function resolveTemplateId(templateId: string | undefined, docType: string): string | undefined {
+  if (templateId && templateMeta(templateId)) return templateId;
+  return DOC_TYPE_TEMPLATE_DEFAULT[docType];
+}
+
+/**
+ * Render the agent-written document for a chosen template.
+ *
+ * Unified pipeline: every doc type now prefers the ATS-grade template registry
+ * (src/lib/pdf/templates/*.tex via renderTemplate) when a matching template
+ * exists. Letters map to letter-*.tex; resumes map to classic-ats family.
+ * Falls back to legacy buildDocumentTex only when no registry template matches
+ * (guard against unknown docType/templateId combos).
+ *
+ * This makes /api/pdf and /api/resume/* share the exact same .tex source set
+ * and the same placeholder substitution ({{NAME}} etc), so the Resume Studio
+ * preview and the /jobs/seed-44 Documents tab export render identically.
+ */
 function texForTemplate(
   templateId: string | undefined,
   docType: string,
@@ -27,10 +54,31 @@ function texForTemplate(
   job: JobApplication,
   content: string
 ): string {
-  if (templateId && templateMeta(templateId) && (docType === "tailoredResume" || docType === "resume" || docType === "cv")) {
-    const base = contentFromProfile(profile, "resume");
-    base.summary = content.trim().slice(0, 1200);
-    return renderTemplate(templateId, base);
+  const resolved = resolveTemplateId(templateId, docType);
+  const isResumeKind = docType === "tailoredResume" || docType === "resume" || docType === "cv";
+  const isLetterKind = docType === "coverLetter" || docType === "motivationLetter" || docType === "followUpEmail"
+    || docType === "cover_letter" || docType === "motivation_letter";
+
+  if (resolved && templateMeta(resolved)) {
+    if (isResumeKind) {
+      // Seed a structured ResumeContent from profile, fold tailored markdown into summary.
+      // Preserve existing structured sections (experience/skills) from profile, but surface
+      // the tailored body as summary so LLM-tailored bullets remain visible.
+      const base = contentFromProfile(profile, "resume");
+      const tail = content.trim();
+      // If content looks like full resume markdown (contains section headers), keep as summary fallback,
+      // otherwise embed as summary. Structured sections stay from profile — same as Studio preview.
+      base.summary = tail.slice(0, 4000);
+      return renderTemplate(resolved, base);
+    }
+    if (isLetterKind) {
+      const base = contentFromProfile(profile, docType === "followUpEmail" ? "cover_letter" : "cover_letter");
+      // Letters expect paragraphs[] — split tailored markdown into paragraphs
+      const paras = content.split(/\n\n+/).map(p=>p.trim()).filter(Boolean).slice(0, 12);
+      base.paragraphs = paras.length ? paras : [content.trim().slice(0, 4000)];
+      base.recipient = job.company || "Hiring Manager";
+      return renderTemplate(resolved, base as never);
+    }
   }
   return buildDocumentTex(docType as never, profile, job, content);
 }

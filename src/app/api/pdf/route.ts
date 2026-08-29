@@ -13,13 +13,6 @@ async function resolveEngine(): Promise<string> {
   return enginePromise;
 }
 
-/**
- * Render the agent-written document for a chosen template.
- *
- * For resumes/CVs we lean on `renderTemplate` (the ATS-grade template registry)
- * when a `templateId` is supplied, seeding a ResumeContent from the profile and
- * folding the tailored-markdown body into it. Letters keep the letter template.
- */
 const DOC_TYPE_TEMPLATE_DEFAULT: Record<string, string> = {
   tailoredResume: "classic-ats",
   resume: "classic-ats",

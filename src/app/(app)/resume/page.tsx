@@ -799,21 +799,21 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                 >
                   <div
                     className={cn(
-                      "max-w-[92%] rounded-2xl p-3 text-xs leading-relaxed",
+                      "max-w-[92%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-sm",
                       isAssistant
-                        ? "border border-[var(--line)] bg-white/[0.03] text-[var(--paper)]"
-                        : "bg-[var(--chartreuse)] text-neutral-950 font-medium"
+                        ? "border border-[var(--line)] bg-white/[0.04] text-[var(--paper)] backdrop-blur"
+                        : "bg-[var(--chartreuse)] text-neutral-950 font-medium shadow-[0_4px_16px_rgba(185,237,87,0.22)]"
                     )}
                   >
                     <div className="whitespace-pre-wrap">{msg.text}</div>
 
                     {msg.actionSummary && (
-                      <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 px-2 py-0.5 font-mono text-[10px] text-[var(--chartreuse)]">
+                      <div className="mt-2.5 flex items-center gap-1.5 rounded-xl border border-[var(--chartreuse)]/25 bg-[var(--chartreuse)]/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-[var(--chartreuse)]">
                         <Check className="h-3 w-3" /> {msg.actionSummary}
                       </div>
                     )}
                   </div>
-                  <span className="text-[9px] text-dim px-1">{msg.timestamp}</span>
+                  <span className="text-[10px] font-medium tracking-tight text-dim/70 px-1">{msg.timestamp}</span>
                 </div>
               );
             })}
@@ -821,7 +821,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           </div>
 
           {/* Chat Input Bar */}
-          <div className="border-t border-[var(--line)] p-2.5 bg-black/40">
+          <div className="border-t border-[var(--line)] p-3 bg-[var(--ink-soft)]/50 backdrop-blur">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -836,9 +836,9 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                 disabled={copilotBusy}
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Ask AI Copilot to rewrite, add Vault facts, or polish..."
-                className="flex-1 rounded-xl border border-[var(--line)] bg-white/[0.03] px-3 py-1.5 text-xs text-[var(--paper)] outline-none transition-colors placeholder:text-dim focus:border-[var(--chartreuse)]/50"
+                className="flex-1 rounded-xl border border-[var(--line)] bg-white/[0.04] px-3.5 py-2 text-xs text-[var(--paper)] outline-none transition-all placeholder:text-dim focus:border-[var(--chartreuse)]/50 focus:bg-white/[0.06]"
               />
-              <Button type="submit" size="sm" disabled={!chatInput.trim() || copilotBusy} loading={copilotBusy}>
+              <Button type="submit" size="sm" disabled={!chatInput.trim() || copilotBusy} loading={copilotBusy} className="shadow-[var(--glow)]">
                 <Send className="h-3.5 w-3.5" />
               </Button>
             </form>
@@ -849,18 +849,22 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         <div
           onMouseDown={handleMouseDown}
           className={cn(
-            "w-2 bg-[var(--line)] hover:bg-[var(--chartreuse)]/50 transition-colors cursor-col-resize flex items-center justify-center shrink-0 select-none",
-            isDragging && "bg-[var(--chartreuse)]"
+            "w-1.5 bg-[var(--line)] hover:bg-[var(--chartreuse)]/40 transition-colors cursor-col-resize flex items-center justify-center shrink-0 select-none",
+            isDragging && "bg-[var(--chartreuse)]/60"
           )}
         >
-          <GripVertical className="h-3 w-3 text-dim opacity-60" />
+          <GripVertical className="h-3 w-3 text-dim opacity-40 group-hover:opacity-80" />
         </div>
 
         {/* CENTER / RIGHT PANE: Live Document Paper Preview with Zoom */}
         <div
           ref={previewContainerRef}
           onMouseUp={handlePreviewMouseUp}
-          className="flex-1 overflow-auto bg-neutral-900/60 p-6 flex flex-col items-center gap-4 relative select-text"
+          className="flex-1 overflow-auto bg-[var(--ink-deep)] p-6 flex flex-col items-center gap-5 relative select-text"
+          style={{
+            backgroundImage:
+              "radial-gradient(800px 500px at 50% -10%, color-mix(in srgb, var(--chartreuse) 4%, transparent), transparent 60%), radial-gradient(700px 400px at 100% 100%, color-mix(in srgb, var(--sky) 3%, transparent), transparent 55%)",
+          }}
         >
           <ResumePdfPreview
             pdfUrl={pdfUrl}
@@ -882,24 +886,27 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           />
         </div>
 
-        {/* RIGHT SIDEBAR: ATS Layouts & Settings (Show / Hide) */}
+        {/* RIGHT SIDEBAR: ATS Layouts & Settings — polished hierarchy */}
         {settingsSidebarOpen && (
-          <div className="w-80 border-l border-[var(--line)] bg-[var(--ink-card)]/95 backdrop-blur-xl p-4 overflow-y-auto space-y-5 animate-in slide-in-from-right duration-200 shrink-0">
-            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--paper)] flex items-center gap-1.5">
-                <SlidersHorizontal className="h-4 w-4 text-[var(--chartreuse)]" /> ATS Layouts & Settings
+          <div className="w-[340px] border-l border-[var(--line)] bg-[var(--ink-card)]/95 backdrop-blur-xl p-4 overflow-y-auto space-y-6 animate-in slide-in-from-right duration-200 shrink-0 shadow-[-12px_0_32px_rgba(0,0,0,0.2)]">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3.5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--paper)] flex items-center gap-2">
+                <span className="grid h-6 w-6 place-items-center rounded-lg bg-[var(--chartreuse)]/12 ring-1 ring-[var(--chartreuse)]/20">
+                  <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
+                </span>
+                ATS Layouts & Settings
               </h3>
               <button
                 onClick={() => setSettingsSidebarOpen(false)}
-                className="text-dim hover:text-[var(--paper)] p-1"
+                className="grid h-7 w-7 place-items-center rounded-lg border border-[var(--line)] bg-white/[0.04] text-dim hover:text-[var(--paper)] hover:bg-white/[0.08] transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Target Job Tailoring */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-dim">
+            <div className="space-y-2">
+              <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
                 Tailor for Target Job
               </label>
               <Select
@@ -916,16 +923,16 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             </div>
 
             {/* ATS / CV Layout Cards with Visual Image Previews */}
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-dim">
+                <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
                   {docKind === "cv" ? "CV Formats" : "ATS Resume Formats"} ({filteredTemplates.length})
                 </label>
-                <span className="text-[10px] font-mono text-[var(--chartreuse)] uppercase">
+                <span className="rounded-full border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/10 px-2 py-0.5 text-[10px] font-mono font-semibold tracking-tight text-[var(--chartreuse)] uppercase">
                   {docKind} Mode
                 </span>
               </div>
-              <div className="grid grid-cols-1 gap-2.5">
+              <div className="grid grid-cols-1 gap-3">
                 {filteredTemplates.map((tmpl) => {
                   const isSelected = selectedTemplate === tmpl.id;
                   return (
@@ -933,23 +940,23 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                       key={tmpl.id}
                       onClick={() => handleTemplateChange(tmpl.id)}
                       className={cn(
-                        "rounded-xl border p-3 cursor-pointer transition-all space-y-2 group",
+                        "rounded-2xl border p-3.5 cursor-pointer transition-all space-y-2.5 group",
                         isSelected
-                          ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/10 shadow-lg"
-                          : "border-[var(--line)] bg-black/30 hover:border-white/20 hover:bg-white/[0.02]"
+                          ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/10 shadow-[0_8px_24px_rgba(185,237,87,0.12)] ring-1 ring-[var(--chartreuse)]/20"
+                          : "border-[var(--line)] bg-black/20 hover:border-white/15 hover:bg-white/[0.03] hover:shadow-md"
                       )}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[var(--paper)] group-hover:text-[var(--chartreuse)]">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold tracking-tight text-[var(--paper)] group-hover:text-[var(--chartreuse)] transition-colors">
                           {tmpl.name}
                         </span>
-                        <span className="text-[9px] font-mono text-[var(--chartreuse)] bg-[var(--chartreuse)]/10 px-1.5 py-0.5 rounded">
+                        <span className="shrink-0 text-[9px] font-mono font-bold tracking-wide text-[var(--chartreuse)] bg-[var(--chartreuse)]/10 px-2 py-1 rounded-full border border-[var(--chartreuse)]/20">
                           {tmpl.badge}
                         </span>
                       </div>
 
-                      {/* Visual Miniature Image / Mock Preview */}
-                      <div className="h-16 w-full rounded-md bg-white p-2 flex flex-col justify-between overflow-hidden shadow-inner border border-neutral-300">
+                      {/* Visual Miniature Image / Mock Preview — latex-faithful */}
+                      <div className="h-[76px] w-full rounded-xl bg-[#fffefb] p-2.5 flex flex-col justify-between overflow-hidden shadow-inner border border-neutral-200">
                         <div
                           className={cn(
                             "h-2.5 w-full rounded-xs",
@@ -975,11 +982,11 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             </div>
 
             {/* Actions */}
-            <div className="pt-2 border-t border-[var(--line)] space-y-2">
-              <Button size="sm" variant="outline" className="w-full justify-center" onClick={syncToProfile}>
+            <div className="pt-3 border-t border-[var(--line)] space-y-2.5">
+              <Button size="sm" variant="outline" className="w-full justify-center border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]" onClick={syncToProfile}>
                 <Save className="h-3.5 w-3.5" /> Sync with Main Profile
               </Button>
-              <Button size="sm" className="w-full justify-center" onClick={downloadPdf} loading={compilingPdf}>
+              <Button size="sm" className="w-full justify-center shadow-[var(--glow)]" onClick={downloadPdf} loading={compilingPdf}>
                 <Download className="h-3.5 w-3.5" /> Download LaTeX PDF
               </Button>
             </div>

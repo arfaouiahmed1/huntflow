@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Bot, CheckCircle2, Ellipsis, Globe, Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import Select from "@/components/ui/Select";
 import { RegionCode } from "@/lib/agents/regionalNorms";
 import { cn } from "@/lib/utils";
 
@@ -146,15 +147,13 @@ export default function AutoApplyRunControls({
         <label className="ml-auto flex items-center gap-2">
           <Globe className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
           <span className="text-[10px] font-semibold uppercase tracking-wider text-dim">Region norms</span>
-          <select
+          <Select
             value={targetRegion}
-            onChange={(event) => onTargetRegionChange(event.target.value as RegionCode)}
-            className="rounded-lg border border-[var(--line)] bg-black/40 px-2 py-1.5 text-xs text-[var(--paper)] outline-none focus:border-[var(--chartreuse)]/60"
-          >
-            {REGIONS.map((region) => (
-              <option key={region.code} value={region.code}>{region.label}</option>
-            ))}
-          </select>
+            onChange={(v) => onTargetRegionChange(v as RegionCode)}
+            options={REGIONS.map((r) => ({ value: r.code, label: r.label }))}
+            ariaLabel="Region norms"
+            className="w-44"
+          />
         </label>
       </div>
     </>

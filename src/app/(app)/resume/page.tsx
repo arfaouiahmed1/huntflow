@@ -1,4 +1,5 @@
 "use client";
+import Select from "@/components/ui/Select";
 /* eslint-disable react-hooks/set-state-in-effect, react-hooks/purity */
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
@@ -897,18 +898,17 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
               <label className="text-[10px] font-semibold uppercase tracking-wider text-dim">
                 Tailor for Target Job
               </label>
-              <select
+              <Select
                 value={selectedJobId}
-                onChange={(e) => setSelectedJobId(e.target.value)}
-                className="w-full rounded-lg border border-[var(--line)] bg-black/40 px-2.5 py-1.5 text-xs text-[var(--paper)] outline-none cursor-pointer focus:border-[var(--chartreuse)]/60"
-              >
-                <option value="">General Profile (No specific job)</option>
-                {applications.map((app) => (
-                  <option key={app.id} value={app.id}>
-                    {app.company} — {app.title}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setSelectedJobId(v)}
+                options={[
+                  { value: "", label: "General Profile (No specific job)" },
+                  ...applications.map((app) => ({ value: app.id, label: `${app.company} — ${app.title}` })),
+                ]}
+                placeholder="Select job…"
+                ariaLabel="Tailor for Target Job"
+                className="w-full"
+              />
             </div>
 
             {/* ATS / CV Layout Cards with Visual Image Previews */}

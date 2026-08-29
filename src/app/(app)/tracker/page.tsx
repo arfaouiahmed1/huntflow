@@ -1,4 +1,5 @@
 "use client";
+import Select from "@/components/ui/Select";
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -569,18 +570,17 @@ export default function TrackerPage() {
             className="w-56 rounded-xl border border-[var(--line)] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-[var(--paper)] outline-none transition-colors placeholder:text-dim focus:border-[var(--chartreuse)]/50"
           />
         </div>
-        <div className="relative">
-          <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-dim" />
-          <select
+        <div className="flex items-center gap-2">
+          <span className="hidden sm:grid h-8 w-8 place-items-center rounded-lg border border-[var(--line)] bg-white/[0.03]">
+            <ArrowUpDown className="h-3.5 w-3.5 text-dim" />
+          </span>
+          <Select
             value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="appearance-none rounded-xl border border-[var(--line)] bg-[var(--ink-card)] py-2 pl-9 pr-8 text-sm font-semibold text-[var(--paper)] outline-none transition-colors focus:border-[var(--chartreuse)]/50"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.id} value={o.id}>{o.label}</option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-dim" />
+            onChange={(v) => setSortKey(v as SortKey)}
+            options={SORT_OPTIONS.map((o) => ({ value: o.id, label: o.label }))}
+            ariaLabel="Sort"
+            className="min-w-[160px]"
+          />
         </div>
         <div className="flex flex-wrap gap-1.5">
           <button
@@ -607,18 +607,19 @@ export default function TrackerPage() {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <select
-            value={minMatch}
-            onChange={(e) => setMinMatch(Number(e.target.value))}
-            aria-label="Minimum match score"
-            className="rounded-lg border border-line bg-white/[0.03] px-2.5 py-1.5 text-xs text-paper outline-none transition-colors focus:border-chartreuse/50"
-          >
-            <option value={0}>Any match</option>
-            <option value={50}>Match ≥ 50%</option>
-            <option value={60}>Match ≥ 60%</option>
-            <option value={70}>Match ≥ 70%</option>
-            <option value={80}>Match ≥ 80%</option>
-          </select>
+          <Select
+            value={String(minMatch) as "0" | "50" | "60" | "70" | "80"}
+            onChange={(v) => setMinMatch(Number(v))}
+            options={[
+              { value: "0", label: "Any match" },
+              { value: "50", label: "Match ≥ 50%" },
+              { value: "60", label: "Match ≥ 60%" },
+              { value: "70", label: "Match ≥ 70%" },
+              { value: "80", label: "Match ≥ 80%" },
+            ]}
+            ariaLabel="Minimum match score"
+            className="w-36"
+          />
           <button
             onClick={() => setHasUrlOnly((v) => !v)}
             className={cn(
@@ -698,17 +699,17 @@ export default function TrackerPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <select
-              aria-label="Pick job to explain"
+            <Select
               value={explainJobId ?? ""}
-              onChange={(e) => setExplainJobId(e.target.value || null)}
-              className="max-w-[220px] rounded-xl border border-[var(--line)] bg-white/[0.03] px-3 py-2 text-xs font-semibold text-[var(--paper)] outline-none focus:border-[var(--chartreuse)]/50"
-            >
-              <option value="">Select a role…</option>
-              {applications.map((j) => (
-                <option key={j.id} value={j.id}>{j.title} @ {j.company}</option>
-              ))}
-            </select>
+              onChange={(v) => setExplainJobId(v || null)}
+              options={[
+                { value: "", label: "Select a role…" },
+                ...applications.map((j) => ({ value: j.id, label: `${j.title} @ ${j.company}` })),
+              ]}
+              placeholder="Select a role…"
+              ariaLabel="Pick job to explain"
+              className="max-w-[220px]"
+            />
             <button
               data-testid="explain-fit-button"
               onClick={() => {

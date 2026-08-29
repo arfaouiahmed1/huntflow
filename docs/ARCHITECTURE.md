@@ -287,31 +287,32 @@ Key behaviors:
 
 ## 4. Apply agent
 
-`src/agents/applyAgent.ts` is a LangGraph `StateGraph` with five nodes:
+`src/agents/applyAgent.ts` is a LangGraph `StateGraph` with five nodes — **scoring is informational only** (no silent `minMatch` gate):
 
 ```mermaid
 stateDiagram-v2
   [*] --> analyze: local fit engine + skill extraction
   analyze --> decide
-  decide --> prepare: proceed (matchScore >= minMatch AND fit != skip)
-  decide --> verify: skipped (below threshold or fit = skip)
+  decide --> prepare: proceed (fit != skip — score surfaced, not gated)
+  decide --> verify: skipped (fit = skip — dealbreaker)
   prepare --> execute: pitch via LLM or pitchFallback
   execute --> verify: POST /apply to Scrapling agent
   verify --> [*]: applied / manual_required / failed / skipped
 ```
 
 - `analyze` - runs the local `matchFallback` fit engine (score + `fit`
-  rating + dealbreakers) and extracts JD terms vs. profile skills.
-- `decide` - proceeds only when `matchScore >= minMatch` AND the profile
-  fit is not `skip` (dealbreaker gate); otherwise sets `skipped` and
-  jumps to `verify`.
+  rating + dealbreakers) and extracts JD terms vs. profile skills. The numeric
+  `matchScore` is surfaced for ranking/explainability, not used as a silent block.
+- `decide` - proceeds when the profile fit is not `skip` (dealbreaker gate). Legacy
+  `minMatch` / `min_match` fields are accepted for compatibility but **ignored** —
+  they never skip a run. Skipped runs jump to `verify` with reason `fit=skip`.
 - `prepare` - writes a 3-sentence pitch through the LLM router (agent
   type `pitch`); on failure falls back to `pitchFallback` (grounded in
   real skills + strongest bullet, not a raw summary slice).
-- `execute` - POSTs `{url, profile, documents, submit, min_match,
-  match_score}` to `${SCRAPLING_AGENT_URL || http://127.0.0.1:8001}/apply`
-  with a 90s abort timeout; the agent inspects the form and either fills
-  it (`submit: false` -> prefill) or submits it.
+- `execute` - POSTs `{url, profile, documents, submit}` (plus legacy
+  `min_match`/`match_score` only for wire-compat, ignored server-side) to
+  `${SCRAPLING_AGENT_URL || http://127.0.0.1:8001}/apply` with a 90s abort timeout;
+  the agent inspects the form and either fills it (`submit: false` -> prefill) or submits it.
 - `verify` - records the terminal status and logs.
 
 Notes:

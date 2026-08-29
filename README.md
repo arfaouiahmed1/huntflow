@@ -28,21 +28,24 @@ It is designed as a single-user, local-first product and an engineering showcase
 ## Product surfaces
 
 - **Opportunity workspace** — import, enrich, score, compare, and track job listings.
-- **Discovery Control** — choose individual scraper sources, start runs explicitly, and inspect live telemetry plus per-source outcomes.
-- **Resume Studio** — select a LaTeX template, tailor content, inspect an A4 structure preview, and compile a PDF.
+- **Discovery Control** — `CrawlerDiscoveryControls` (248 lines): independent **Source type / Market / Experience / Work mode** filters (via `src/lib/sourceTaxonomy.ts` + `parseSourceCatalog`/`applySourceFilters`), keyword + result cap, selectable source cards, `BoardLiveGrid` SSE telemetry (`runId` heartbeat, `error`+`log` without fake cards).
+- **Resume Studio** — LaTeX PDF is the **typography source of truth** (`ResumePdfPreview` 73 lines, `SynctexViewer`), HTML structure preview is an amber-labeled fallback (`ResumeHtmlFallback` 65 lines); header `ResumeCompileControls` (51 lines) for `compilePreview` / synctex / diff toggle; auto-compile with graceful offline `no-tex` banner.
 - **Evidence Vault** — upload PDF, DOCX, TXT, and Markdown evidence; inspect chunks; and search with hybrid retrieval.
 - **Agent workflows** — run research, profile analysis, document drafting, and browser preparation through LangGraph-backed orchestration with field, click, screenshot, and run-history evidence.
-- **Human-controlled actions** — keep consequential external actions separate from autonomous research and drafting.
+- **Human-controlled actions** — keep consequential external actions separate from autonomous research and drafting; **scoring is informational only** (no silent `minMatch` block — `decide` gates only on `fit=skip`).
 - **Local operations** — use SQLite for application state and Docker volumes for persistence.
 
 ## What's new
 
+- **Independent crawler filters**: filter boards by Source type, Market, Experience, Work mode independently — selection survives filter changes.
+- **Crawler SSE proxy (94 lines)**: `runId` required (400), heartbeat `: keepalive`, offline → `error`+`log` (no fake `board_update`), per-event `try/catch`, cursor monotonic — `9/9` route tests.
 - **Vault chunk inspector**: inspect the exact chunks produced from each uploaded document before retrieval touches them.
 - **Hybrid RAG search with citation breakdown**: every vault result shows lexical rank, vector rank, matched terms, and the fused score behind it.
 - **Live crawler board grid (SSE)**: watch per-source crawl outcomes stream into Discovery Control while a run is in flight.
 - **Tracker explain-fit**: read a plain explanation of why a listing scored the way it did against your profile.
 - **LaTeX agent loop with diff preview**: review proposed resume edits as diffs before anything compiles.
 - **Short and long agent memory**: agents keep session-scoped notes alongside durable memory that survives across sessions.
+- **Resume PDF-primary**: compiled PDF (`compiled-pdf` / `SynctexViewer`) above the HTML fallback; fallback amber label when `no-tex`/`error`, `html-preview-toggle` with zoom scale.
 
 ## Resume Studio
 
@@ -100,16 +103,20 @@ Choose your platform below, then pick a path. The Docker path is the fastest rou
 
 On first boot the SQLite database creates its schema and applies migrations automatically (memory embeddings, expiry timestamps, and run IDs included). There are no manual migration steps.
 
+> **Docker — source vs Hub:** Today you run Docker **from source** (`git clone` → `docker compose up --build`). Prebuilt images on Docker Hub / GHCR (`docker compose pull` → `up`) are planned for the next release — not yet published. The Hub path below is kept for when they go live.
+
 ### Windows
 
 Run these commands in PowerShell. For the Docker path, Docker Desktop with the WSL2 backend is recommended.
 
-**Path 1: Docker**
+**Path 1: Docker — from source (today, recommended)**
 
-Prerequisite: [Docker Desktop](https://www.docker.com/products/docker-desktop/) with Compose v2.
+Prerequisite: [Docker Desktop](https://www.docker.com/products/docker-desktop/) with **Compose v2** (`docker compose version` should print `v2.x`). If you only have `docker-compose` v1, [upgrade Compose](https://docs.docker.com/compose/install/).
 
 ```powershell
-Copy-Item .env.docker.example .env
+git clone https://github.com/arfaouiahmed1/huntflow.git
+cd huntflow
+Copy-Item .env.docker.example .env   # set HUNTFLOW_AGENT_TOKEN + any LLM keys you use
 docker compose up --build
 ```
 
@@ -119,6 +126,18 @@ Optional Scrapling agent at `http://127.0.0.1:8001`:
 
 ```powershell
 docker compose --profile agent up --build
+```
+
+**Path 1b: Docker — from Hub (publishing next, not yet live)**
+
+Once images are published, the same flow becomes:
+
+```powershell
+git clone https://github.com/arfaouiahmed1/huntflow.git
+cd huntflow
+Copy-Item .env.docker.example .env
+docker compose pull        # pulls ghcr.io/arfaouiahmed1/huntflow-web + huntflow-agent
+docker compose up -d       # or --profile agent for the sidecar
 ```
 
 **Path 2: Native (npm + uv)**
@@ -146,16 +165,28 @@ npm run dev:scrapling
 
 ### macOS
 
-**Path 1: Docker**
+**Path 1: Docker — from source (today, recommended)**
 
-Prerequisite: [Docker Desktop](https://www.docker.com/products/docker-desktop/) for Mac with Compose v2.
+Prerequisite: [Docker Desktop](https://www.docker.com/products/docker-desktop/) for Mac with **Compose v2** (`docker compose version` should print `v2.x`).
 
 ```bash
-cp .env.docker.example .env
+git clone https://github.com/arfaouiahmed1/huntflow.git
+cd huntflow
+cp .env.docker.example .env   # set HUNTFLOW_AGENT_TOKEN + any LLM keys you use
 docker compose up --build
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Ports bind to `127.0.0.1` only and data persists in the `huntflow-data` volume. Add `--profile agent` to also start the Scrapling sidecar on `127.0.0.1:8001`.
+
+**Path 1b: Docker — from Hub (publishing next, not yet live)**
+
+```bash
+git clone https://github.com/arfaouiahmed1/huntflow.git
+cd huntflow
+cp .env.docker.example .env
+docker compose pull
+docker compose up -d       # or --profile agent
+```
 
 **Path 2: Native (npm + uv)**
 
@@ -170,23 +201,35 @@ The port warning from the Windows section applies here too: `npm run dev` clears
 
 ### Linux
 
-**Path 1: Docker**
+**Path 1: Docker — from source (today, recommended)**
 
-Prerequisites: Docker Engine plus the Compose v2 plugin. On Debian/Ubuntu:
+Prerequisites: Docker Engine plus the **Compose v2 plugin**. On Debian/Ubuntu:
 
 ```bash
 sudo apt install docker.io docker-compose-plugin
 sudo usermod -aG docker $USER   # log out and back in afterwards
 ```
 
-Use your distribution's equivalent packages elsewhere.
+Use your distribution's equivalent packages elsewhere. Verify `docker compose version` prints `v2.x`.
 
 ```bash
-cp .env.docker.example .env
+git clone https://github.com/arfaouiahmed1/huntflow.git
+cd huntflow
+cp .env.docker.example .env   # set HUNTFLOW_AGENT_TOKEN + any LLM keys you use
 docker compose up --build
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Ports bind to `127.0.0.1` only and data persists in the `huntflow-data` volume. Add `--profile agent` for the sidecar on `127.0.0.1:8001`.
+
+**Path 1b: Docker — from Hub (publishing next, not yet live)**
+
+```bash
+git clone https://github.com/arfaouiahmed1/huntflow.git
+cd huntflow
+cp .env.docker.example .env
+docker compose pull
+docker compose up -d --profile agent # if you need the sidecar
+```
 
 **Path 2: Native (npm + uv)**
 

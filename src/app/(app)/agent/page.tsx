@@ -22,6 +22,7 @@ import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Button";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { useToast } from "@/components/ui/Toaster";
+import Select from "@/components/ui/Select";
 import AgentRunMonitor from "@/components/agent/AgentRunMonitor";
 import MemoryFeed from "@/components/MemoryFeed";
 import { cn } from "@/lib/utils";
@@ -192,38 +193,29 @@ export default function AgentPage() {
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex min-w-[220px] flex-1 flex-col gap-1">
             <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Target</span>
-            <select
+            <Select
               value={effectiveTargetId}
-              onChange={(e) => setTargetId(e.target.value)}
-              className="w-full rounded-lg border border-[var(--line)] bg-black/40 px-2.5 py-2 text-xs text-[var(--paper)] outline-none focus:border-[var(--chartreuse)]/60"
-            >
-              {runnable.length === 0 && appliedJobs.length === 0 && <option value="">No applications yet</option>}
-              {runnable.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {displayJobTitle(job)} — {displayJobCompany(job)}
-                </option>
-              ))}
-              {appliedJobs.map((job) => (
-                <option key={job.id} value={job.id} disabled>
-                  {displayJobTitle(job)} — applied
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setTargetId(v)}
+              options={[
+                ...(runnable.length === 0 && appliedJobs.length === 0 ? [{ value: "", label: "No applications yet", disabled: true } as const] : []),
+                ...runnable.map((job) => ({ value: job.id, label: `${displayJobTitle(job)} — ${displayJobCompany(job)}` })),
+                ...appliedJobs.map((job) => ({ value: job.id, label: `${displayJobTitle(job)} — applied`, disabled: true })),
+              ]}
+              placeholder="Select target…"
+              ariaLabel="Target"
+              className="w-full"
+            />
           </label>
 
           <label className="flex min-w-[150px] flex-col gap-1">
             <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Region norms</span>
-            <select
+            <Select
               value={region}
-              onChange={(e) => setRegion(e.target.value as RegionCode)}
-              className="w-full rounded-lg border border-[var(--line)] bg-black/40 px-2.5 py-2 text-xs text-[var(--paper)] outline-none focus:border-[var(--chartreuse)]/60"
-            >
-              {REGIONS.map((r) => (
-                <option key={r.code} value={r.code}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setRegion(v as RegionCode)}
+              options={REGIONS.map((r) => ({ value: r.code, label: r.label }))}
+              ariaLabel="Region norms"
+              className="w-full"
+            />
           </label>
 
           <div className="flex flex-col gap-1">

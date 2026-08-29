@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Globe, ShieldAlert } from "lucide-react";
 import { JobApplication } from "@/types";
 import AgentRunMonitor from "@/components/agent/AgentRunMonitor";
+import Select from "@/components/ui/Select";
 import { RegionCode } from "@/lib/agents/regionalNorms";
 
 const REGIONS: { code: RegionCode; label: string }[] = [
@@ -42,13 +43,13 @@ export default function JobDetailAgentRun({ job }: { job: JobApplication }) {
         <label className="ml-auto flex items-center gap-2">
           <Globe className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
           <span className="text-[10px] font-semibold uppercase tracking-wider text-dim">Region norms</span>
-          <select
+          <Select
             value={region}
-            onChange={(event) => setRegion(event.target.value as RegionCode)}
-            className="rounded-lg border border-[var(--line)] bg-black/40 px-2 py-1.5 text-xs text-[var(--paper)] outline-none focus:border-[var(--chartreuse)]/60"
-          >
-            {REGIONS.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}
-          </select>
+            onChange={(v) => setRegion(v as RegionCode)}
+            options={REGIONS.map((r) => ({ value: r.code, label: r.label }))}
+            ariaLabel="Region norms"
+            className="w-44"
+          />
         </label>
       </section>
       {submitAfterReview && (

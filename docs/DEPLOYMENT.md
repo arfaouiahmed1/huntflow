@@ -11,22 +11,30 @@ localhost:3000 → Next.js standalone container → /app/data volume
 
 The web image contains the Next.js standalone server and LaTeX packages needed by the current resume templates. The optional agent is a separate Python image and is disabled unless the `agent` profile is selected.
 
-## Start the web workspace
+## Start the web workspace — from source (today)
 
 ```bash
-cp .env.docker.example .env
+git clone https://github.com/arfaouiahmed1/huntflow.git
+cd huntflow
+cp .env.docker.example .env   # set HUNTFLOW_AGENT_TOKEN + any LLM keys you use
 docker compose up --build
 ```
 
-Open `http://localhost:3000`. The published port is explicitly bound to `127.0.0.1`.
+Open `http://localhost:3000`. The published port is explicitly bound to `127.0.0.1` (`127.0.0.1:3000->3000/tcp`, `healthcheck GET /api/health`). Data lives in the `huntflow-data` volume (SQLite WAL at `data/huntflow.db`).
+
+> **Hub pull — publishing next:** Once `ghcr.io/arfaouiahmed1/huntflow-web:local` / `huntflow-agent:local` are published, replace `up --build` with `docker compose pull && docker compose up -d`. Today you must build from source.
 
 ## Start with the optional agent
 
-Generate a long random shared token in `.env`, then run:
+The agent image (`huntflow-agent:local` 2.74GB) is `profiles: ["agent"]` — it **does not** start with plain `up`. Generate a long random shared token in `.env`, then:
 
 ```bash
-docker compose --profile agent up --build
+docker compose --profile agent up --build   # first run builds + starts both web + agent
+docker compose --profile agent ps            # verify huntflow-agent-1 Up (health: starting → healthy)
+curl http://127.0.0.1:8001/health            # {"status":"ok","sources":{"total":30,...}}
 ```
+
+Or Hub later: `docker compose --profile agent pull && docker compose --profile agent up -d`.
 
 The agent port is also bound to loopback. Agent screenshots remain in the named run volume unless Cloudinary is deliberately configured.
 

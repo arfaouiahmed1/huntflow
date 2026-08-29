@@ -23,6 +23,7 @@ import AgentLiveConsole from "@/components/AgentLiveConsole";
 import { BoardLiveGrid } from "@/components/crawler/BoardLiveCard";
 import CrawlerDiscoveryControls from "@/components/crawler/CrawlerDiscoveryControls";
 import { applySourceFilters, DEFAULT_FILTER_SELECTION, parseSourceCatalog, type SourceFilterSelection } from "@/lib/sourceTaxonomy";
+import { persistNotification } from "@/lib/notificationsClient";
 
 interface CrawlerSource {
   id: string;
@@ -136,6 +137,7 @@ export default function JobsPage() {
       const sourceIds = [...selectedSourceIds];
       if (sources.length > 0 && sourceIds.length === 0) {
         warn("Select at least one crawler source before starting a run.");
+        void persistNotification({ title: "Crawl blocked", message: "Select at least one source before starting a run.", kind: "warning" });
         return;
       }
       const startedAt = new Date().toISOString();
@@ -170,11 +172,13 @@ export default function JobsPage() {
         });
         if (data.count > 0) {
           success(`Parallel crawler fetched ${data.count} fresh job(s) using ${data.concurrency || 1} concurrent workers.`);
+        void persistNotification({ title: "Crawl complete", message: `Found ${data.count} fresh roles across ${data.concurrency || 1} workers for "${keyword.trim() || "developer"}"`, kind: "success", link: "/jobs" });
         }
         // Server persisted wishlist stubs; rehydrate so sidebar + tracker update live.
         void refreshData();
       } catch (err) {
         error(err instanceof Error ? err.message : "Crawl failed — agent offline. Start the sidecar.");
+        void persistNotification({ title: "Crawl failed", message: err instanceof Error ? err.message : "Crawl failed — agent offline. Start the sidecar.", kind: "error" });
         setOffline(true);
         setJobs([]);
       } finally {
@@ -270,6 +274,7 @@ export default function JobsPage() {
       const saved = saveJob(job);
       void recordDecision(saved, "saved");
       success(`Saved ${saved.title} to tracker.`);
+      void persistNotification({ title: "Saved to tracker", message: `${saved.title} @ ${saved.company} — saved to wishlist`, kind: "success", link: "/tracker" });
     },
     [saveJob, recordDecision, success]
   );
@@ -314,9 +319,11 @@ export default function JobsPage() {
           setReviewModalOpen(true);
         } else {
           error(data.error || "Employer Review failed.");
+          void persistNotification({ title: "Employer review failed", message: data.error || "Employer Review failed.", kind: "error" });
         }
       } catch (err) {
         error(err instanceof Error ? err.message : "Failed to run Employer Simulator.");
+        void persistNotification({ title: "Employer review failed", message: err instanceof Error ? err.message : "Failed to run Employer Simulator.", kind: "error" });
       }
     },
     [saveJob, recordDecision, error]
@@ -340,6 +347,7 @@ export default function JobsPage() {
         void recordDecision(saved, "saved");
       }
       success(`Saved ${selected.length} job(s) to pipeline tracker.`);
+      void persistNotification({ title: "Batch save", message: `Saved ${selected.length} roles to tracker`, kind: "success", link: "/tracker" });
     },
     [saveJob, recordDecision, success]
   );
@@ -353,6 +361,7 @@ export default function JobsPage() {
       });
       const ids = savedJobs.map((j) => j.id);
       success(`Dispatched parallel auto-apply workers for ${ids.length} roles…`);
+      void persistNotification({ title: "Auto-apply dispatched", message: `Dispatched ${ids.length} supervised workers (review mode)`, kind: "info", link: "/agent" });
       await triggerAutoApplyBatch(ids, { submit: false });
     },
     [saveJob, recordDecision, triggerAutoApplyBatch, success]
@@ -363,6 +372,7 @@ export default function JobsPage() {
       const savedJobs = selected.map((j) => saveJob(j));
       const ids = savedJobs.map((j) => j.id);
       success(`Running parallel AI ATS match analysis on ${ids.length} jobs…`);
+      void persistNotification({ title: "Match analysis", message: `Running ATS match on ${ids.length} roles`, kind: "info" });
       await triggerMatchBatch(ids);
     },
     [saveJob, triggerMatchBatch, success]
@@ -474,14 +484,21 @@ export default function JobsPage() {
         offline={offline}
       />
 
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/40 p-5">
-        <BoardLiveGrid
-          runId={liveRunId ?? lastCrawl?.runId ?? null}
-          sources={visibleSources}
-          concurrency={workerCount}
-          selectedIds={selectedSourceIds}
-        />
-      </section>
+      {crawling && (
+        <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/40 p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--chartreuse)]" />
+            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--paper)]">Live board telemetry</span>
+            <span className="font-mono text-[10px] text-dim">run {liveRunId ?? lastCrawl?.runId ?? "pending"} · {workerCount} workers</span>
+          </div>
+          <BoardLiveGrid
+            runId={liveRunId ?? lastCrawl?.runId ?? null}
+            sources={visibleSources}
+            concurrency={workerCount}
+            selectedIds={selectedSourceIds}
+          />
+        </section>
+      )}
 
       {lastCrawl && (
         <section className="rounded-2xl border border-[var(--line)] bg-white/[0.02] p-5">

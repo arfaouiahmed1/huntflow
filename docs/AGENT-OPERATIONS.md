@@ -16,11 +16,11 @@ select sources → start crawl → inspect source outcomes → review role
 
 The Job Finder does not start work when the page opens. The operator chooses:
 
-- search terms;
-- category or region;
-- result cap;
-- individual source boards;
-- the configured worker limit.
+- search terms (free-text, e.g. `AI engineer, LangGraph, RAG`);
+- **Source type, Market, Experience, Work mode** — four independent filters driven by `src/lib/sourceTaxonomy.ts` (`CrawlerDiscoveryControls` 248 lines);
+- result cap (1-150, default 30);
+- individual source boards (checkbox cards, selection survives filter changes);
+- the configured worker limit (`HUNTFLOW_CRAWL_CONCURRENCY` 1-16, default 1).
 
 Each completed run reports its run identifier, duration context, boards crawled, candidate count, and a per-source outcome. A successful source with zero matching cards is different from a source failure; the interface shows both states.
 

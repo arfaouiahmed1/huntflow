@@ -1,4 +1,5 @@
 "use client";
+import Select from "@/components/ui/Select";
 
 import { useState, useEffect, useRef } from "react";
 import {
@@ -538,10 +539,9 @@ export default function SettingsPage() {
 
         {/* Add provider */}
         <div className="mt-4 flex items-center gap-2">
-          <select
+          <Select
             value={addId}
-            onChange={(e) => {
-              const id = e.target.value;
+            onChange={(id) => {
               if (!id) return;
               const cfg = LLM_PROVIDERS.find((c) => c.id === id);
               if (cfg && !chain.some((c) => c.id === id)) {
@@ -552,7 +552,7 @@ export default function SettingsPage() {
                     label: cfg.label,
                     providerId: cfg.id,
                     kind: cfg.kind ?? "openai",
-                    apiKey: "",
+                    apiKey: '',
                     model: cfg.defaultModel,
                     baseURL: cfg.baseURL,
                     temperature: 0.7,
@@ -563,15 +563,14 @@ export default function SettingsPage() {
               }
               setAddId("");
             }}
-            className="rounded-lg border border-[var(--line)] bg-[var(--ink-card)] px-3 py-1.5 text-[11px] text-[var(--paper)] outline-none"
-          >
-            <option value="">Add a provider…</option>
-            {LLM_PROVIDERS.filter((c) => !chain.some((p) => p.id === c.id)).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: "", label: "Add a provider…" },
+              ...LLM_PROVIDERS.filter((c) => !chain.some((p) => p.id === c.id)).map((c) => ({ value: c.id, label: c.label })),
+            ]}
+            placeholder="Add a provider…"
+            ariaLabel="Add a provider"
+            className="w-48"
+          />
           <span className="text-[10px] text-dim">{chain.filter((c) => c.enabled).length} active · {chain.length} total</span>
         </div>
       </section>
@@ -744,18 +743,20 @@ export default function SettingsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <select
-              className={cn(field, "w-44 font-mono text-xs")}
-              value={cloudForm.concurrency || 1}
-              onChange={(e) => setCloudForm((prev) => ({ ...prev, concurrency: Number(e.target.value) }))}
-            >
-              <option value="1">1 Worker (Serial · Default)</option>
-              <option value="2">2 Workers</option>
-              <option value="4">4 Workers</option>
-              <option value="6">6 Workers (Fast)</option>
-              <option value="8">8 Workers (Turbo)</option>
-              <option value="12">12 Workers (Max)</option>
-            </select>
+            <Select
+              value={String(cloudForm.concurrency || 1) as "1" | "2" | "4" | "6" | "8" | "12"}
+              onChange={(v) => setCloudForm((prev) => ({ ...prev, concurrency: Number(v) }))}
+              options={[
+                { value: "1", label: "1 Worker (Serial · Default)" },
+                { value: "2", label: "2 Workers" },
+                { value: "4", label: "4 Workers" },
+                { value: "6", label: "6 Workers (Fast)" },
+                { value: "8", label: "8 Workers (Turbo)" },
+                { value: "12", label: "12 Workers (Max)" },
+              ]}
+              ariaLabel="Concurrency"
+              className="w-44"
+            />
           </div>
         </div>
 

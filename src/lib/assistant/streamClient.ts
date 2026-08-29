@@ -61,19 +61,22 @@ export async function consumeAssistant(
   body: string,
   options: StreamOptions = {}
 ): Promise<void> {
-  const { onEvent } = options;
-  const res = await fetch("/api/assistant", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body,
-    signal: options.signal,
-  });
+  const { onEvent, signal } = options;
+  let res: Response;
+  try {
+    res = await fetch("/api/assistant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body,
+      signal,
+    });
+  } catch (err) {
+    if ((err as Error)?.name === "AbortError") return;
+    throw err;
+  }
 
   const contentType = res.headers.get("content-type") ?? "";
 
-  // Non-streaming fallback: the server returned one JSON response. This is the
-  // path used by older infrastructure, proxies that don't passthrough SSE, and
-  // every test of the route — it must behave exactly like the pre-stream client.
   if (!contentType.includes("text/event-stream")) {
     const data = await res.json();
     if (!res.ok) {
@@ -96,6 +99,15 @@ export async function consumeAssistant(
   const decoder = new TextDecoder();
   let buffer = "";
 
+  const onAbort = () => {
+    try {
+      reader.cancel();
+    } catch {
+      /* ignore */
+    }
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
+
   try {
     for (;;) {
       const { value, done } = await reader.read();
@@ -106,7 +118,16 @@ export async function consumeAssistant(
       for (const ev of events) handleEvent(ev, onEvent);
     }
   } catch (err) {
+    if ((err as Error)?.name === "AbortError") return;
+    if (signal?.aborted) return;
     onEvent?.onError?.(err instanceof Error ? err.message : "Stream interrupted.");
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+    try {
+      reader.cancel();
+    } catch {
+      /* already closed */
+    }
   }
 }
 

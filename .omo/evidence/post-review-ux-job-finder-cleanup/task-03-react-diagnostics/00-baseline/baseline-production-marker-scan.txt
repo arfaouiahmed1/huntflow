@@ -1,0 +1,3 @@
+== Baseline production marker scan — 2026-08-23T00:31:37.6782880+01:00 ==
+scope: .next (build output) + .next/standalone, case-insensitive react-grab|react-scan|react-doctor|react_scan|reactgrab
+RESULT: ZERO matches across all .next files — baseline is clean

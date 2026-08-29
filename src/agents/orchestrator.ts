@@ -159,7 +159,7 @@ async function executeTool(state: typeof AssistantState.State) {
 
   switch (tool) {
     case "pipeline_summary": {
-      const shared = buildSharedContext({
+      const shared = await buildSharedContext({
         profile: state.profile,
         jobs: jobsRepo.list(),
         emails: emailsRepo.list(),
@@ -204,21 +204,21 @@ async function executeTool(state: typeof AssistantState.State) {
     }
     case "access_email": {
       const raw = settingsRepo.get("mail_settings");
-      let parsed: any = {};
+      let parsed: Record<string, unknown> = {};
       if (raw) {
         try { parsed = JSON.parse(raw); } catch { /* ignore */ }
       }
       const mailSettings = {
-        imapHost: parsed.imapHost ?? "",
-        imapPort: parsed.imapPort ?? 993,
-        imapUser: parsed.imapUser ?? "",
-        imapPass: parsed.imapPass ?? "",
-        smtpHost: parsed.smtpHost ?? "",
-        smtpPort: parsed.smtpPort ?? 587,
-        smtpUser: parsed.smtpUser ?? "",
-        smtpPass: parsed.smtpPass ?? "",
-        fromName: parsed.fromName ?? "",
-        fromEmail: parsed.fromEmail ?? "",
+        imapHost: String(parsed.imapHost || "imap.gmail.com"),
+        imapPort: Number(parsed.imapPort) || 993,
+        imapUser: String(parsed.imapUser || ""),
+        imapPass: String(parsed.imapPass || ""),
+        smtpHost: String(parsed.smtpHost || "smtp.gmail.com"),
+        smtpPort: Number(parsed.smtpPort) || 587,
+        smtpUser: String(parsed.smtpUser || ""),
+        smtpPass: String(parsed.smtpPass || ""),
+        fromName: String(parsed.fromName || ""),
+        fromEmail: String(parsed.fromEmail || ""),
       };
 
       if (!mailSettings.imapUser || !mailSettings.smtpUser) {
@@ -248,7 +248,7 @@ async function executeTool(state: typeof AssistantState.State) {
             port: mailSettings.smtpPort,
             secure: mailSettings.smtpPort === 465,
             auth: { user: mailSettings.smtpUser, pass: mailSettings.smtpPass },
-          });
+          } as unknown as Parameters<typeof nodemailer.createTransport>[0]);
           await transporter.sendMail({
             from: `"${mailSettings.fromName || mailSettings.smtpUser}" <${mailSettings.fromEmail || mailSettings.smtpUser}>`,
             to,
@@ -449,7 +449,7 @@ function summarizeResult(result: { finalAnswer?: string; steps: AssistantStep[];
 }
 
 export async function runAssistant(input: AssistantInput): Promise<AssistantResult> {
-  const shared = buildSharedContext({
+  const shared = await buildSharedContext({
     profile: input.profile,
     jobs: jobsRepo.list(),
     emails: emailsRepo.list(),
@@ -477,7 +477,7 @@ export async function runAssistantStream(
   input: AssistantInput,
   onEvent: (event: AssistantStreamEvent) => void
 ): Promise<AssistantResult> {
-  const shared = buildSharedContext({
+  const shared = await buildSharedContext({
     profile: input.profile,
     jobs: jobsRepo.list(),
     emails: emailsRepo.list(),

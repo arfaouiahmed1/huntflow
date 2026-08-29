@@ -1,0 +1,17 @@
+== Task 03 cleanup receipt ==
+Processes started and terminated (all verified dead):
+- dev server (enabled QA):  cmd wrapper PID 4384  + listener 19164 -> taskkill /F, port 3013 freed
+- dev server (disabled QA): cmd wrapper PID 4508  + listener 11544 -> taskkill /F, port 3013 freed
+- dev server (final enabled QA):  wrapper 17484 + listener 31268   -> taskkill /F, port 3013 freed
+- dev server (final disabled QA): wrapper 36268 + listener 5904    -> taskkill /F, port 3013 freed
+- next start attempt (incompatible with standalone): PID 22092     -> killed immediately
+- standalone prod server: wrapper 33216 + node listener 9388       -> taskkill /F, port 3014 freed
+
+Final port state at 2026-08-23T01:23:58.1141490+01:00: ports 3013 and 3014 LISTENING-free (netstat verified).
+No npm run dev was used (predev kills ports 3000/8001); all servers ran via isolated ports.
+Playwright chromium instances: closed by qa scripts (browser.close() in finally).
+
+Exit codes: baseline build 0; final build 0; targeted vitest 5/5 pass (exit 0);
+tsc --noEmit exit 0; scoped eslint exit 0; react-doctor run exit 1 (pre-existing
+findings, ok:true in report); QA enabled exit 0; QA suppressed exit 0;
+production browser check exit 0.

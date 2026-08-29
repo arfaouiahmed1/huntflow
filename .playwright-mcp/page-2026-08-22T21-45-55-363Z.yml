@@ -1,0 +1,111 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - link [ref=e5] [cursor=pointer]:
+        - /url: /
+        - paragraph [ref=e9]: HUNTFLOW
+      - generic [ref=e10]:
+        - button "Notification History" [ref=e12]
+        - navigation [ref=e16]:
+          - link "Command Deck" [ref=e17] [cursor=pointer]:
+            - /url: /
+          - link "Applications" [ref=e23] [cursor=pointer]:
+            - /url: /tracker
+          - link "Resume & CV Studio" [ref=e26] [cursor=pointer]:
+            - /url: /resume
+          - link "Job Finder" [ref=e31] [cursor=pointer]:
+            - /url: /jobs
+          - link "Auto-Apply Agent" [ref=e39] [cursor=pointer]:
+            - /url: /agent
+          - link "Assistant" [ref=e43] [cursor=pointer]:
+            - /url: /assistant
+          - link "Profile & Evidence" [ref=e47] [cursor=pointer]:
+            - /url: /vault
+          - link "Network" [ref=e51] [cursor=pointer]:
+            - /url: /network
+          - link "Outreach" [ref=e57] [cursor=pointer]:
+            - /url: /outreach
+          - link "Interviews" [ref=e61] [cursor=pointer]:
+            - /url: /interviews
+          - link "Settings" [ref=e66] [cursor=pointer]:
+            - /url: /settings
+  - main [ref=e70]:
+    - generic [ref=e73]:
+      - generic [ref=e74]:
+        - generic [ref=e75]:
+          - paragraph [ref=e76]: Discover → inspect → decide
+          - heading "Discovery Control" [level=1] [ref=e77]
+          - paragraph [ref=e78]: Choose exactly which boards run, watch every source outcome, then review the evidence before anything enters your tracker.
+        - generic [ref=e79]:
+          - generic [ref=e80]: Checking agent
+          - generic [ref=e87]: 1 workers max
+      - generic [ref=e90]:
+        - generic [ref=e91]:
+          - heading "New crawl" [level=2] [ref=e103]
+          - generic [ref=e104]: No run starts until you press Start crawl.
+        - generic [ref=e105]:
+          - generic [ref=e106]:
+            - text: Search terms
+            - textbox "Search terms" [ref=e107]:
+              - /placeholder: AI engineer, LangGraph, RAG
+              - text: AI Engineer (New Graduate)
+          - generic [ref=e108]:
+            - text: Region / feed
+            - combobox "Region / feed" [ref=e109]:
+              - option "All Categories" [selected]
+              - option "General"
+              - option "Remote Only"
+              - option "Europe"
+              - option "MENA & Qatar"
+              - option "Global / YC"
+              - option "HN Posts"
+          - generic [ref=e110]:
+            - text: Experience
+            - combobox "Experience" [ref=e111]:
+              - option "All Experience Levels" [selected]
+              - option "Entry level"
+              - option "Mid level"
+              - option "Senior"
+          - generic [ref=e112]:
+            - text: Work mode
+            - combobox "Work mode" [ref=e113]:
+              - option "Any Work Mode" [selected]
+              - option "Remote"
+              - option "Hybrid"
+              - option "On-site"
+          - generic [ref=e114]:
+            - text: Result cap
+            - spinbutton "Result cap" [ref=e115]: "30"
+          - button "Start crawl" [disabled]
+        - generic [ref=e116]:
+          - generic [ref=e117]:
+            - paragraph [ref=e118]: Sources in this view
+            - generic [ref=e119]: 0 selected
+          - paragraph [ref=e121]: Source controls appear when the agent is online.
+      - generic [ref=e123]:
+        - paragraph [ref=e127]: No boards in this view
+        - paragraph [ref=e128]: Select a category or enable sources to see live cards.
+      - generic [ref=e130]:
+        - generic [ref=e131]:
+          - paragraph [ref=e133]: Crawler telemetry and proof
+          - generic [ref=e140]: connecting…
+        - generic [ref=e141]:
+          - generic [ref=e142]:
+            - generic [ref=e147]: scrapling — agent console
+            - generic [ref=e150]:
+              - button "all0" [ref=e151]
+              - button "info0" [ref=e152]
+              - button "reasoning0" [ref=e153]
+              - button "success0" [ref=e154]
+              - button "warning0" [ref=e155]
+              - button "error0" [ref=e156]
+              - button "shot0" [ref=e157]
+          - paragraph [ref=e159]: No activity yet. Start a crawl or supervised browser run to populate this feed.
+      - generic [ref=e160]:
+        - generic [ref=e161]:
+          - heading "Discovered roles" [level=2] [ref=e162]
+          - paragraph [ref=e163]: 0 ready to review · 0 tracked · 0 skipped
+        - generic [ref=e164]:
+          - button "Deck" [ref=e165]
+          - button "Grid" [ref=e168]
+      - paragraph [ref=e177]: Pinging the parallel Scrapling engine and sweeping boards…

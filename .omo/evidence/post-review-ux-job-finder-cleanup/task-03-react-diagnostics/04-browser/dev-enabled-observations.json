@@ -1,0 +1,23 @@
+{
+  "url": "http://127.0.0.1:3013",
+  "expectation": "active",
+  "observed": {
+    "attributeValue": "active",
+    "toolbarPresent": true,
+    "canvasCount": 0,
+    "grabArtifacts": {
+      "styleTagsReactGrab": 0,
+      "dataIgnoreNodes": 0
+    },
+    "initConsoleLines": [
+      {
+        "type": "info",
+        "text": "[huntflow:dev-diagnostics] {loaded: 2, requested: 2}"
+      }
+    ],
+    "reactScanFailureLines": [],
+    "consoleMessageCount": 9,
+    "pageErrors": []
+  },
+  "pass": true
+}

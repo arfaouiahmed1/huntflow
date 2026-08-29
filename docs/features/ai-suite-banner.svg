@@ -1,0 +1,71 @@
+<svg width="1000" height="240" viewBox="0 0 1000 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg-#38BDF8" cx="30%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#141B2D" />
+      <stop offset="100%" stop-color="#090C15" />
+    </radialGradient>
+    <filter id="glow-#38BDF8" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Container -->
+  <rect width="1000" height="240" rx="16" fill="url(#bg-#38BDF8)" />
+  <rect width="998" height="238" x="1" y="1" rx="15" stroke="#1E293B" stroke-width="1.5" />
+
+  <!-- Accent glow corner -->
+  <circle cx="80" cy="80" r="140" fill="#38BDF8" fill-opacity="0.06" />
+
+  <!-- Left Icon Container -->
+  <g transform="translate(48, 48)">
+    <rect width="72" height="72" rx="18" fill="#0F172A" stroke="#38BDF8" stroke-opacity="0.5" stroke-width="1.5" />
+    <g transform="translate(20, 20)" stroke="#38BDF8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M16 2L20 12L30 16L20 20L16 30L12 20L2 16L12 12L16 2Z" fill="#38BDF8" fill-opacity="0.3" />
+    </g>
+  </g>
+
+  <!-- Header & Title -->
+  <g transform="translate(144, 48)">
+    <!-- Pill Badge -->
+    <rect width="177" height="24" rx="12" fill="#0F172A" stroke="#38BDF8" stroke-opacity="0.4" stroke-width="1" />
+    <circle cx="12" cy="12" r="3.5" fill="#38BDF8" />
+    <text font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="11" fill="#38BDF8" letter-spacing="0.08em" x="22" y="15.5">INTELLIGENT SUITE</text>
+
+    <!-- Main Title -->
+    <text font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="28" fill="#F8FAFC" x="0" y="60">
+      AI Generation & ATS Studio
+    </text>
+
+    <!-- Subtitle -->
+    <text font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="14" fill="#94A3B8" x="0" y="86">
+      Tailored resumes, cover letters, STAR prep flashcards, and instant skills gap analyses.
+    </text>
+  </g>
+
+  <!-- Details Row Grid -->
+  <g transform="translate(144, 160)">
+    
+      <g transform="translate(0, 0)">
+        <rect width="245" height="52" rx="10" fill="#0B0F19" stroke="#1E293B" stroke-width="1" />
+        <circle cx="16" cy="26" r="4" fill="#38BDF8" />
+        <text font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="13" fill="#E2E8F0" x="30" y="24">Tailored Resumes & CVs</text>
+        <text font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="11" fill="#64748B" x="30" y="40">LaTeX + PDF generation</text>
+      </g>
+    
+      <g transform="translate(260, 0)">
+        <rect width="245" height="52" rx="10" fill="#0B0F19" stroke="#1E293B" stroke-width="1" />
+        <circle cx="16" cy="26" r="4" fill="#38BDF8" />
+        <text font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="13" fill="#E2E8F0" x="30" y="24">STAR Flashcards</text>
+        <text font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="11" fill="#64748B" x="30" y="40">Interview question simulator</text>
+      </g>
+    
+      <g transform="translate(520, 0)">
+        <rect width="245" height="52" rx="10" fill="#0B0F19" stroke="#1E293B" stroke-width="1" />
+        <circle cx="16" cy="26" r="4" fill="#38BDF8" />
+        <text font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="13" fill="#E2E8F0" x="30" y="24">ATS Gap Analysis</text>
+        <text font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="11" fill="#64748B" x="30" y="40">Deep keyword breakdown</text>
+      </g>
+    
+  </g>
+</svg>

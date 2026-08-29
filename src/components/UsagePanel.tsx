@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { BrainCircuit, Coins, Loader2, TriangleAlert, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/Toaster";
+import { toErrorMessage } from "@/lib/errors";
 
 interface UsageRecent {
   id: number;
@@ -28,17 +30,20 @@ interface UsageData {
 
 export default function UsagePanel() {
   const [data, setData] = useState<UsageData | null>(null);
+  const { error: toastError } = useToast();
 
   useEffect(() => {
     let cancelled = false;
     fetch("/api/usage")
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Usage ${r.status}`))))
       .then((d) => !cancelled && setData(d))
-      .catch(() => undefined);
+      .catch((err) => {
+        if (!cancelled) toastError(`Usage unavailable: ${toErrorMessage(err)}`);
+      });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [toastError]);
 
   if (!data) {
     return (

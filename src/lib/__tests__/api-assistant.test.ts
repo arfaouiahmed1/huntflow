@@ -38,14 +38,14 @@ describe("POST /api/assistant — validation", () => {
     expect(body.error).toContain("message");
   });
 
-  it("rejects a missing profile with 400", async () => {
+  it("falls back to default profile when profile is omitted in body", async () => {
     const req = new NextRequest("http://localhost/api/assistant", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: "hi" }),
     });
     const res = await POST(req);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
   });
 });
 

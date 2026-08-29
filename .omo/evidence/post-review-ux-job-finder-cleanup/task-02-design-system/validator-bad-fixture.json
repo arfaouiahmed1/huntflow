@@ -1,0 +1,19 @@
+{
+  "ok": false,
+  "design": "C:\\Users\\ahmed\\AppData\\Local\\Temp\\opencode\\DESIGN.bad-fixture-task1.md",
+  "checked": 1,
+  "unknown": [
+    {
+      "kind": "palette.key",
+      "id": "unknown-ai-token"
+    }
+  ],
+  "liveCounts": {
+    "themeExports": 4,
+    "paletteKeys": 15,
+    "cssDefinedVars": 41,
+    "cssReferencedVars": 20,
+    "utilityClasses": 12,
+    "keyframes": 3
+  }
+}

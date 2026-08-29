@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Brain, Plus, Trash2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/Toaster";
+import { toErrorMessage } from "@/lib/errors";
 
 export interface MemoryFeedItem {
   id: number;
@@ -23,6 +25,7 @@ const KIND_STYLE: Record<MemoryFeedItem["kind"], string> = {
 };
 
 export default function MemoryFeed({ limit = 12 }: { limit?: number }) {
+  const { error: toastError } = useToast();
   const [items, setItems] = useState<MemoryFeedItem[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,23 +37,35 @@ export default function MemoryFeed({ limit = 12 }: { limit?: number }) {
       const res = await fetch(`/api/memory?limit=${limit}`);
       const data = await res.json();
       if (res.ok) setItems(data.memory ?? []);
-    } catch {
-      /* offline */
+      else toastError(data?.error || `Memory ${res.status}`);
+    } catch (err) {
+      toastError(`Memory unavailable: ${toErrorMessage(err)}`);
     } finally {
       setLoading(false);
     }
-  }, [limit]);
+  }, [limit, toastError]);
 
   useEffect(() => {
-    let cancelled = false;
-    load().finally(() => {
-      if (!cancelled) setLoading(false);
-    });
+    let ignore = false;
+    fetch(`/api/memory?limit=${limit}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!ignore && data) {
+          setItems(data.memory ?? []);
+        }
+      })
+      .catch((err) => {
+        if (!ignore) toastError(`Memory unavailable: ${toErrorMessage(err)}`);
+      })
+      .finally(() => {
+        if (!ignore) {
+          setLoading(false);
+        }
+      });
     return () => {
-      cancelled = true;
+      ignore = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [limit]);
+  }, [limit, toastError]);
 
   const add = async () => {
     const content = draft.trim();
@@ -66,8 +81,9 @@ export default function MemoryFeed({ limit = 12 }: { limit?: number }) {
       setDraft("");
       setNote("Noted — agents will see this in shared context.");
       await load();
-    } catch {
+    } catch (err) {
       setNote("Could not save the note.");
+      toastError(`Save failed: ${toErrorMessage(err)}`);
     } finally {
       setBusy(false);
       setTimeout(() => setNote(""), 4000);
@@ -75,7 +91,15 @@ export default function MemoryFeed({ limit = 12 }: { limit?: number }) {
   };
 
   const remove = async (id: number) => {
-    await fetch(`/api/memory?id=${id}`, { method: "DELETE" }).catch(() => undefined);
+    try {
+      const res = await fetch(`/api/memory?id=${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string })?.error || `Delete ${res.status}`);
+      }
+    } catch (err) {
+      toastError(`Failed to delete memory: ${toErrorMessage(err)}`);
+    }
     load();
   };
 

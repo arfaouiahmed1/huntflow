@@ -3,11 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Save,
-  User,
-  Briefcase,
-  GraduationCap,
   Trash2,
-  Plus,
   Check,
   Cpu,
   Link2,
@@ -23,37 +19,40 @@ import {
   Power,
   Key,
   Cookie,
-  ExternalLink,
   ShieldCheck,
-  HelpCircle,
   Copy,
+  Camera,
+  Image as ImageIcon,
+  Layers,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toaster";
 import { LLM_PROVIDERS, LLMProvider } from "@/lib/llm/providers";
-import { UserProfile, WorkExperience, Education, MailSettings } from "@/types";
+import { MailSettings, CloudinarySettings } from "@/types";
 import { cn } from "@/lib/utils";
+import { CloudinarySettingsSchema } from "@/lib/validation";
+import { isMasked } from "@/lib/masking";
+import { toErrorMessage } from "@/lib/errors";
+import type { LinkedInLoginResult } from "@/context/AppContext";
 
 export default function SettingsPage() {
   const {
-    profile,
-    updateProfile,
     providers,
     updateProviders,
     checkLinkedInSession,
     openLinkedInLogin,
     logoutLinkedIn,
-    importLinkedInProfile,
     mailSettings,
     saveMailSettings,
+    cloudinarySettings,
+    saveCloudinarySettings,
+    refreshData,
   } = useApp();
-  const { success, error } = useToast();
-  const [form, setForm] = useState({ ...profile });
-  const [saved, setSaved] = useState(false);
+  const { success, error, warn } = useToast();
   const [liStatus, setLiStatus] = useState<"checking" | "signed-in" | "signed-out">("checking");
+  const [liDetails, setLiDetails] = useState<LinkedInLoginResult | null>(null);
   const [liBusy, setLiBusy] = useState(false);
-  const [liHandle, setLiHandle] = useState("");
   const [liCookie, setLiCookie] = useState("");
   const [liCookieOpen, setLiCookieOpen] = useState(false);
   const [liCookieBusy, setLiCookieBusy] = useState(false);
@@ -61,6 +60,14 @@ export default function SettingsPage() {
   const [mailForm, setMailForm] = useState<MailSettings>({ ...mailSettings });
   const [testingMail, setTestingMail] = useState(false);
   const [mailResult, setMailResult] = useState<"untested" | "ok" | "failed">("untested");
+  const [cloudForm, setCloudForm] = useState<CloudinarySettings>({ ...cloudinarySettings });
+  const [prevCloudinary, setPrevCloudinary] = useState(cloudinarySettings);
+  if (cloudinarySettings !== prevCloudinary) {
+    setPrevCloudinary(cloudinarySettings);
+    setCloudForm({ ...cloudinarySettings });
+  }
+  const [savingCloud, setSavingCloud] = useState(false);
+  const [testingCloud, setTestingCloud] = useState(false);
   const [gmailStatus, setGmailStatus] = useState<{
     connected: boolean;
     email?: string;
@@ -98,9 +105,9 @@ export default function SettingsPage() {
     }
     try {
       const res = await fetch("/api/data/reset", { method: "POST" });
-      if (!res.ok) throw new Error("DB reset failed");
-    } catch {
-      /* still wipe the browser cache below */
+      if (!res.ok) throw new Error(`DB reset failed (HTTP ${res.status})`);
+    } catch (err) {
+      error(err instanceof Error ? err.message : "DB reset failed — SQLite data may remain; only the local cache was cleared.");
     }
     ["job_finder_apps", "job_finder_profile", "huntflow_insights", "huntflow_storage_version"].forEach((k) =>
       localStorage.removeItem(k)
@@ -142,17 +149,95 @@ export default function SettingsPage() {
   const refreshLiStatus = async () => {
     setLiStatus("checking");
     try {
-      const ok = await checkLinkedInSession();
-      setLiStatus(ok ? "signed-in" : "signed-out");
-    } catch {
+      const result = await checkLinkedInSession();
+      setLiDetails(result);
+      setLiStatus(result.authenticated ? "signed-in" : "signed-out");
+    } catch (err) {
+      setLiDetails({
+        authenticated: false,
+        state: "error",
+        reason: err instanceof Error ? err.message : "LinkedIn session check failed.",
+        recovery: "Confirm the local Scrapling agent is running, then retry.",
+      });
       setLiStatus("signed-out");
     }
   };
 
   useEffect(() => {
-    refreshLiStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let cancelled = false;
+    checkLinkedInSession()
+      .then((result) => {
+        if (!cancelled) {
+          setLiDetails(result);
+          setLiStatus(result.authenticated ? "signed-in" : "signed-out");
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setLiDetails({
+            authenticated: false,
+            state: "error",
+            reason: err instanceof Error ? err.message : "LinkedIn session check failed.",
+          });
+          setLiStatus("signed-out");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [checkLinkedInSession]);
+
+  const onTestCloudinary = async () => {
+    setTestingCloud(true);
+    try {
+      // Masked values (••••XXXX) mean "unchanged" — omit them so the sidecar keeps its real/env-backed credentials.
+      const res = await fetch("/api/agent/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cloudinary_cloud_name: cloudForm.cloudName || undefined,
+          ...(isMasked(cloudForm.apiKey) ? {} : { cloudinary_api_key: cloudForm.apiKey || undefined }),
+          ...(isMasked(cloudForm.apiSecret) ? {} : { cloudinary_api_secret: cloudForm.apiSecret || undefined }),
+          max_concurrency: cloudForm.concurrency,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.cloudinary_configured) {
+        success("Cloudinary CDN & Crawler Concurrency configured successfully on agent!");
+      } else if (res.ok) {
+        success(`Agent config updated: ${cloudForm.concurrency || 4} parallel crawler workers (local snapshots only).`);
+      } else {
+        error(data.error || "Failed to update configuration on agent sidecar.");
+      }
+    } catch (err) {
+      error(err instanceof Error ? err.message : "Failed to connect to agent");
+    } finally {
+      setTestingCloud(false);
+    }
+  };
+
+  const onSaveCloudinary = async () => {
+    const parsed = CloudinarySettingsSchema.safeParse(cloudForm);
+    if (!parsed.success) {
+      error(parsed.error.issues[0]?.message || "Invalid Cloudinary settings.");
+      return;
+    }
+    setSavingCloud(true);
+    try {
+      await saveCloudinarySettings({
+        cloudName: parsed.data.cloudName || "",
+        apiKey: parsed.data.apiKey || "",
+        apiSecret: parsed.data.apiSecret || "",
+        concurrency: parsed.data.concurrency ?? 1,
+      });
+      await onTestCloudinary();
+      success("Cloudinary & Parallelism settings saved!");
+    } catch (err) {
+      error(toErrorMessage(err) || "Failed to save Cloudinary settings.");
+    } finally {
+      setSavingCloud(false);
+    }
+  };
 
   const refreshGmailStatus = async () => {
     try {
@@ -163,7 +248,9 @@ export default function SettingsPage() {
       } else {
         setGmailStatus({ connected: false });
       }
-    } catch {
+    } catch (_err) {
+      // Probe failure → disconnected badge is the user-facing signal; toast per refresh would spam.
+      void _err;
       setGmailStatus({ connected: false });
     }
   };
@@ -174,8 +261,8 @@ export default function SettingsPage() {
       await fetch("/api/auth/gmail/revoke", { method: "POST" });
       setGmailStatus({ connected: false });
       success("Gmail disconnected — mail falls back to app-password settings.");
-    } catch {
-      error("Failed to disconnect Gmail.");
+    } catch (err) {
+      error(toErrorMessage(err) || "Failed to disconnect Gmail.");
     } finally {
       setGmailBusy(false);
     }
@@ -187,8 +274,12 @@ export default function SettingsPage() {
       if (res.ok) {
         const data = await res.json();
         setGoogleClientStatus(data);
+      } else {
+        warn(`Google OAuth config unavailable (HTTP ${res.status}).`);
       }
-    } catch {}
+    } catch (err) {
+      warn(err instanceof Error ? err.message : "Could not read Google OAuth config.");
+    }
   };
 
   const onSaveGoogleConfig = async () => {
@@ -232,17 +323,15 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cookie: liCookie.trim() }),
       });
-      const data = await res.json();
+      const data = (await res.json()) as LinkedInLoginResult & { error?: string };
+      setLiDetails(data);
       if (data.authenticated) {
         setLiStatus("signed-in");
         setLiCookie("");
         setLiCookieOpen(false);
         success("LinkedIn session verified and saved successfully!");
-        if (liHandle.trim()) {
-          onImportProfile();
-        }
       } else {
-        error(data.error || "LinkedIn session cookie could not be verified. Ensure your cookie is active.");
+        error(data.reason || data.error || "LinkedIn could not verify this session cookie.");
       }
     } catch (err: unknown) {
       error(err instanceof Error ? err.message : "LinkedIn cookie login failed");
@@ -253,6 +342,7 @@ export default function SettingsPage() {
 
   /* Gmail OAuth: reflect connect/disconnect (and the /settings?gmail=… redirect) into the UI. */
   useEffect(() => {
+    let cancelled = false;
     const params = new URLSearchParams(window.location.search);
     const gmail = params.get("gmail");
     if (gmail === "connected") {
@@ -263,10 +353,29 @@ export default function SettingsPage() {
       error(`Gmail connection failed (${reason}) — check OAuth Client ID / Secret and redirect URI.`);
       window.history.replaceState({}, "", "/settings");
     }
-    refreshGmailStatus();
-    refreshGoogleConfig();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    fetch("/api/auth/gmail/status", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : { connected: false }))
+      .then((data) => {
+        if (!cancelled) setGmailStatus(data);
+      })
+      .catch(() => {
+        if (!cancelled) setGmailStatus({ connected: false });
+      });
+
+    fetch("/api/auth/gmail/config", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setGoogleClientStatus(data);
+      })
+      .catch((err) => {
+        if (!cancelled) warn(err instanceof Error ? err.message : "Google OAuth config unavailable.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [error, success]);
 
   const exportBackup = async () => {
     setBackupBusy(true);
@@ -303,12 +412,25 @@ export default function SettingsPage() {
       const data = (await res.json().catch(() => ({}))) as { error?: string; counts?: Record<string, number> };
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       const counts = data.counts ?? {};
+      try {
+        await Promise.allSettled([
+          refreshData(),
+          fetch("/api/vault", { cache: "no-store" }).then(async (r) => {
+            if (r.ok) {
+              const v = await r.json().catch(() => null);
+              if (v && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("huntflow:vault-refreshed", { detail: v }));
+            }
+          }),
+        ]);
+      } catch (err) {
+        warn(err instanceof Error ? err.message : "Import saved, but workspace refresh failed — reload if data looks stale.");
+      }
       success(
         `Restored — ${counts.jobs ?? 0} jobs, ${counts.contacts ?? 0} contacts, ${counts.vaultDocs ?? 0} vault docs`
       );
-      window.location.reload();
     } catch (e) {
       error(e instanceof Error ? e.message : "Restore failed.");
+    } finally {
       setRestoreBusy(false);
     }
   };
@@ -316,47 +438,23 @@ export default function SettingsPage() {
   const onLinkedInLogin = async () => {
     setLiBusy(true);
     try {
-      const { authenticated, profile: li, checkpoint } = await openLinkedInLogin();
-      setLiStatus(authenticated ? "signed-in" : "signed-out");
-      if (checkpoint && !authenticated) {
-        error("Finish verification in the browser window, then press Refresh");
+      const result = await openLinkedInLogin();
+      setLiDetails(result);
+      setLiStatus(result.authenticated ? "signed-in" : "signed-out");
+      if (result.checkpoint && !result.authenticated) {
+        error(result.reason || "LinkedIn requires a verification checkpoint.");
         return;
       }
-      if (authenticated && li) {
-        setForm((f) => ({
-          ...f,
-          name: li.name || f.name,
-          location: li.location || f.location,
-          summary: li.about || f.summary,
-          skills: li.skills?.length ? li.skills : f.skills,
-          experience: li.experience?.map((exp, i) => ({
-            id: "exp-" + Date.now() + "-" + i,
-            company: exp.company || "",
-            role: exp.role || "",
-            duration: exp.duration || "",
-            bulletPoints: exp.details || [],
-          })) || f.experience,
-          education: li.education?.map((edu, i) => ({
-            id: "edu-" + Date.now() + "-" + i,
-            degree: edu.degree || "",
-            school: edu.school || "",
-            year: "",
-          })) || f.education,
-        }));
-        const handle = liHandle.trim();
-        if (handle) {
-          fetch("/api/data/settings", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ linkedin_handle: handle }),
-          }).catch(() => undefined);
-        }
-        success(`Signed in — imported ${li.name || "profile"} for review.`);
-      } else if (authenticated) {
+      if (result.authenticated) {
         success("Signed in to LinkedIn.");
+      } else if (result.reason) {
+        error(result.reason);
       }
-    } catch {
+    } catch (err) {
       setLiStatus("signed-out");
+      const message = err instanceof Error ? err.message : "LinkedIn login window failed.";
+      setLiDetails({ authenticated: false, state: "error", reason: message });
+      error(message);
     } finally {
       setLiBusy(false);
     }
@@ -367,42 +465,11 @@ export default function SettingsPage() {
     try {
       await logoutLinkedIn();
       setLiStatus("signed-out");
+      setLiDetails({ authenticated: false, state: "signed_out", reason: "The persistent LinkedIn session was cleared." });
       success("Signed out of LinkedIn.");
-    } catch {
+    } catch (err) {
       setLiStatus("signed-out");
-    } finally {
-      setLiBusy(false);
-    }
-  };
-
-  const onImportProfile = async () => {
-    if (!liHandle.trim()) return;
-    setLiBusy(true);
-    try {
-      const li = await importLinkedInProfile(liHandle.trim());
-      setForm((f) => ({
-        ...f,
-        name: li.name || f.name,
-        location: li.location || f.location,
-        summary: li.about || f.summary,
-        skills: li.skills?.length ? li.skills : f.skills,
-        experience: li.experience?.map((exp, i) => ({
-          id: "exp-" + Date.now() + "-" + i,
-          company: exp.company || "",
-          role: exp.role || "",
-          duration: exp.duration || "",
-          bulletPoints: exp.details || [],
-        })) || f.experience,
-        education: li.education?.map((edu, i) => ({
-          id: "edu-" + Date.now() + "-" + i,
-          degree: edu.degree || "",
-          school: edu.school || "",
-          year: "",
-        })) || f.education,
-      }));
-      success(`Imported ${li.name || "profile"} — review and save.`);
-    } catch (e) {
-      error(e instanceof Error ? e.message : "Import failed.");
+      error(err instanceof Error ? err.message : "LinkedIn sign-out failed on the agent — the browser session may persist.");
     } finally {
       setLiBusy(false);
     }
@@ -410,31 +477,18 @@ export default function SettingsPage() {
 
   const field =
     "w-full rounded-xl border border-[var(--line)] bg-white/[0.03] px-3.5 py-2.5 text-sm text-[var(--paper)] outline-none transition-colors placeholder:text-[var(--paper-dim)]/60 focus:border-[var(--chartreuse)]/50";
-
-  const set = <K extends keyof UserProfile>(k: K, v: UserProfile[K]) => setForm((f) => ({ ...f, [k]: v }));
-
-  const save = () => {
-    updateProfile(form);
-    setSaved(true);
-    success("Profile saved.");
-    setTimeout(() => setSaved(false), 1800);
-  };
-
-  const updateSkill = (i: number, v: string) => {
-    const skills = [...form.skills];
-    skills[i] = v;
-    set("skills", skills);
-  };
-
-  const updateExp = (i: number, key: keyof WorkExperience, v: string) => {
-    const exp = form.experience.map((e, idx) => (idx === i ? { ...e, [key]: v } : e));
-    set("experience", exp);
-  };
-
-  const updateEdu = (i: number, key: keyof Education, v: string) => {
-    const edu = form.education.map((e, idx) => (idx === i ? { ...e, [key]: v } : e));
-    set("education", edu);
-  };
+  const liStateLabel = liStatus === "checking"
+    ? "Checking session…"
+    : liStatus === "signed-in"
+      ? "Connected"
+      : liDetails?.state === "checkpoint"
+        ? "Verification required"
+        : liDetails?.state === "login_in_progress"
+          ? "Login in progress"
+          : liDetails?.state === "session_locked"
+            ? "Session profile busy"
+            : "Not signed in";
+  const liNeedsAttention = ["checkpoint", "login_in_progress", "session_locked"].includes(liDetails?.state || "");
 
   return (
     <div className="max-w-3xl space-y-8">
@@ -442,9 +496,9 @@ export default function SettingsPage() {
         <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.3em] text-[var(--chartreuse)]">
           /settings
         </p>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-[var(--paper)]">Your Profile</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight text-[var(--paper)]">Settings</h1>
         <p className="mt-1 text-sm text-dim">
-          This powers match scoring, document tailoring, and the auto-apply agent.
+          Configure providers, integrations, automation services, and local data controls.
         </p>
       </div>
 
@@ -539,16 +593,18 @@ export default function SettingsPage() {
                 ? "border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
                 : liStatus === "checking"
                   ? "border-[var(--line)] bg-white/[0.03] text-dim"
-                  : "border-[var(--coral)]/40 bg-[var(--coral)]/10 text-[var(--coral)]"
+                  : liNeedsAttention
+                    ? "border-[var(--amber)]/40 bg-[var(--amber)]/10 text-[var(--amber)]"
+                    : "border-[var(--coral)]/40 bg-[var(--coral)]/10 text-[var(--coral)]"
             )}
           >
             <span
               className={cn(
                 "h-1.5 w-1.5 rounded-full",
-                liStatus === "signed-in" ? "bg-[var(--chartreuse)]" : liStatus === "checking" ? "bg-dim" : "bg-[var(--coral)]"
+                liStatus === "signed-in" ? "bg-[var(--chartreuse)]" : liStatus === "checking" ? "bg-dim" : liNeedsAttention ? "bg-[var(--amber)]" : "bg-[var(--coral)]"
               )}
             />
-            {liStatus === "signed-in" ? "Connected" : liStatus === "checking" ? "Checking session…" : "Not signed in"}
+            {liStateLabel}
           </span>
 
           {liStatus !== "signed-in" ? (
@@ -570,13 +626,33 @@ export default function SettingsPage() {
           </Button>
         </div>
 
+        {liDetails && liStatus !== "checking" && (
+          <div className="mt-4 rounded-xl border border-[var(--line)] bg-black/20 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-[var(--paper)]">Session diagnostic</p>
+              <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-dim">
+                {liDetails.method?.replace("_", " ") || "local agent"}
+                {liDetails.checkedAt ? " · " + new Date(liDetails.checkedAt).toLocaleTimeString() : ""}
+              </span>
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-[var(--paper)]/85">
+              {liDetails.reason || (liDetails.authenticated ? "LinkedIn authenticated the local session." : "No authenticated session was detected.")}
+            </p>
+            {liDetails.recovery && !liDetails.authenticated && (
+              <p className="mt-2 border-l-2 border-[var(--amber)]/50 pl-3 text-[11px] leading-relaxed text-dim">
+                Next step: {liDetails.recovery}
+              </p>
+            )}
+          </div>
+        )}
+
         {liCookieOpen && liStatus !== "signed-in" && (
           <div className="mt-4 rounded-xl border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/5 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-[var(--paper)] flex items-center gap-1.5">
                 <Cookie className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> LinkedIn Session Cookie (<code className="font-mono text-[11px] text-[var(--chartreuse)]">li_at</code>)
               </p>
-              <span className="text-[10px] text-dim">100% Reliable Local Session</span>
+              <span className="text-[10px] text-dim">Manual local session</span>
             </div>
             <p className="text-[11px] text-dim leading-relaxed">
               Open linkedin.com in your browser, press F12 → Application → Cookies → copy the value of <code className="font-mono text-[var(--paper)]">li_at</code> and paste it below:
@@ -596,32 +672,101 @@ export default function SettingsPage() {
           </div>
         )}
 
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="flex-1">
+        <p className="mt-4 text-[10px] leading-relaxed text-dim">
+          Account connection belongs here. Profile facts and imported career evidence belong in Profile &amp; Evidence Vault.
+        </p>
+      </section>
+
+      {/* Cloudinary & Parallelism */}
+      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
+            <ImageIcon className="h-4 w-4 text-[var(--chartreuse)]" /> Cloudinary Streaming & Parallel Crawler
+          </h2>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--sky)]/40 bg-[var(--sky)]/10 px-2.5 py-0.5 text-[10px] font-bold text-[var(--sky)]">
+            <Camera className="h-3 w-3" /> Live Visual Feeds
+          </span>
+        </div>
+        <p className="mb-2 text-xs leading-relaxed text-dim">
+          Configure Cloudinary to stream live browser screenshots to the web console and job deck during scraping and form automation. Set the maximum crawler worker concurrency for controlled parallel discovery.
+        </p>
+        <p className="mb-4 text-[11px] leading-relaxed text-dim">
+          Or set <code className="font-mono text-[10px] text-[var(--chartreuse)]">CLOUDINARY_CLOUD_NAME</code> /{" "}
+          <code className="font-mono text-[10px] text-[var(--chartreuse)]">CLOUDINARY_API_KEY</code> /{" "}
+          <code className="font-mono text-[10px] text-[var(--chartreuse)]">CLOUDINARY_API_SECRET</code> in .env — values saved here take precedence over .env.
+        </p>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
             <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
-              Profile handle (auto-imported after sign-in)
+              Cloud Name
             </label>
             <input
               className={field}
-              placeholder="linkedin.com/in/your-handle"
-              value={liHandle}
-              disabled={liStatus !== "signed-in"}
-              onChange={(e) => setLiHandle(e.target.value)}
+              placeholder="e.g. dktc34wxa"
+              value={cloudForm.cloudName || ""}
+              onChange={(e) => setCloudForm((prev) => ({ ...prev, cloudName: e.target.value }))}
             />
           </div>
-          <Button
-            size="sm"
-            className="sm:mt-5"
-            disabled={liStatus !== "signed-in" || !liHandle.trim()}
-            loading={liBusy && liStatus === "signed-in"}
-            onClick={onImportProfile}
-          >
-            <Download className="h-3.5 w-3.5" /> Import profile
+          <div>
+            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
+              API Key
+            </label>
+            <input
+              className={field}
+              placeholder="e.g. 123456789012345"
+              value={cloudForm.apiKey || ""}
+              onChange={(e) => setCloudForm((prev) => ({ ...prev, apiKey: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
+              API Secret
+            </label>
+            <input
+              type="password"
+              className={field}
+              placeholder="••••••••••••"
+              value={cloudForm.apiSecret || ""}
+              onChange={(e) => setCloudForm((prev) => ({ ...prev, apiSecret: e.target.value }))}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-[var(--line)] bg-[#0d0f14]/50 p-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-[var(--chartreuse)]" />
+              <p className="text-xs font-semibold text-[var(--paper)]">Crawler Concurrency Pool</p>
+            </div>
+            <p className="text-[11px] text-dim">
+              Number of parallel workers scraping job boards simultaneously. Higher values crawl faster.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <select
+              className={cn(field, "w-44 font-mono text-xs")}
+              value={cloudForm.concurrency || 1}
+              onChange={(e) => setCloudForm((prev) => ({ ...prev, concurrency: Number(e.target.value) }))}
+            >
+              <option value="1">1 Worker (Serial · Default)</option>
+              <option value="2">2 Workers</option>
+              <option value="4">4 Workers</option>
+              <option value="6">6 Workers (Fast)</option>
+              <option value="8">8 Workers (Turbo)</option>
+              <option value="12">12 Workers (Max)</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-end gap-3">
+          <Button size="sm" variant="outline" onClick={onTestCloudinary} loading={testingCloud}>
+            <PlugZap className="h-3.5 w-3.5" /> Test & Sync to Agent
+          </Button>
+          <Button size="sm" onClick={onSaveCloudinary} loading={savingCloud}>
+            <Save className="h-3.5 w-3.5" /> Save Media & Concurrency
           </Button>
         </div>
-        <p className="mt-2 text-[10px] text-dim">
-          Fills name, headline, location, summary, skills, experience and education into the form below — press Save Profile to keep them.
-        </p>
       </section>
 
       {/* Email */}
@@ -748,7 +893,9 @@ export default function SettingsPage() {
                   error("Please enter your Google Client ID & Secret first or set them in .env.local.");
                   return;
                 }
-                window.location.assign("/api/auth/gmail/authorize");
+                // OAuth needs a full document navigation so the API route can
+                // redirect the browser to Google's external consent screen.
+                window.location.assign(new URL("/api/auth/gmail/authorize", window.location.origin));
               }}
             >
               <PlugZap className="h-3.5 w-3.5" /> Connect with Google OAuth
@@ -879,162 +1026,6 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* Basics */}
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
-        <h2 className="mb-4 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
-          <User className="h-4 w-4 text-[var(--chartreuse)]" /> Basics
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Full Name</label>
-            <input className={field} value={form.name} onChange={(e) => set("name", e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Email</label>
-            <input className={field} value={form.email} onChange={(e) => set("email", e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Phone</label>
-            <input className={field} value={form.phone} onChange={(e) => set("phone", e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Location</label>
-            <input className={field} value={form.location} onChange={(e) => set("location", e.target.value)} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Target Title</label>
-            <input className={field} value={form.targetTitle} onChange={(e) => set("targetTitle", e.target.value)} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Professional Summary</label>
-            <textarea
-              className={field + " min-h-[90px] resize-y"}
-              value={form.summary}
-              onChange={(e) => set("summary", e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">LinkedIn</label>
-            <input className={field} placeholder="linkedin.com/in/…" value={form.linkedin || ""} onChange={(e) => set("linkedin", e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">GitHub</label>
-            <input className={field} placeholder="github.com/…" value={form.github || ""} onChange={(e) => set("github", e.target.value)} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Portfolio</label>
-            <input className={field} placeholder="https://…" value={form.portfolio || ""} onChange={(e) => set("portfolio", e.target.value)} />
-          </div>
-        </div>
-      </section>
-
-      {/* Skills */}
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
-        <h2 className="mb-4 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
-          <Briefcase className="h-4 w-4 text-[var(--chartreuse)]" /> Skills
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          {form.skills.map((s, i) => (
-            <div key={i} className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white/[0.03] pl-3 pr-1.5 py-1">
-              <input
-                value={s}
-                onChange={(e) => updateSkill(i, e.target.value)}
-                className="w-24 bg-transparent text-xs font-medium text-[var(--paper)] outline-none"
-              />
-              <button
-                onClick={() => set("skills", form.skills.filter((_, idx) => idx !== i))}
-                className="grid h-5 w-5 place-items-center rounded-full text-dim transition-colors hover:bg-[var(--coral)]/20 hover:text-[var(--coral)]"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
-          <button
-            onClick={() => set("skills", [...form.skills, ""])}
-            className="inline-flex items-center gap-1 rounded-full border border-dashed border-[var(--line)] px-3 py-1 text-xs font-medium text-dim transition-colors hover:border-[var(--chartreuse)]/40 hover:text-[var(--chartreuse)]"
-          >
-            <Plus className="h-3 w-3" /> Add skill
-          </button>
-        </div>
-      </section>
-
-      {/* Experience */}
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
-        <h2 className="mb-4 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
-          <Briefcase className="h-4 w-4 text-[var(--chartreuse)]" /> Experience
-        </h2>
-        <div className="space-y-4">
-          {form.experience.map((exp, i) => (
-            <div key={exp.id} className="space-y-3 rounded-xl border border-[var(--line)] p-4">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <input className={field} placeholder="Company" value={exp.company} onChange={(e) => updateExp(i, "company", e.target.value)} />
-                <input className={field} placeholder="Role" value={exp.role} onChange={(e) => updateExp(i, "role", e.target.value)} />
-                <input className={field} placeholder="Duration" value={exp.duration} onChange={(e) => updateExp(i, "duration", e.target.value)} />
-              </div>
-              {exp.bulletPoints.map((bp, j) => (
-                <div key={j} className="flex gap-2">
-                  <input
-                    className={field}
-                    placeholder="Achievement bullet…"
-                    value={bp}
-                    onChange={(e) => {
-                      const bullets = [...exp.bulletPoints];
-                      bullets[j] = e.target.value;
-                      set("experience", form.experience.map((x, idx) => (idx === i ? { ...x, bulletPoints: bullets } : x)));
-                    }}
-                  />
-                  <button
-                    onClick={() => set("experience", form.experience.map((x, idx) => (idx === i ? { ...x, bulletPoints: x.bulletPoints.filter((_, bi) => bi !== j) } : x)))}
-                    className="shrink-0 text-dim hover:text-[var(--coral)]"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => set("experience", form.experience.map((x, idx) => (idx === i ? { ...x, bulletPoints: [...x.bulletPoints, ""] } : x)))}
-              >
-                <Plus className="h-3.5 w-3.5" /> Add bullet
-              </Button>
-            </div>
-          ))}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              set("experience", [...form.experience, { id: "exp-" + Date.now(), company: "", role: "", duration: "", bulletPoints: [""] }])
-            }
-          >
-            <Plus className="h-3.5 w-3.5" /> Add role
-          </Button>
-        </div>
-      </section>
-
-      {/* Education */}
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
-        <h2 className="mb-4 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
-          <GraduationCap className="h-4 w-4 text-[var(--chartreuse)]" /> Education
-        </h2>
-        <div className="space-y-3">
-          {form.education.map((edu, i) => (
-            <div key={edu.id} className="grid gap-3 sm:grid-cols-4">
-              <input className={field + " sm:col-span-2"} placeholder="Degree" value={edu.degree} onChange={(e) => updateEdu(i, "degree", e.target.value)} />
-              <input className={field} placeholder="School" value={edu.school} onChange={(e) => updateEdu(i, "school", e.target.value)} />
-              <input className={field} placeholder="Year" value={edu.year} onChange={(e) => updateEdu(i, "year", e.target.value)} />
-            </div>
-          ))}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => set("education", [...form.education, { id: "edu-" + Date.now(), degree: "", school: "", year: "" }])}
-          >
-            <Plus className="h-3.5 w-3.5" /> Add education
-          </Button>
-        </div>
-      </section>
-
       {/* Backup & restore */}
       <section className="rounded-2xl border border-[var(--line)]/70 bg-white/[0.02] p-6">
         <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
@@ -1096,13 +1087,6 @@ export default function SettingsPage() {
           {armReset ? "Click again to confirm — this wipes everything" : "Reset all data"}
         </button>
       </section>
-
-      <div className="flex justify-end pb-8">
-        <Button onClick={save}>
-          {saved ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-          {saved ? "Saved!" : "Save Profile"}
-        </Button>
-      </div>
     </div>
   );
 }

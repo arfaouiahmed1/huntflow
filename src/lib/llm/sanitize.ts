@@ -85,6 +85,10 @@ export function cleanSkillsGap(v: unknown): SkillsGapAnalysis | null {
       : [],
     fit: v.fit !== undefined ? cleanEnum(v.fit, ["high", "medium", "low", "skip"] as const, "medium") : undefined,
     dealbreakers: cleanStringArray(v.dealbreakers, 8, 300),
+    source: v.source === "live_llm" ? "live_llm" : v.source === "heuristic_fallback" ? "heuristic_fallback" : undefined,
+    provider: cleanOptionalText(v.provider, 100) ?? undefined,
+    model: cleanOptionalText(v.model, 100) ?? undefined,
+    analyzedAt: cleanOptionalText(v.analyzedAt, 100) ?? undefined,
   };
   /* matchScore 0 never occurs legitimately (fallback clamps to 38–97) —
      treat a zero score with no other signal as an unparsable payload. */
@@ -106,6 +110,18 @@ export function cleanDocuments(v: unknown): TailoredDocuments | null {
       out[key] = s;
       any = true;
     }
+  }
+  if (v.source === "live_llm" || v.source === "heuristic_fallback") {
+    out.source = v.source;
+  }
+  if (typeof v.provider === "string" && v.provider.trim()) {
+    out.provider = cleanText(v.provider, 100);
+  }
+  if (typeof v.model === "string" && v.model.trim()) {
+    out.model = cleanText(v.model, 100);
+  }
+  if (typeof v.generatedAt === "string" && v.generatedAt.trim()) {
+    out.generatedAt = cleanText(v.generatedAt, 100);
   }
   return any ? out : null;
 }
@@ -231,7 +247,7 @@ export function cleanPipelineReport(v: unknown): PipelineReport | null {
   return { headline, highlights, risks, actions };
 }
 
-export const AUTO_APPLY_LOG_TYPES = ["info", "success", "warning", "error"] as const;
+export const AUTO_APPLY_LOG_TYPES = ["info", "success", "warning", "error", "reasoning"] as const;
 
 export function cleanAutoApplyLogs(v: unknown): AutoApplyLog[] {
   if (!Array.isArray(v)) return [];

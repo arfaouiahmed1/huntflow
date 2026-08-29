@@ -4,6 +4,7 @@ import { runAssistant, runAssistantStream, AssistantStreamEvent, ChatMessage } f
 import { settingsRepo } from "@/lib/db";
 import { UserProfile } from "@/types";
 import { sseFrame, sseHeaders } from "@/lib/sse";
+import { initialProfile } from "@/lib/initialData";
 
 /**
  * Decide whether this request wants a live SSE stream. The negotiation is
@@ -22,7 +23,14 @@ function loadProfile(body: { profile?: unknown }): UserProfile | null {
     return body.profile as UserProfile;
   }
   const rawProfile = settingsRepo.get("profile");
-  return rawProfile ? (JSON.parse(rawProfile) as UserProfile) : null;
+  if (rawProfile) {
+    try {
+      return JSON.parse(rawProfile) as UserProfile;
+    } catch {
+      /* parse error, fallback */
+    }
+  }
+  return initialProfile;
 }
 
 export async function POST(req: NextRequest) {

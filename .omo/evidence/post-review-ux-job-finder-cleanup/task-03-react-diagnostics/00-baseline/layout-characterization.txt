@@ -1,0 +1,14 @@
+== Task 03 baseline — 2026-08-23T00:28:51.9110777+01:00 ==
+
+-- owned file hashes (SHA256, pre-change dirty worktree) --
+  package.json  F7391B4C1357172F956832099192098C001C493F5BB2ABB97F75D3D35A4C6CB5
+  src/app/layout.tsx  EF7842D20C5B414BDE144E99C6EE1C59073C68A1E2A86C76333CE76F855E7591
+
+-- 'use client' directive occurrences in src/app/layout.tsx --
+NONE — layout is a Server Component (no directive)
+
+-- Server Component evidence: exports static metadata (invalid in Client Components) --
+export const metadata: Metadata = {
+
+-- pre-existing react-grab/react-scan/react-doctor references anywhere in tracked source/config (excl node_modules,.next,.omo) --
+NONE — zero markers in worktree before implementation (git grep exit 1)

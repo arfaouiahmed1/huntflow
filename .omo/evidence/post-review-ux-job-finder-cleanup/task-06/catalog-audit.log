@@ -1,0 +1,3 @@
+boards=30 enabled=4 static=21 stealth=7 posts=2
+enabled ids: ['remotive', 'workingnomades', 'justremote', 'nodesk']
+all selectors resolvable

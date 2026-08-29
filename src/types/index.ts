@@ -11,6 +11,18 @@ export interface STARCard {
   status?: 'unstudied' | 'learning' | 'mastered';
 }
 
+export type AISourceType = "live_llm" | "heuristic_fallback";
+
+export interface AIMetadata {
+  source: AISourceType;
+  provider?: string;
+  model?: string;
+  generatedAt?: string;
+  latencyMs?: number;
+  promptTokens?: number;
+  completionTokens?: number;
+}
+
 export interface SkillsGapAnalysis {
   matchScore: number; // 0 - 100
   matchingSkills: string[];
@@ -22,6 +34,11 @@ export interface SkillsGapAnalysis {
   fit?: "high" | "medium" | "low" | "skip";
   /** Concrete reasons this role should be skipped (visa, clearance, on-site-only, salary floor). */
   dealbreakers?: string[];
+  /** AI source & generation metadata */
+  source?: AISourceType;
+  provider?: string;
+  model?: string;
+  analyzedAt?: string;
 }
 
 export interface TailoredDocuments {
@@ -30,6 +47,11 @@ export interface TailoredDocuments {
   motivationLetter?: string;
   followUpEmail?: string;
   customNotes?: string;
+  /** AI source & generation metadata */
+  source?: AISourceType;
+  provider?: string;
+  model?: string;
+  generatedAt?: string;
 }
 
 export interface InterviewQuestion {
@@ -90,7 +112,46 @@ export interface GlobalInsights {
 export interface AutoApplyLog {
   timestamp: string;
   message: string;
-  type: 'info' | 'success' | 'warning' | 'error';
+  type: 'info' | 'success' | 'warning' | 'error' | 'reasoning';
+}
+
+export interface CompanyResearchSource {
+  id: string;
+  kind: "wikidata" | "wikipedia" | "news" | "job_posting";
+  title: string;
+  url: string;
+  publisher: string;
+  publishedAt?: string;
+  retrievedAt: string;
+}
+
+export interface CompanyResearchFact {
+  label: string;
+  value: string;
+  sourceIds: string[];
+  confidence: "verified" | "posting_signal";
+}
+
+export interface CompanyResearchNewsItem {
+  title: string;
+  url: string;
+  publisher: string;
+  publishedAt?: string;
+  sourceId: string;
+}
+
+/** Source-backed company context. Empty fields are intentionally not guessed. */
+export interface CompanyResearch {
+  company: string;
+  status: "verified" | "partial" | "unavailable";
+  entityId?: string;
+  summary?: string;
+  officialWebsite?: string;
+  facts: CompanyResearchFact[];
+  news: CompanyResearchNewsItem[];
+  sources: CompanyResearchSource[];
+  warnings: string[];
+  researchedAt: string;
 }
 
 export interface EmployerReview {
@@ -109,6 +170,7 @@ export interface EmployerReview {
     products?: string[];
     techStack?: string[];
     cultureSignals?: string[];
+    research?: CompanyResearch;
   };
 }
 
@@ -145,6 +207,7 @@ export interface JobApplication {
     salaryEstimate?: string;
     outreachSubject?: string;
     interviewPrepTopics?: string[];
+    companyResearch?: CompanyResearch;
   };
   createdDate: string;
   companyLogo?: string;
@@ -152,6 +215,19 @@ export interface JobApplication {
   source?: string;
   /** Marks low-confidence hiring-post extractions (HN Who-is-Hiring style). */
   hiringPost?: boolean;
+  /** Live screenshot URL of the job page or crawl proof */
+  screenshotUrl?: string;
+  /** Direct Cloudinary CDN image URL if uploaded */
+  cloudinaryUrl?: string;
+  /** Feedback reason when a candidate skips or rejects a job in HITL deck */
+  skipReason?: string;
+}
+
+export interface CloudinarySettings {
+  cloudName: string;
+  apiKey: string;
+  apiSecret: string;
+  concurrency?: number;
 }
 
 export interface Contact {
@@ -392,3 +468,40 @@ export interface ResumeDoc {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  kind: "info" | "success" | "warning" | "error" | "review";
+  link?: string;
+  read: boolean;
+  createdAt: string;
+}
+
+/** UI-facing Source Type classification from the sidecar source contract. */
+export type CrawlerSourceType = "general" | "remote_board" | "community";
+
+/** Market tags describing the regions a crawler board serves. */
+export type CrawlerMarket = "global" | "europe" | "mena" | "americas" | "apac";
+
+/**
+ * One crawler board as returned by `/api/agent/sources` (the sidecar `/sources`
+ * whitelist). The top-level `category` is storage organization only — Source
+ * Type and Market are the explicit, independent filter dimensions.
+ */
+export interface CrawlerSource {
+  id: string;
+  name: string;
+  category: string;
+  type: "static" | "stealth" | "posts";
+  url: string;
+  sourceType: CrawlerSourceType;
+  markets: CrawlerMarket[];
+  experience: "entry" | "mid" | "senior" | "all";
+  workMode: "remote" | "hybrid" | "onsite" | "all";
+  enabledByDefault: boolean;
+  note?: string;
+}
+
+export type { VaultDoc, VaultChunk, MemoryEntry } from "@/lib/db";

@@ -1,0 +1,46 @@
+== Installed diagnostic package versions ==
+  react-grab@
+  react-scan@
+  react-doctor@
+
+-- package.json diff (git) --
+diff --git a/package.json b/package.json
+index 421f46b..4e9bc89 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+     "imapflow": "^1.6.5",
+     "lucide-react": "^1.28.0",
+     "mammoth": "^1.12.0",
+-    "next": "16.2.12",
++    "next": "^16.3.1",
+     "nodemailer": "^9.0.3",
+     "pdf-parse": "^2.4.5",
+     "react": "19.2.4",
+@@ -39,8 +39,11 @@
+     "@types/react-dom": "^19",
+     "concurrently": "^8.2.2",
+     "eslint": "^9",
+-    "eslint-config-next": "16.2.12",
++    "eslint-config-next": "^16.3.1",
+     "playwright": "^1.62.1",
++    "react-doctor": "^0.9.12",
++    "react-grab": "^0.2.0",
++    "react-scan": "^0.5.7",
+     "tailwindcss": "^4",
+     "typescript": "^5",
+     "vite-tsconfig-paths": "^6.1.1",
+
+
+-- package-lock.json diff stat (added/changed lines only counted) --
+ package-lock.json | 10409 +++++++++++++++++++++++++++++++++-------------------
+ 1 file changed, 6719 insertions(+), 3690 deletions(-)
+
+
+-- confirm all three are under devDependencies only --
+dependencies contains react-grab: False
+dependencies contains react-scan: False
+dependencies contains react-doctor: False
+devDependencies.react-grab = ^0.2.0
+devDependencies.react-scan = ^0.5.7
+devDependencies.react-doctor = ^0.9.12

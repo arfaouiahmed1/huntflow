@@ -21,21 +21,21 @@
   --color-linkedin: var(--linkedin);
   --color-dim: var(--paper-dim);
   --font-sans: var(--font-manrope);
-  --font-display: var(--font-unbounded);
+  --font-display: var(--font-manrope);
   --font-mono: var(--font-jetbrains);
 }
 
 :root {
-  --ink: #080b0e;
-  --ink-soft: #0d1116;
-  --ink-card: #10151c;
-  --ink-deep: #05070a;
-  --ink-console: #0a0c0f;
-  --ink-leaf: #0e1510;
-  --paper: #e8ece4;
-  --paper-dim: #9aa39a;
-  --chartreuse: #c8f453;
-  --chartreuse-bright: #eaffa0;
+  --ink: #0a0e13;
+  --ink-soft: #10161e;
+  --ink-card: #131a23;
+  --ink-deep: #070a0f;
+  --ink-console: #0c1118;
+  --ink-leaf: #111a15;
+  --paper: #f3f5f1;
+  --paper-dim: #9ca7a1;
+  --chartreuse: #b9ed57;
+  --chartreuse-bright: #dcff91;
   --amber: #ffb454;
   --coral: #ff7a5c;
   --sky: #6bc7ff;
@@ -57,20 +57,9 @@ body {
   color: var(--paper);
   font-family: var(--font-manrope), system-ui, sans-serif;
   background-image:
-    radial-gradient(900px 500px at 85% -10%, color-mix(in srgb, var(--chartreuse) 7%, transparent), transparent 60%),
-    radial-gradient(700px 400px at -10% 110%, color-mix(in srgb, var(--sky) 5%, transparent), transparent 55%);
+    radial-gradient(900px 500px at 85% -10%, color-mix(in srgb, var(--chartreuse) 5%, transparent), transparent 60%),
+    radial-gradient(700px 400px at -10% 110%, color-mix(in srgb, var(--sky) 3%, transparent), transparent 55%);
   background-attachment: fixed;
-}
-
-/* Film grain overlay for atmosphere */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 9998;
-  pointer-events: none;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* Keyboard navigation clarity */
@@ -124,14 +113,11 @@ body::after {
   border-radius: 1rem;
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--ink-card) 70%, transparent);
-  transition: border-color 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.25s ease, background-color 0.25s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 .card:hover {
-  border-color: color-mix(in srgb, var(--chartreuse) 40%, transparent);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px color-mix(in srgb, #000 35%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--chartreuse) 6%, transparent);
+  border-color: color-mix(in srgb, var(--chartreuse) 26%, transparent);
+  box-shadow: 0 12px 36px color-mix(in srgb, #000 22%, transparent);
 }
 
 /* Inputs — softer focus glow */
@@ -153,18 +139,19 @@ select {
 }
 
 .scanlines::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    0deg,
-    color-mix(in srgb, var(--paper) 1.5%, transparent) 0px,
-    color-mix(in srgb, var(--paper) 1.5%, transparent) 1px,
-    transparent 1px,
-    transparent 3px
-  );
-  z-index: 9999;
+  display: none;
+}
+
+/* Resume/CV previews use a dedicated book face so the browser matches the
+   Latin Modern/Computer Modern character of the exported LaTeX documents. */
+.document-paper {
+  font-family: var(--font-document), "Latin Modern Roman", "CMU Serif", Georgia, serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  text-rendering: optimizeLegibility;
+}
+
+.document-paper-sans {
+  font-family: var(--font-manrope), "Latin Modern Sans", Arial, sans-serif;
 }
 
 /* Animations */

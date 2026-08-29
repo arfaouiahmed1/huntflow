@@ -1,0 +1,18 @@
+{
+  "url": "http://127.0.0.1:3013",
+  "expectation": "suppressed",
+  "observed": {
+    "attributeValue": null,
+    "toolbarPresent": false,
+    "canvasCount": 0,
+    "grabArtifacts": {
+      "styleTagsReactGrab": 0,
+      "dataIgnoreNodes": 0
+    },
+    "initConsoleLines": [],
+    "reactScanFailureLines": [],
+    "consoleMessageCount": 14,
+    "pageErrors": []
+  },
+  "pass": true
+}

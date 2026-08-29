@@ -1,15 +1,37 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { GET } from "@/app/api/data/route";
-import { POST as POST_COLLECTION } from "@/app/api/data/[collection]/route";
-import { DELETE as DELETE_COLLECTION } from "@/app/api/data/[collection]/[id]/route";
+import { GET as GET_COLLECTION, POST as POST_COLLECTION } from "@/app/api/data/[collection]/route";
+import {
+  GET as GET_ENTITY,
+  PUT as PUT_ENTITY,
+  PATCH as PATCH_ENTITY,
+  DELETE as DELETE_COLLECTION,
+} from "@/app/api/data/[collection]/[id]/route";
+import { POST as POST_RESET } from "@/app/api/data/reset/route";
 import { GET as GET_STATS } from "@/app/api/data/stats/route";
 import { NextRequest } from "next/server";
-import { jobsRepo, contactsRepo, settingsRepo, emailsRepo } from "@/lib/db";
+import { jobsRepo, contactsRepo, settingsRepo, emailsRepo, resumeRepo } from "@/lib/db";
 import { isMasked, MASK_PREFIX } from "@/lib/masking";
 
 function post(url: string, body: unknown) {
   return new NextRequest(url, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+function put(url: string, body: unknown) {
+  return new NextRequest(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+function patch(url: string, body: unknown) {
+  return new NextRequest(url, {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -109,10 +131,59 @@ describe("POST /api/data/settings — profile roundtrip", () => {
   });
 });
 
-describe("collection CRUD — what the frontend's persist() uses", () => {
-  it("upserts a job via POST and deletes via DELETE", async () => {
+describe("collection CRUD — RESTful collection and item methods", () => {
+  it("GET /api/data/[collection] lists items or settings with redaction", async () => {
+    jobsRepo.upsert({
+      id: "list-job-1",
+      title: "Staff Eng",
+      company: "Acme",
+      location: "Remote",
+      status: "applied",
+      jobDescription: "",
+      autoApplyStatus: "idle",
+      autoApplyLogs: [],
+      createdDate: "2026-08-01",
+    });
+    const jobRes = await GET_COLLECTION(new NextRequest("http://localhost/api/data/jobs"), {
+      params: Promise.resolve({ collection: "jobs" }),
+    });
+    expect(jobRes.status).toBe(200);
+    const jobData = await jobRes.json();
+    expect(Array.isArray(jobData.jobs)).toBe(true);
+    expect(jobData.jobs.some((j: { id: string }) => j.id === "list-job-1")).toBe(true);
+
+    const settingsRes = await GET_COLLECTION(new NextRequest("http://localhost/api/data/settings"), {
+      params: Promise.resolve({ collection: "settings" }),
+    });
+    expect(settingsRes.status).toBe(200);
+    const settingsData = await settingsRes.json();
+    expect(settingsData).toHaveProperty("settings");
+  });
+
+  it("GET /api/data/emails?jobId= filters emails by job", async () => {
+    emailsRepo.upsert({
+      id: "em-filter-1",
+      jobId: "filter-job-1",
+      direction: "sent",
+      subject: "Test",
+      body: "Body",
+      sentAt: "2026-08-01T00:00:00Z",
+      threadId: "t-1",
+      status: "sent",
+      read: true,
+    });
+    const res = await GET_COLLECTION(new NextRequest("http://localhost/api/data/emails?jobId=filter-job-1"), {
+      params: Promise.resolve({ collection: "emails" }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(Array.isArray(data.emails)).toBe(true);
+    expect(data.emails.every((e: { jobId?: string }) => e.jobId === "filter-job-1")).toBe(true);
+  });
+
+  it("GET, PUT, PATCH, DELETE /api/data/[collection]/[id]", async () => {
     const job = {
-      id: "frontend-job-1",
+      id: "rest-job-1",
       title: "Frontend Engineer",
       company: "Acme",
       location: "Remote",
@@ -122,20 +193,41 @@ describe("collection CRUD — what the frontend's persist() uses", () => {
       autoApplyLogs: [],
       createdDate: "2026-08-01",
     };
-    const up = await POST_COLLECTION(post("http://localhost/api/data/jobs", job), {
+    await POST_COLLECTION(post("http://localhost/api/data/jobs", job), {
       params: Promise.resolve({ collection: "jobs" }),
     });
-    expect(up.status).toBe(200);
-    expect(await up.json()).toEqual({ ok: true });
 
-    const data = await (await GET()).json();
-    expect(data.jobs.some((j: { id: string }) => j.id === "frontend-job-1")).toBe(true);
-
-    const del = await DELETE_COLLECTION(new NextRequest("http://localhost/api/data/jobs/frontend-job-1"), {
-      params: Promise.resolve({ collection: "jobs", id: "frontend-job-1" }),
+    // GET single
+    const getRes = await GET_ENTITY(new NextRequest("http://localhost/api/data/jobs/rest-job-1"), {
+      params: Promise.resolve({ collection: "jobs", id: "rest-job-1" }),
     });
-    expect(del.status).toBe(200);
-    expect(jobsRepo.get("frontend-job-1")).toBeNull();
+    expect(getRes.status).toBe(200);
+    const single = await getRes.json();
+    expect(single.item.title).toBe("Frontend Engineer");
+
+    // PUT single
+    const putRes = await PUT_ENTITY(
+      put("http://localhost/api/data/jobs/rest-job-1", { ...job, title: "Principal Engineer" }),
+      { params: Promise.resolve({ collection: "jobs", id: "rest-job-1" }) }
+    );
+    expect(putRes.status).toBe(200);
+    expect(jobsRepo.get("rest-job-1")?.title).toBe("Principal Engineer");
+
+    // PATCH single
+    const patchRes = await PATCH_ENTITY(
+      patch("http://localhost/api/data/jobs/rest-job-1", { status: "interviewing" }),
+      { params: Promise.resolve({ collection: "jobs", id: "rest-job-1" }) }
+    );
+    expect(patchRes.status).toBe(200);
+    expect(jobsRepo.get("rest-job-1")?.status).toBe("interviewing");
+    expect(jobsRepo.get("rest-job-1")?.title).toBe("Principal Engineer");
+
+    // DELETE single
+    const delRes = await DELETE_COLLECTION(new NextRequest("http://localhost/api/data/jobs/rest-job-1"), {
+      params: Promise.resolve({ collection: "jobs", id: "rest-job-1" }),
+    });
+    expect(delRes.status).toBe(200);
+    expect(jobsRepo.get("rest-job-1")).toBeNull();
   });
 
   it("rejects unknown collections with 404", async () => {
@@ -169,6 +261,30 @@ describe("collection CRUD — what the frontend's persist() uses", () => {
       params: Promise.resolve({ collection: "jobs", id: "cascade-job" }),
     });
     expect(emailsRepo.list().some((e) => e.id === "cascade-mail")).toBe(false);
+  });
+});
+
+describe("POST /api/data/reset — database reset route", () => {
+  it("wipes database, resets seed_version, and re-seeds default data", async () => {
+    resumeRepo.upsert({
+      id: "reset-res",
+      name: "Resume",
+      kind: "resume",
+      templateId: "classic",
+      tex: "tex",
+      source: "scratch",
+      autoCompile: false,
+      createdAt: "2026-08-01",
+      updatedAt: "2026-08-01",
+    });
+    expect(resumeRepo.count()).toBeGreaterThan(0);
+
+    const res = await POST_RESET();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(resumeRepo.count()).toBe(0);
+    expect(jobsRepo.count()).toBeGreaterThan(0);
   });
 });
 

@@ -1,5 +1,6 @@
 import { extractJdTerms, normalizeSkill } from "@/lib/prompts";
 import { texToText } from "@/lib/pdf/sanitize";
+export { texToText };
 import { ResumeContent } from "@/types";
 
 export function resumeContentToText(content: ResumeContent): string {

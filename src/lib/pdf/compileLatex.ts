@@ -85,11 +85,6 @@ export async function compileLatex(
   const dir = await mkdtemp(join(tmpdir(), "huntflow-tex-"));
   try {
     await writeFile(join(dir, "doc.tex"), tex, "utf8");
-    await writeFile(
-      join(dir, "latexmkrc"),
-      `$pdf_mode = 1;\n$pdf_previewer = undef;\n`,
-      "utf8"
-    );
     await runRuns(engine, dir, runs);
     return await readFile(join(dir, "doc.pdf"));
   } finally {
@@ -97,9 +92,24 @@ export async function compileLatex(
   }
 }
 
+async function readLogTail(dir: string): Promise<string> {
+  try {
+    const log = await readFile(join(dir, "doc.log"), "utf8");
+    const tail = log.split("\n").slice(-80).join("\n").slice(-6000);
+    return tail.trim() || log.slice(-4000);
+  } catch {
+    return "";
+  }
+}
+
+function buildPdfErrorMessage(stdout: string, stderr: string, logTail: string, fallback: string) {
+  return logTail || ((stdout || "") + (stderr || "")).split("\n").slice(-40).join("\n") || fallback;
+}
+
 /**
  * Compile with SyncTeX enabled and KEEP the build dir alive in a TTL cache so
  * `synctex view` / `synctex edit` can run against the real artifacts.
+ * Captures latexmk/pdflatex logTail from doc.log — never discards compiler diagnostics.
  */
 export async function compileWithSynctex(
   tex: string,
@@ -113,7 +123,6 @@ export async function compileWithSynctex(
 
   try {
     await writeFile(join(dir, "doc.tex"), tex, "utf8");
-    await writeFile(join(dir, "latexmkrc"), `$pdf_mode = 1;\n$pdf_previewer = undef;\n`, "utf8");
 
     const args = [
       "-interaction=nonstopmode",
@@ -131,18 +140,40 @@ export async function compileWithSynctex(
         });
       } catch (e) {
         const err = e as { stdout?: string; stderr?: string; message?: string };
-        const tail = ((err.stdout || "") + (err.stderr || "")).split("\n").slice(-40).join("\n");
-        throw new PdfError(`LaTeX compilation failed (run ${i + 1}).`, tail || err.message);
+        const logTail = await readLogTail(dir);
+        const tail = buildPdfErrorMessage(err.stdout || "", err.stderr || "", logTail, err.message || "LaTeX compilation failed");
+        throw new PdfError(`LaTeX compilation failed (run ${i + 1}).`, tail);
       }
     }
 
+    const logTail = await readLogTail(dir);
+    const compactLog = logTail.replace(/\s+/g, " ").replace(/con trol/i, "control");
+    if (/Undefined|Missing.*brace|LaTeX Error|Emergency stop|Fatal error/i.test(compactLog)) {
+      throw new PdfError("LaTeX compilation failed (log contains errors).", logTail);
+    }
     const pdf = await readFile(join(dir, "doc.pdf"));
     cacheBuild(token, dir);
-    return { pdf, token, logTail: "" };
+    return { pdf, token, logTail };
   } catch (e) {
+    if (e instanceof PdfError && !e.logTail) {
+      const logTail = await readLogTail(dir);
+      if (logTail) (e as PdfError & { logTail: string }).logTail = logTail;
+    }
     await rm(dir, { recursive: true, force: true }).catch(() => {});
     throw e;
   }
+}
+
+/** Parse a latexmk/pdflatex log tail into structured error lines (for SSE). */
+export function parseLatexLog(logTail: string): string[] {
+  if (!logTail) return [];
+  const compact = logTail.replace(/\s+/g, " ").replace(/con trol/i, "control");
+  if (/Undefined/i.test(compact)) return [compact.match(/Undefined[^.!]*[.!]?/i)?.[0]?.trim() || "Undefined control sequence"].slice(0, 20);
+  return logTail
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => /! |^l\.\d+|Error|Undefined|Missing|Runaway|File ended|Fatal/i.test(l))
+    .slice(0, 20);
 }
 
 /* ------------------------------------------------------------------ *

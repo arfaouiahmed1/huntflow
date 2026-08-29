@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/purity */
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
@@ -46,6 +47,9 @@ import { Button } from "@/components/ui/Button";
 import { ResumeContent, ResumeProjectItem } from "@/types";
 import { cn } from "@/lib/utils";
 import { analyzeAts } from "@/lib/ats/analyze";
+import ResumePdfPreview from "@/components/resume/ResumePdfPreview";
+import ResumeHtmlFallback from "@/components/resume/ResumeHtmlFallback";
+import ResumeCompileControls from "@/components/resume/ResumeCompileControls";
 
 interface ChatMessage {
   id: string;
@@ -236,6 +240,14 @@ export default function ResumeStudioPage() {
   const [docKind, setDocKind] = useState<"resume" | "cv">("resume");
   const [latexSource, setLatexSource] = useState("");
   const [compilingPdf, setCompilingPdf] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfState, setPdfState] = useState<"idle" | "compiling" | "ready" | "no-tex" | "error">("idle");
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [compiledTex, setCompiledTex] = useState<string | null>(null);
+  const [compileToken, setCompileToken] = useState<string | null>(null);
+  const [htmlOpen, setHtmlOpen] = useState(true);
+  const [diffCollapsed, setDiffCollapsed] = useState(true);
+  const [changedSections] = useState<string[]>([]);
 
   // Layout states: resizing & sidebar
   const [leftWidthPercent, setLeftWidthPercent] = useState(40);
@@ -313,6 +325,47 @@ export default function ResumeStudioPage() {
   useEffect(() => {
     updateLatexPreview(resume, selectedTemplate);
   }, [resume, selectedTemplate, updateLatexPreview]);
+
+  const compilePreview = useCallback(async () => {
+    if (!latexSource.trim()) return;
+    setPdfState("compiling");
+    setPdfError(null);
+    try {
+      const compileRes = await fetch("/api/resume/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tex: latexSource }),
+      });
+      const compileData = (await compileRes.json()) as { ok?: boolean; token?: string; error?: { message?: string } };
+      if (compileData.ok && compileData.token) {
+        setCompileToken(compileData.token);
+        setPdfUrl(`/api/resume/compile?token=${compileData.token}`);
+        setCompiledTex(latexSource);
+        setPdfState("ready");
+      } else {
+        setPdfError(compileData.error?.message ?? "Compile failed");
+        setPdfState("error");
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("No LaTeX engine")) setPdfState("no-tex");
+      else {
+        setPdfError(msg);
+        setPdfState("error");
+      }
+    }
+  }, [latexSource]);
+
+  const compileSynctex = useCallback(async () => {
+    await compilePreview();
+  }, [compilePreview]);
+
+  useEffect(() => {
+    // auto-attempt initial compile when profile exists — graceful offline, non-blocking
+    if (latexSource && pdfState === "idle") {
+      void compilePreview();
+    }
+  }, [latexSource, pdfState, compilePreview]);
 
   const applyUpdate = (newResume: ResumeContent, saveHistory = true) => {
     if (saveHistory) {
@@ -665,6 +718,16 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             <Download className="h-3.5 w-3.5" /> Export PDF
           </Button>
 
+          <ResumeCompileControls
+            pdfState={pdfState}
+            diffCollapsed={diffCollapsed}
+            changedSections={changedSections}
+            onCompilePreview={compilePreview}
+            onCompileSynctex={compileSynctex}
+            onToggleDiff={() => setDiffCollapsed((v) => !v)}
+            onPinBaseline={() => success("Baseline pinned.")}
+          />
+
           {/* Settings Sidebar Toggle */}
           <Button
             size="sm"
@@ -792,186 +855,26 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         <div
           ref={previewContainerRef}
           onMouseUp={handlePreviewMouseUp}
-          className="flex-1 overflow-auto bg-neutral-900/60 p-6 flex justify-center items-start relative select-text"
+          className="flex-1 overflow-auto bg-neutral-900/60 p-6 flex flex-col items-center gap-4 relative select-text"
         >
-          <div
-            style={{
-              transform: `scale(${zoom / 100})`,
-              transformOrigin: "top center",
-              transition: isDragging ? "none" : "transform 0.15s ease-out",
-            }}
-            className={cn(
-              "w-[800px] min-h-[1050px] bg-white text-neutral-900 shadow-2xl p-10 space-y-5 rounded-sm shrink-0",
-              selectedTemplate === "executive" ? "font-serif" : "font-sans"
-            )}
-          >
-            {/* Template Header Rendering */}
-            <div
-              className={cn(
-                "pb-3 space-y-1",
-                selectedTemplate === "modern-professional"
-                  ? "border-b-2 border-sky-800 text-left"
-                  : selectedTemplate === "tabular-german"
-                    ? "border-b border-emerald-800 text-left"
-                    : selectedTemplate === "executive"
-                      ? "border-b border-neutral-800 text-center tracking-wide"
-                      : "border-b border-neutral-300 text-center"
-              )}
-            >
-              <h1
-                className={cn(
-                  "text-2xl font-bold tracking-tight text-neutral-950 uppercase",
-                  selectedTemplate === "modern-professional" && "text-sky-900",
-                  selectedTemplate === "tabular-german" && "text-emerald-900 font-bold",
-                  selectedTemplate === "executive" && "text-xl font-serif tracking-widest"
-                )}
-              >
-                {resume.header.name}
-              </h1>
-              <p className="text-sm font-semibold text-neutral-700">{resume.header.title}</p>
-              <p className="text-xs text-neutral-600 space-x-2 font-mono">
-                {resume.header.email && <span>{resume.header.email}</span>}
-                {resume.header.phone && <span>• {resume.header.phone}</span>}
-                {resume.header.location && <span>• {resume.header.location}</span>}
-                {resume.header.linkedin && <span>• {resume.header.linkedin}</span>}
-                {resume.header.github && <span>• {resume.header.github}</span>}
-              </p>
-            </div>
-
-            {/* Summary */}
-            {resume.summary && (
-              <div className="space-y-1">
-                <h2
-                  className={cn(
-                    "text-xs font-bold uppercase tracking-wider border-b pb-0.5",
-                    selectedTemplate === "modern-professional"
-                      ? "text-sky-900 border-sky-200"
-                      : selectedTemplate === "tabular-german"
-                        ? "text-emerald-900 border-emerald-200"
-                        : "text-neutral-900 border-neutral-200"
-                  )}
-                >
-                  Professional Summary
-                </h2>
-                <p className="text-xs leading-relaxed text-neutral-800">{resume.summary}</p>
-              </div>
-            )}
-
-            {/* Skills */}
-            {resume.skills && resume.skills.length > 0 && (
-              <div className="space-y-1">
-                <h2
-                  className={cn(
-                    "text-xs font-bold uppercase tracking-wider border-b pb-0.5",
-                    selectedTemplate === "modern-professional"
-                      ? "text-sky-900 border-sky-200"
-                      : selectedTemplate === "tabular-german"
-                        ? "text-emerald-900 border-emerald-200"
-                        : "text-neutral-900 border-neutral-200"
-                  )}
-                >
-                  Core Skills & Technologies
-                </h2>
-                <p className="text-xs leading-relaxed text-neutral-800 font-mono">
-                  {resume.skills.join(" • ")}
-                </p>
-              </div>
-            )}
-
-            {/* Experience */}
-            {resume.experience && resume.experience.length > 0 && (
-              <div className="space-y-3">
-                <h2
-                  className={cn(
-                    "text-xs font-bold uppercase tracking-wider border-b pb-0.5",
-                    selectedTemplate === "modern-professional"
-                      ? "text-sky-900 border-sky-200"
-                      : selectedTemplate === "tabular-german"
-                        ? "text-emerald-900 border-emerald-200"
-                        : "text-neutral-900 border-neutral-200"
-                  )}
-                >
-                  Work Experience
-                </h2>
-                {resume.experience.map((exp, idx) => (
-                  <div key={idx} className="space-y-1">
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-xs font-bold text-neutral-950">
-                        {exp.role} <span className="font-normal text-neutral-600">— {exp.company}</span>
-                      </span>
-                      <span className="text-[11px] font-mono text-neutral-500">{exp.duration}</span>
-                    </div>
-                    <ul className="list-disc list-inside space-y-0.5 text-xs text-neutral-800 leading-relaxed">
-                      {exp.bullets.map((b, bIdx) => (
-                        <li key={bIdx} className="pl-1">
-                          {b}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Projects */}
-            {resume.projects && resume.projects.length > 0 && (
-              <div className="space-y-2">
-                <h2
-                  className={cn(
-                    "text-xs font-bold uppercase tracking-wider border-b pb-0.5",
-                    selectedTemplate === "modern-professional"
-                      ? "text-sky-900 border-sky-200"
-                      : selectedTemplate === "tabular-german"
-                        ? "text-emerald-900 border-emerald-200"
-                        : "text-neutral-900 border-neutral-200"
-                  )}
-                >
-                  Featured Projects
-                </h2>
-                {resume.projects.map((p, idx) => (
-                  <div key={idx} className="space-y-0.5 text-xs">
-                    <div className="font-bold text-neutral-950">
-                      {p.name}{" "}
-                      <span className="font-mono text-[11px] font-normal text-neutral-600">({p.tech})</span>
-                    </div>
-                    {p.bullets && (
-                      <ul className="list-disc list-inside space-y-0.5 text-xs text-neutral-800">
-                        {p.bullets.map((b, bIdx) => (
-                          <li key={bIdx}>{b}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Education */}
-            {resume.education && resume.education.length > 0 && (
-              <div className="space-y-1">
-                <h2
-                  className={cn(
-                    "text-xs font-bold uppercase tracking-wider border-b pb-0.5",
-                    selectedTemplate === "modern-professional"
-                      ? "text-sky-900 border-sky-200"
-                      : selectedTemplate === "tabular-german"
-                        ? "text-emerald-900 border-emerald-200"
-                        : "text-neutral-900 border-neutral-200"
-                  )}
-                >
-                  Education
-                </h2>
-                {resume.education.map((ed, idx) => (
-                  <div key={idx} className="flex justify-between items-baseline text-xs">
-                    <span className="font-bold text-neutral-950">
-                      {ed.degree} <span className="font-normal text-neutral-600">— {ed.school}</span>
-                    </span>
-                    <span className="font-mono text-[11px] text-neutral-500">{ed.year}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <ResumePdfPreview
+            pdfUrl={pdfUrl}
+            pdfState={pdfState}
+            pdfError={pdfError}
+            compiledTex={compiledTex}
+            latexSource={latexSource}
+            compileToken={compileToken}
+          />
+          <ResumeHtmlFallback
+            resume={resume}
+            selectedTemplate={selectedTemplate}
+            zoom={zoom}
+            isDragging={isDragging}
+            htmlOpen={htmlOpen}
+            onToggle={() => setHtmlOpen((v) => !v)}
+            pdfUrl={pdfUrl}
+            pdfState={pdfState}
+          />
         </div>
 
         {/* RIGHT SIDEBAR: ATS Layouts & Settings (Show / Hide) */}

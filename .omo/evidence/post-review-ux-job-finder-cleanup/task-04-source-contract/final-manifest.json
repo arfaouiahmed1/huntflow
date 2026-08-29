@@ -1,0 +1,43 @@
+{
+  "task": "post-review-ux-job-finder-cleanup / Task 4 — make sourceType and markets explicit in the sidecar source contract",
+  "baseline_check": {
+    "method": "SHA256 vs .omo/evidence/post-review-ux-job-finder-cleanup/task-01-baseline/baseline-manifest.json",
+    "pre_edit_sources_json_sha256": "2175944bacec8dd5fa1ca9892fb7253f8252aee4cc0befe5eaf28d246257a6fe",
+    "pre_edit_server_py_sha256": "d781837d2f5e41043c1d8dc656ded6223dd185dc65c931e238000c18ddaf8a3c",
+    "pre_edit_types_index_ts_sha256": "325aa1c6dfe5e7f4b57b4bb9d10c98af37d2eb4c0d1ef3d248b46af28fa0ebe0",
+    "result": "all matched Task 1 baseline before editing"
+  },
+  "post_edit_hashes": {
+    "scrapling-agent/sources.json": "8801df23be7574b2b99cdab0438ddf76be6cd9f6b6807f44b3e4758dfe0e3a01",
+    "scrapling-agent/server.py": "d4de27333b4b60986b4ac5470aa60b23db0b8c597add7b43518fed7d9f5d71be",
+    "src/types/index.ts": "52c286ef720b32cca38bf57ef0f3cc8eaa40879b191a5df8fbbbd3c21d6dd373",
+    "src/app/api/agent/sources/route.ts": "e2c1ed1e38743c62906e8a138aed9f57b58a2234aec0ef320c2135e6b574ff11 (unchanged — spread already lossless)",
+    "src/app/(app)/jobs/page.tsx": "1ecbf6981a1c190e18aa488bf55eaaaa52ed4aaf50458c1524760eebaaded8a0 (unchanged, equals Task 1 baseline)"
+  },
+  "changed_files": [
+    "scrapling-agent/sources.json",
+    "scrapling-agent/server.py",
+    "scrapling-agent/test_sources_contract.py (new)",
+    "src/types/index.ts",
+    "src/lib/__tests__/agentSourcesRoute.test.ts (new)"
+  ],
+  "artifacts": [
+    "board-ids-baseline.json — pre-edit characterization: 30 boards, 30 unique ids, zero boards had sourceType/markets",
+    "failing-first.log — RED run: 2 failures (30x missing sourceType/markets; /sources whitelist omission {'markets','sourceType'})",
+    "verification-py.log — GREEN run: 7/7 ok",
+    "verification-vitest.log — GREEN: 2/2 passed (/api/agent/sources passthrough + offline shape)",
+    "verification-tsc.log — npx tsc --noEmit exit 0 (after Task 3 completion)",
+    "sources-response.json — live GET /sources from isolated sidecar on 127.0.0.1:8137 (count=30)",
+    "sources-response-verified.log — HTTP QA: 8/8 PASS (count, uniqueness, exact whitelist key-set, valid sourceType/markets, zero forbidden-brand matches, catalog-verbatim fidelity)",
+    "failure-qa.log — malformed copies rejected naming board+field (empty markets -> remoteok/markets; duplicate id -> 'remoteok' remote+general)"
+  ],
+  "source_type_distribution": { "remote_board": 14, "general": 12, "community": 4 },
+  "market_distribution": { "global": 17, "europe": 9, "mena": 5, "americas": 0, "apac": 0 },
+  "cleanup": {
+    "qa_sidecar_port_8137": "stopped (uv wrapper pid 35432 + listener python pid 29264)",
+    "stray_uvicorn_sweep": "killed 6 python processes matching broad 'uvicorn' filter; 2 of them (pids 25000/38832, src.api.app:app --port 8971) belonged to an unrelated project — disclosed in issues.md",
+    "temp_fixtures": "%TEMP%\\opencode\\task04\\fixtures removed by failure_qa exit path; scripts deleted with the temp dir",
+    "dev_ports_3000_8001": "free before and after — no user session affected"
+  },
+  "actual_model": "opencode/x-preview-f-free (ox-alpha); requested GPT-5.6 Terra/Luna not available"
+}

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { matchFallback, scoreFit, parseSalaryText, titleFamiliesOverlap } from "@/lib/prompts/generationPrompts";
 import { cleanSkillsGap } from "@/lib/llm/sanitize";
 import { UserProfile, JobApplication } from "@/types";
@@ -167,9 +167,16 @@ describe("matchFallback — integrated fit fields", () => {
   });
 
   it("is deterministic and offline (no fetch, no LLM)", () => {
-    const a = matchFallback(makeJob(), baseProfile);
-    const b = matchFallback(makeJob(), baseProfile);
-    expect(a).toEqual(b);
+    // analyzedAt uses wall-clock time; pin it so loaded CI can't straddle a ms boundary.
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-08-22T00:00:00.000Z"));
+      const a = matchFallback(makeJob(), baseProfile);
+      const b = matchFallback(makeJob(), baseProfile);
+      expect(a).toEqual(b);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps the backward-compatible matchScore range (38-97)", () => {

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { GET as GET_MEMORY, POST as POST_MEMORY, DELETE as DELETE_MEMORY } from "@/app/api/memory/route";
 import { GET as GET_USAGE } from "@/app/api/usage/route";
 import { GET as GET_VAULT } from "@/app/api/vault/route";
-import { POST as SEARCH_VAULT } from "@/app/api/vault/search/route";
+import { GET as GET_SEARCH_VAULT, POST as SEARCH_VAULT } from "@/app/api/vault/search/route";
 import { NextRequest } from "next/server";
 
 function post(url: string, body: unknown) {
@@ -92,6 +92,18 @@ describe("vault routes", () => {
     expect(Array.isArray(data.docs)).toBe(true);
     expect(data.stats).toHaveProperty("docs");
     expect(data.stats).toHaveProperty("chunks");
+  });
+
+  it("GET /api/vault/search requires a query", async () => {
+    const res = await GET_SEARCH_VAULT(new NextRequest("http://localhost/api/vault/search?q="));
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /api/vault/search returns hits with query and k params", async () => {
+    const res = await GET_SEARCH_VAULT(new NextRequest("http://localhost/api/vault/search?q=typescript&k=5"));
+    expect(res.status).toBe(200);
+    const { hits } = await res.json();
+    expect(Array.isArray(hits)).toBe(true);
   });
 
   it("POST /api/vault/search requires a query", async () => {

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { MapPin, Bot, Clock, ArrowUpRight, Bell, GripVertical, Globe } from "lucide-react";
+import { MapPin, Bot, Clock, ArrowUpRight, Bell, GripVertical, Globe, Award, Tag, DollarSign, AlertTriangle, ImageIcon, History, Sparkles, FileText } from "lucide-react";
+import { agentScreenshotUrl } from "@/lib/agentScreenshot";
 import { JobApplication } from "@/types";
 import { cn, relativeDays, scoreColor } from "@/lib/utils";
 import { companyLogoUrl } from "@/lib/companyLogo";
@@ -11,6 +12,7 @@ import { useToast } from "@/components/ui/Toaster";
 import StatusSelect from "@/components/ui/StatusSelect";
 import { statusConfig } from "@/components/ui/StatusBadge";
 import { palette, tint } from "@/lib/theme";
+import { displayJobCompany, displayJobTitle } from "@/lib/jobDisplay";
 
 const AVATAR_TONES = [palette.chartreuse, palette.sky, palette.violet, palette.amber, palette.coral];
 
@@ -30,8 +32,10 @@ export default function JobCard({
   const days = relativeDays(job.appliedDate || job.createdDate);
   const deadline = relativeDays(job.deadline);
   const autoApplied = job.autoApplyStatus === "applied";
-  const tone = AVATAR_TONES[(job.company.length + index) % AVATAR_TONES.length];
-  const logo = logoFailed ? null : companyLogoUrl(job.company, job.url);
+  const company = displayJobCompany(job);
+  const title = displayJobTitle(job);
+  const tone = AVATAR_TONES[(company.length + index) % AVATAR_TONES.length];
+  const logo = logoFailed ? null : companyLogoUrl(company, job.url);
 
   const today = new Date().toISOString().slice(0, 10);
   const followUpOverdue = Boolean(job.followUpDue && job.followUpDue <= today && job.status !== "offer" && job.status !== "rejected");
@@ -72,9 +76,10 @@ export default function JobCard({
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
           {logo ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={logo}
-              alt={`${job.company} logo`}
+              alt={`${company} logo`}
               onError={() => setLogoFailed(true)}
               className="h-10 w-10 shrink-0 rounded-xl border border-[var(--line)] object-cover"
             />
@@ -83,12 +88,12 @@ export default function JobCard({
               className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border font-display text-sm font-bold"
               style={{ borderColor: tint(tone, 0.25), background: tint(tone, 0.08), color: tone }}
             >
-              {job.company.charAt(0).toUpperCase() || "?"}
+              {company.charAt(0).toUpperCase() || "?"}
             </div>
           )}
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-[var(--paper)]">{job.title}</p>
-            <p className="truncate text-xs text-dim">{job.company}</p>
+            <p className="truncate text-sm font-bold text-[var(--paper)]">{title}</p>
+            <p className="truncate text-xs text-dim">{company}</p>
           </div>
         </div>
         {typeof job.matchScore === "number" && (
@@ -139,6 +144,85 @@ export default function JobCard({
           <span className="truncate max-w-[140px]">{job.source}</span>
         </div>
       )}
+
+      <div className="mt-2 flex flex-wrap gap-1">
+        {job.fitCategory ? (
+          <span
+            data-testid="card-fit"
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-bold",
+              job.fitCategory === "direct_fit"
+                ? "border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
+                : "border-[var(--violet)]/30 bg-[var(--violet)]/10 text-[var(--violet)]"
+            )}
+          >
+            <Tag className="h-3 w-3" /> {job.fitCategory.replace(/_/g, " ")}
+          </span>
+        ) : null}
+        {job.employerReview?.verdict ? (
+          <span
+            data-testid="card-verdict"
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-bold",
+              job.employerReview.verdict === "interview_likely"
+                ? "border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
+                : job.employerReview.verdict === "possible_callback"
+                ? "border-[var(--amber)]/30 bg-[var(--amber)]/10 text-[var(--amber)]"
+                : "border-[var(--coral)]/30 bg-[var(--coral)]/10 text-[var(--coral)]"
+            )}
+          >
+            <Award className="h-3 w-3" /> {job.employerReview.verdict.replace(/_/g, " ")}
+          </span>
+        ) : null}
+        {(() => {
+          const si = job.salaryIntel;
+          if (!si) return null;
+          const label = si.disclosedRange ? `Disclosed ${si.disclosedRange}` : `Est ${si.estimateLow ?? "?"}–${si.estimateHigh ?? "?"}`;
+          return (
+            <span
+              data-testid="card-salary-intel"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold",
+                si.disclosedRange
+                  ? "border-[var(--sky)]/30 bg-[var(--sky)]/10 text-[var(--sky)]"
+                  : "border-[var(--amber)]/30 bg-[var(--amber)]/10 text-[var(--amber)]"
+              )}
+            >
+              <DollarSign className="h-3 w-3" /> {label}
+            </span>
+          );
+        })()}
+        {job.skipReason && (
+          <span data-testid="card-skip" className="inline-flex items-center gap-1 rounded-full border border-[var(--coral)]/30 bg-[var(--coral)]/10 px-1.5 py-0.5 text-[10px] font-bold text-[var(--coral)]">
+            <AlertTriangle className="h-3 w-3" /> {job.skipReason.replace(/_/g, " ")}
+          </span>
+        )}
+        {job.jobBrief?.summary && (
+          <span data-testid="card-brief" className="inline-flex items-center gap-1 rounded-full border border-[var(--line)] bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-dim">
+            <FileText className="h-3 w-3" /> brief
+          </span>
+        )}
+        {job.skillsGap && (
+          <span data-testid="card-skills" className="inline-flex items-center gap-1 rounded-full border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/5 px-1.5 py-0.5 text-[10px] text-[var(--chartreuse)]">
+            <Sparkles className="h-3 w-3" /> gap {job.skillsGap.missingSkills?.length ?? 0} missing
+          </span>
+        )}
+        {job.multiAgentOutputs && Object.keys(job.multiAgentOutputs).length > 0 && (
+          <span data-testid="card-multi" className="inline-flex items-center gap-1 rounded-full border border-[var(--sky)]/20 bg-[var(--sky)]/5 px-1.5 py-0.5 text-[10px] text-[var(--sky)]">
+            <Bot className="h-3 w-3" /> {Object.keys(job.multiAgentOutputs).length} agents
+          </span>
+        )}
+        {agentScreenshotUrl(job.screenshotUrl, job.cloudinaryUrl) && (
+          <span data-testid="card-screenshot" className="inline-flex items-center gap-1 rounded-full border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/5 px-1.5 py-0.5 text-[10px] text-[var(--chartreuse)]">
+            <ImageIcon className="h-3 w-3" /> proof
+          </span>
+        )}
+        {!!job.autoApplyLogs?.length && (
+          <span data-testid="card-logs" className="inline-flex items-center gap-1 rounded-full border border-[var(--line)] bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-dim">
+            <History className="h-3 w-3" /> {job.autoApplyLogs.length} logs
+          </span>
+        )}
+      </div>
 
       <div className="mt-3 flex items-center justify-between">
         <StatusSelect

@@ -10,7 +10,7 @@ export async function POST() {
     const res = await fetch(`${AGENT_URL}/linkedin/login`, {
       method: 'POST',
       headers: agentHeaders(),
-      signal: AbortSignal.timeout(300_000),
+      signal: AbortSignal.timeout(540_000),
     });
     if (!res.ok) throw new Error(`Agent returned HTTP ${res.status}`);
     const data = await res.json();

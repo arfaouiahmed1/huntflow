@@ -24,6 +24,7 @@ import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toaster";
 import { toErrorMessage } from "@/lib/errors";
+import AIStatusBadge from "@/components/ui/AIStatusBadge";
 
 type DocType = "tailoredResume" | "coverLetter" | "motivationLetter" | "followUpEmail";
 
@@ -229,10 +230,14 @@ export default function DocumentsPanel({ job }: { job: JobApplication }) {
   const copyDoc = async () => {
     const content = docs?.[activeDoc];
     if (!content) return;
-    await navigator.clipboard.writeText(content);
-    setCopied(true);
-    success(`${docList.find((d) => d.id === activeDoc)?.label} copied.`);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      success(`${docList.find((d) => d.id === activeDoc)?.label} copied.`);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (e) {
+      errToast(toErrorMessage(e));
+    }
   };
 
   const downloadPdf = async (docType: DocType) => {
@@ -292,12 +297,12 @@ export default function DocumentsPanel({ job }: { job: JobApplication }) {
       {!docs ? (
         <div className="rounded-2xl border border-dashed border-[var(--line)] p-8 text-center">
           <FileText className="mx-auto mb-3 h-8 w-8 text-[var(--chartreuse)]" />
-          <h3 className="font-display text-sm font-semibold">Tailored Documents</h3>
+          <h3 className="font-display text-sm font-semibold">Application package</h3>
           <p className="mx-auto mt-2 max-w-xs text-xs leading-relaxed text-dim">
-            One click generates all four: tailored CV, cover letter, motivation letter, and follow-up email.
+            Generate reviewable drafts from the master profile and saved evidence. Unsupported claims must be removed before export.
           </p>
           <Button onClick={run} loading={loading} className="mt-5">
-            <Sparkles className="h-4 w-4" /> {loading ? "Generating all 4 documents…" : "Generate All Documents"}
+            <Sparkles className="h-4 w-4" /> {loading ? "Generating application drafts…" : "Generate application drafts"}
           </Button>
         </div>
       ) : (
@@ -352,7 +357,7 @@ export default function DocumentsPanel({ job }: { job: JobApplication }) {
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] pb-3">
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" onClick={run} loading={loading}>
-                <RefreshCw className="h-3.5 w-3.5" /> {loading ? "Regenerating all…" : "Regenerate All"}
+                <RefreshCw className="h-3.5 w-3.5" /> {loading ? "Regenerating drafts…" : "Regenerate drafts"}
               </Button>
               <Button variant="outline" size="sm" onClick={copyDoc} disabled={!docs[activeDoc]}>
                 {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
@@ -380,8 +385,17 @@ export default function DocumentsPanel({ job }: { job: JobApplication }) {
               </Button>
             </div>
 
-            {/* Zoom Controls */}
-            <div className="flex items-center gap-1 rounded-lg border border-[var(--line)] bg-black/40 px-1.5 py-1">
+            <div className="flex items-center gap-2">
+              <AIStatusBadge
+                size="sm"
+                source={docs.source}
+                provider={docs.provider}
+                model={docs.model}
+                timestamp={docs.generatedAt}
+              />
+
+              {/* Zoom Controls */}
+              <div className="flex items-center gap-1 rounded-lg border border-[var(--line)] bg-black/40 px-1.5 py-1">
               <button
                 onClick={() => setZoom((z) => Math.max(z - 10, 50))}
                 className="p-1 text-dim hover:text-[var(--paper)] rounded hover:bg-white/[0.05]"
@@ -408,6 +422,7 @@ export default function DocumentsPanel({ job }: { job: JobApplication }) {
               </button>
             </div>
           </div>
+        </div>
 
           {/* Full High-Fidelity Paper Document Canvas */}
           <div className="flex justify-center overflow-auto rounded-2xl border border-[var(--line)] bg-neutral-950/80 p-4 sm:p-6 min-h-[500px]">

@@ -1,0 +1,179 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - link [ref=e5] [cursor=pointer]:
+          - /url: /
+          - paragraph [ref=e9]: HUNTFLOW
+        - generic [ref=e10]:
+          - button "Notifications" [ref=e12]
+          - navigation [ref=e16]:
+            - link "Command Deck" [ref=e17] [cursor=pointer]:
+              - /url: /
+            - link "Applications" [ref=e23] [cursor=pointer]:
+              - /url: /tracker
+            - link "Resume & CV Studio" [ref=e26] [cursor=pointer]:
+              - /url: /resume
+            - link "Job Finder" [ref=e31] [cursor=pointer]:
+              - /url: /jobs
+            - link "Auto-Apply Agent" [ref=e39] [cursor=pointer]:
+              - /url: /agent
+            - link "Assistant" [ref=e43] [cursor=pointer]:
+              - /url: /assistant
+            - link "Profile & Evidence" [ref=e47] [cursor=pointer]:
+              - /url: /vault
+            - link "Network" [ref=e51] [cursor=pointer]:
+              - /url: /network
+            - link "Outreach" [ref=e57] [cursor=pointer]:
+              - /url: /outreach
+            - link "Interviews" [ref=e61] [cursor=pointer]:
+              - /url: /interviews
+            - link "Settings" [ref=e66] [cursor=pointer]:
+              - /url: /settings
+    - main [ref=e70]:
+      - generic [ref=e73]:
+        - generic [ref=e75]:
+          - generic [ref=e76]:
+            - generic [ref=e77]: Supervised job search
+            - heading "Job search command deck" [level=1] [ref=e81]
+            - paragraph [ref=e82]: "One clear flow: discover roles, review the evidence, prepare truthful documents, and supervise every browser action."
+          - generic [ref=e83]:
+            - link "Find jobs" [ref=e84] [cursor=pointer]:
+              - /url: /jobs
+            - link "Watch agent" [ref=e92] [cursor=pointer]:
+              - /url: /agent
+        - generic [ref=e95]:
+          - generic [ref=e96]:
+            - heading "Your workflow" [level=2] [ref=e97]
+            - paragraph [ref=e98]: Each stage has one purpose and one place to control it.
+          - generic [ref=e99]:
+            - link "01 Discover 67 tracked Run selected job boards and inspect source evidence. Open discovery" [ref=e100] [cursor=pointer]:
+              - /url: /jobs
+              - generic [ref=e101]: "01"
+              - paragraph [ref=e111]: Discover
+              - paragraph [ref=e112]: 67 tracked
+              - paragraph [ref=e113]: Run selected job boards and inspect source evidence.
+              - paragraph [ref=e114]: Open discovery
+            - link "02 Review 56 shortlisted Keep, skip, score, and compare before preparing documents. Review pipeline" [ref=e117] [cursor=pointer]:
+              - /url: /tracker
+              - generic [ref=e118]: "02"
+              - paragraph [ref=e125]: Review
+              - paragraph [ref=e126]: 56 shortlisted
+              - paragraph [ref=e127]: Keep, skip, score, and compare before preparing documents.
+              - paragraph [ref=e128]: Review pipeline
+            - link "03 Prepare 0 document sets Tailor ATS documents from the evidence in your profile vault. Open document studio" [ref=e131] [cursor=pointer]:
+              - /url: /resume
+              - generic [ref=e132]: "03"
+              - paragraph [ref=e139]: Prepare
+              - paragraph [ref=e140]: 0 document sets
+              - paragraph [ref=e141]: Tailor ATS documents from the evidence in your profile vault.
+              - paragraph [ref=e142]: Open document studio
+            - link "04 Supervise 0 need review Watch fields, clicks, screenshots, and confirmed outcomes. Open agent control" [ref=e145] [cursor=pointer]:
+              - /url: /agent
+              - generic [ref=e146]: "04"
+              - paragraph [ref=e152]: Supervise
+              - paragraph [ref=e153]: 0 need review
+              - paragraph [ref=e154]: Watch fields, clicks, screenshots, and confirmed outcomes.
+              - paragraph [ref=e155]: Open agent control
+        - generic [ref=e158]:
+          - generic [ref=e159]:
+            - generic [ref=e160]:
+              - generic [ref=e161]:
+                - heading "Live operations" [level=2] [ref=e162]
+                - paragraph [ref=e165]: The same telemetry and history available in Auto-Apply.
+              - generic [ref=e166]: checking
+            - paragraph [ref=e168]: No recorded agent activity yet.
+            - link "Open logs, screenshots, and run history" [ref=e169] [cursor=pointer]:
+              - /url: /agent
+          - generic [ref=e172]:
+            - heading "Needs attention" [level=2] [ref=e173]
+            - paragraph [ref=e181]: No failed or paused runs need review.
+        - generic [ref=e182]:
+          - generic [ref=e183]:
+            - generic [ref=e184]:
+              - heading "Best matches" [level=2] [ref=e185]
+              - link "View tracker →" [ref=e190] [cursor=pointer]:
+                - /url: /tracker
+            - generic [ref=e191]:
+              - link "85% Agentic & GenAI Engineer (New Graduate) Wavestone · Puteaux / Paris, Île-de-France, France · Unspecified Wishlist" [ref=e192] [cursor=pointer]:
+                - /url: /tracker
+                - generic [ref=e193]: 85%
+                - generic [ref=e194]:
+                  - paragraph [ref=e195]: Agentic & GenAI Engineer (New Graduate)
+                  - paragraph [ref=e196]: Wavestone · Puteaux / Paris, Île-de-France, France · Unspecified
+                - generic [ref=e197]: Wishlist
+              - link "85% AI Engineer Galadrim · Paris, France · On-site Applied" [ref=e199] [cursor=pointer]:
+                - /url: /tracker
+                - generic [ref=e200]: 85%
+                - generic [ref=e201]:
+                  - paragraph [ref=e202]: AI Engineer
+                  - paragraph [ref=e203]: Galadrim · Paris, France · On-site
+                - generic [ref=e204]: Applied
+              - link "85% Forward Deployed AI Engineer Flatgigs · Remote — Tunis, Tunis Governorate, Tunisia · Remote Applied" [ref=e206] [cursor=pointer]:
+                - /url: /tracker
+                - generic [ref=e207]: 85%
+                - generic [ref=e208]:
+                  - paragraph [ref=e209]: Forward Deployed AI Engineer
+                  - paragraph [ref=e210]: Flatgigs · Remote — Tunis, Tunis Governorate, Tunisia · Remote
+                - generic [ref=e211]: Applied
+              - link "85% Graduate/Junior Machine Learning Engineer DigeHealth · Tunis, Tunisia · Remote Applied" [ref=e213] [cursor=pointer]:
+                - /url: /tracker
+                - generic [ref=e214]: 85%
+                - generic [ref=e215]:
+                  - paragraph [ref=e216]: Graduate/Junior Machine Learning Engineer
+                  - paragraph [ref=e217]: DigeHealth · Tunis, Tunisia · Remote
+                - generic [ref=e218]: Applied
+          - generic [ref=e220]:
+            - heading "Recent roles" [level=2] [ref=e221]
+            - generic [ref=e225]:
+              - link "B Graduate AI Software Engineer Bending Spoons 07-31" [ref=e226] [cursor=pointer]:
+                - /url: /tracker
+                - generic [ref=e227]: B
+                - generic [ref=e228]:
+                  - paragraph [ref=e229]: Graduate AI Software Engineer
+                  - paragraph [ref=e230]: Bending Spoons
+                - generic [ref=e231]: 07-31
+              - link "O AI Engineer Oolab 07-30" [ref=e232] [cursor=pointer]:
+                - /url: /tracker
+                - generic [ref=e233]: O
+                - generic [ref=e234]:
+                  - paragraph [ref=e235]: AI Engineer
+                  - paragraph [ref=e236]: Oolab
+                - generic [ref=e237]: 07-30
+              - link "L Data Scientist / ML Engineer Linedata 07-30" [ref=e238] [cursor=pointer]:
+                - /url: /tracker
+                - generic [ref=e239]: L
+                - generic [ref=e240]:
+                  - paragraph [ref=e241]: Data Scientist / ML Engineer
+                  - paragraph [ref=e242]: Linedata
+                - generic [ref=e243]: 07-30
+              - link "V Vneuron — Ingénieur Solutions Junior - TBML Vneuron Risk & Compliance 07-30" [ref=e244] [cursor=pointer]:
+                - /url: /tracker
+                - generic [ref=e245]: V
+                - generic [ref=e246]:
+                  - paragraph [ref=e247]: Vneuron — Ingénieur Solutions Junior - TBML
+                  - paragraph [ref=e248]: Vneuron Risk & Compliance
+                - generic [ref=e249]: 07-30
+              - link "S SambacLab — Rust Software Engineer — Fresh Graduate SambacLab / MyCorr 07-30" [ref=e250] [cursor=pointer]:
+                - /url: /tracker
+                - generic [ref=e251]: S
+                - generic [ref=e252]:
+                  - paragraph [ref=e253]: SambacLab — Rust Software Engineer — Fresh Graduate
+                  - paragraph [ref=e254]: SambacLab / MyCorr
+                - generic [ref=e255]: 07-30
+        - generic [ref=e256]:
+          - generic [ref=e257]:
+            - generic [ref=e258]: Applications sent
+            - paragraph [ref=e263]: "11"
+          - generic [ref=e264]:
+            - generic [ref=e265]: Interviews
+            - paragraph [ref=e271]: "0"
+          - generic [ref=e272]:
+            - generic [ref=e273]: Verified agent submits
+            - paragraph [ref=e278]: "0"
+          - generic [ref=e279]:
+            - generic [ref=e280]: Outreach replies
+            - paragraph [ref=e284]: "0"
+            - paragraph [ref=e285]: 0 sent
+        - paragraph [ref=e289]: Reading the AI usage ledger…
+  - alert [ref=e290]

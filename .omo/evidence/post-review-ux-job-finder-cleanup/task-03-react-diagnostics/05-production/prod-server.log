@@ -1,0 +1,9 @@
+▲ Next.js 16.3.1
+- Local:         http://localhost:3014
+- Network:       http://192.168.1.15:3014
+✓ Ready in 191ms
+⚠ Warning: Next.js ignored package-lock.json in C:\Users\ahmed because it is outside the current Git repository (C:\Users\ahmed\Desktop\Personal Projects\Job Finder).
+ To use this directory, set `outputFileTracingRoot` in your Next.js config.
+
+✓ Running next.config.ts took 42ms
+⚠ "next start" does not work with "output: standalone" configuration. Use "node .next/standalone/server.js" instead.

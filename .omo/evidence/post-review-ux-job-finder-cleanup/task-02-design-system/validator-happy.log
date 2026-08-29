@@ -1,0 +1,8 @@
+COMMAND: node scripts/validate-design-system.mjs
+CAPTURED: 2026-08-23
+ENCODING: UTF-8
+EXIT_CODE: 0
+DESIGN_SHA256: f438dc76c85fbab9427903938bd20cef097a36b07ab9fcd88af52bb810a97d75
+
+STDOUT:
+✓ Design system OK — 77 documented tokens verified against theme.ts + globals.css

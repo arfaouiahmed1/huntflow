@@ -72,42 +72,43 @@ describe("POST /api/apply-agent — response contract", () => {
     expect(data.decision.proceed).toBe(true);
   });
 
-  it("skips when the threshold is unmet and records it in agent state + memory", async () => {
+  it("does not reject a low-score preparation run through a legacy minMatch payload", async () => {
     const res = await POST(post({ ...payload, minMatch: 90 }));
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data.status).toBe("skipped");
-    expect(data.decision.reason).toContain("below threshold");
+    expect(data.status).toBe("failed");
+    expect(data.decision.proceed).toBe(true);
+    expect(data.decision.reason).toContain("Score 85%");
+    expect(data.logs.some((log: { message: string }) => log.message.toLowerCase().includes("threshold"))).toBe(false);
 
     const state = agentStateRepo.get("apply-agent", "last_run");
     expect(state).not.toBeNull();
     const parsed = JSON.parse(state as string);
-    expect(parsed.status).toBe("skipped");
+    expect(parsed.status).toBe("failed");
     expect(parsed.jobId).toBe("api-agent-job-1");
 
-    const outcome = memoryRepo.list().find((m) => m.kind === "outcome" && m.content.includes("Apply agent skipped"));
+    const outcome = memoryRepo.list().find((m) => m.kind === "outcome" && m.content.includes("Apply agent failed"));
     expect(outcome).toBeTruthy();
   });
 
-  it("returns manual_required in prefill mode", async () => {
+  it("returns failed in prefill mode when the sidecar is unavailable", async () => {
     const res = await POST(post(payload));
     const data = await res.json();
-    expect(data.status).toBe("manual_required");
-    expect(data.fields.length).toBeGreaterThan(0);
+    expect(data.status).toBe("failed");
+    expect(data.fields).toEqual([]);
   });
 
-  it("reports applied when submit=true and the agent simulates success", async () => {
+  it("rejects direct external submission without a resumed approval", async () => {
     const res = await POST(post({ ...payload, submit: true }));
+    expect(res.status).toBe(400);
     const data = await res.json();
-    expect(data.status).toBe("applied");
-    expect(data.logs.some((l: { message: string }) => l.message.includes("Simulated application submitted"))).toBe(true);
-    expect(data.decision.proceed).toBe(true);
+    expect(data.error).toContain("supervised approval");
   });
 
   it("uses the configured LLM pitch when a provider key is present", async () => {
     mockResolveChain.mockReturnValue([providerWithKey()]);
     mockCallLLM.mockResolvedValue({ text: "Pitch from LLM.", providerId: "openrouter", model: "x", attempts: 0 });
-    const res = await POST(post({ ...payload, submit: true }));
+    const res = await POST(post({ ...payload, submit: false }));
     const data = await res.json();
     expect(data.logs.some((l: { message: string }) => l.message.includes("AI crafted a tailored pitch"))).toBe(true);
     expect(mockCallLLM).toHaveBeenCalledTimes(1);
@@ -118,7 +119,7 @@ describe("POST /api/apply-agent — response contract", () => {
     /* sharedContext is passed into runApplyAgent which uses it in prepare only when LLM is available */
     mockResolveChain.mockReturnValue([providerWithKey()]);
     mockCallLLM.mockResolvedValue({ text: "p", providerId: "openrouter", model: "x", attempts: 0 });
-    await POST(post({ ...payload, submit: true }));
+    await POST(post({ ...payload, submit: false }));
     const callArgs = mockCallLLM.mock.calls[0][0] as { user: string };
     expect(callArgs.user).toContain("USER PROFILE");
   });
@@ -152,7 +153,7 @@ describe("POST /api/apply-agent — garbage agent verdicts are cleaned", () => {
         )
       )
     );
-    const res = await POST(post({ ...payload, submit: true }));
+    const res = await POST(post({ ...payload, submit: false }));
     const data = await res.json();
     expect(data.status).toBe("manual_required");
     expect(data.fields).toEqual(["full_name"]);

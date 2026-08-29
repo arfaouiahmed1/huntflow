@@ -2,7 +2,7 @@
   "_meta": {
     "description": "HUNTFLOW Scrapling crawl sources — each category maps to a list of job boards.",
     "schema": {
-      "category": "string — board category key (remote | europe | mena | global | posts). Requesting category 'all' sweeps every category.",
+      "category": "string — board category key (remote | general | europe | mena | global | posts). Requesting category 'all' sweeps every category.",
       "id": "string — unique board id (used for board_id on crawled jobs).",
       "name": "string — display name surfaced as the job's source.",
       "url": "string — listing URL the crawler fetches.",
@@ -15,8 +15,13 @@
         "url": "same field config as title.",
         "text": "posts boards only — CSS selector for the full post text that gets parsed for the '| Company |' block."
       },
+      "experience": "optional UI filter tag — 'entry' | 'mid' | 'senior' | 'all' (default 'all'). Used by the Discovery Control Experience dropdown; does not affect crawling.",
+      "workMode": "optional UI filter tag — 'remote' | 'hybrid' | 'onsite' | 'all' (default 'all'). Used by the Discovery Control Work Mode dropdown; does not affect crawling.",
+      "sourceType": "'general' | 'remote_board' | 'community' — UI-facing Source Type classification: general = generalist board mixing on-site/hybrid/remote roles; remote_board = dedicated remote-only board; community = forum/community hiring threads. Independent of experience/workMode and of the top-level storage category.",
+      "markets": "non-empty array of market tags, each one of 'global' | 'europe' | 'mena' | 'americas' | 'apac' — the regions a board serves (Market/location filter); independent of workMode and of the top-level storage category.",
       "keyword": "optional — board-level keyword override; defaults to the crawl request keyword.",
       "maxCards": "optional — per-board card cap (defaults to the remaining request limit).",
+      "enabledByDefault": "optional boolean (default true) — whether the board is pre-selected in Discovery Control. Keep defaults light: only fast, reliable static boards should ship enabled.",
       "_comment": "optional human note about the board."
     },
     "how_to_add_a_board": [
@@ -25,7 +30,8 @@
       "3. For structured job listing pages set type to 'static' or 'stealth' and provide CSS selectors for item/title/company/location/url.",
       "4. For forum hiring threads (e.g. HN Who is Hiring) set type to 'posts' and set selectors.item to the comment rows plus selectors.text to the post body; the agent parses the leading '| Company |' block.",
       "5. Literal field values (e.g. location 'Remote', company 'YCombinator Network') are returned as-is; selectors like 'h4' or 'span.titleline > a' are resolved per card.",
-      "6. Restart the sidecar (uv run uvicorn server:app --port 8001) to pick up changes."
+      "6. Tag each board with sourceType ('general'|'remote_board'|'community'), a non-empty markets array ('global'|'europe'|'mena'|'americas'|'apac'), experience ('entry'|'mid'|'senior'|'all') and workMode ('remote'|'hybrid'|'onsite'|'all') so the UI filters stay meaningful for every user.",
+      "7. Restart the sidecar (uv run uvicorn server:app --port 8001) to pick up changes."
     ]
   },
   "remote": [
@@ -34,6 +40,11 @@
       "name": "RemoteOK",
       "url": "https://remoteok.com/remote-dev-jobs",
       "type": "static",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["global"],
       "selectors": {
         "item": "tr.job",
         "title": "h2[itemprop='title']",
@@ -48,6 +59,11 @@
       "name": "WeWorkRemotely",
       "url": "https://weworkremotely.com/categories/remote-full-stack-programming-jobs",
       "type": "static",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["global"],
       "selectors": {
         "item": "section.jobs article li:not(.view-all)",
         "title": "span.title",
@@ -58,40 +74,15 @@
       "_comment": "Server-rendered board; the item selector also matches the filter tabs, which the keyword filter drops."
     },
     {
-      "id": "fmhy_remote",
-      "name": "FMHY Remote Directory",
-      "url": "https://fmhy.net/misc#remote-jobs",
-      "type": "static",
-      "selectors": {
-        "item": "a[href*='job'], a[href*='remote']",
-        "title": "text",
-        "company": "domain",
-        "location": "Remote",
-        "url": "href"
-      },
-      "_comment": "A link directory, not a real job board — low precision, mostly filtered by keyword. Included for coverage."
-    }
-  ],
-  "europe": [
-    {
-      "id": "wttj_eu",
-      "name": "Welcome to the Jungle Europe",
-      "url": "https://www.welcometothejungle.com/en/jobs?query=developer&page=1",
-      "type": "stealth",
-      "selectors": {
-        "item": "li[data-testid='search-results-item']",
-        "title": "h4",
-        "company": "span",
-        "location": "p",
-        "url": "a"
-      },
-      "_comment": "JS-heavy job board — stealth browser required; selectors may drift as the SPA re-renders."
-    },
-    {
       "id": "europeremotely",
       "name": "EuropeRemotely",
       "url": "https://europeremotely.com/",
       "type": "static",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["europe"],
       "selectors": {
         "item": ".job-item",
         "title": ".job-title",
@@ -102,12 +93,363 @@
       "_comment": "Currently returns 403 to the fetcher; kept for when the site reopens access."
     }
   ],
+  "general": [
+    {
+      "id": "remotive",
+      "name": "Remotive",
+      "url": "https://remotive.com/remote-software-dev-jobs",
+      "type": "static",
+      "enabledByDefault": true,
+      "experience": "all",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["global"],
+      "selectors": {
+        "item": ".job-card",
+        "title": "h2",
+        "company": "h4",
+        "location": ".location",
+        "url": "a"
+      },
+      "_comment": "Light static fetch by default. Selectors unverified against current markup — run /heal-selectors or inspect the DOM manually before trusting extraction."
+    },
+    {
+      "id": "workingnomades",
+      "name": "Working Nomades",
+      "url": "https://workingnomades.com/remote-jobs",
+      "type": "static",
+      "enabledByDefault": true,
+      "experience": "all",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["global"],
+      "selectors": {
+        "item": ".job-listing",
+        "title": "h3",
+        "company": ".company",
+        "location": ".location",
+        "url": "a"
+      },
+      "_comment": "Light static fetch by default. Selectors unverified — verify manually before relying on extraction."
+    },
+    {
+      "id": "justremote",
+      "name": "JustRemote",
+      "url": "https://justremote.co/remote-jobs",
+      "type": "static",
+      "enabledByDefault": true,
+      "experience": "all",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["global"],
+      "selectors": {
+        "item": ".job",
+        "title": ".job-title",
+        "company": ".company",
+        "location": ".location",
+        "url": "a"
+      },
+      "_comment": "Light static fetch by default. Selectors unverified — verify manually before relying on extraction."
+    },
+    {
+      "id": "nodesk",
+      "name": "NoDesk",
+      "url": "https://nodesk.co/remote-jobs/",
+      "type": "static",
+      "enabledByDefault": true,
+      "experience": "all",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["global"],
+      "selectors": {
+        "item": ".job-listing",
+        "title": "h3",
+        "company": ".company",
+        "location": ".location",
+        "url": "a"
+      },
+      "_comment": "Light static fetch by default. Selectors unverified — verify manually before relying on extraction."
+    },
+    {
+      "id": "himalayasapp",
+      "name": "Himalayas App",
+      "url": "https://himalayas.app/jobs",
+      "type": "static",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["global"],
+      "selectors": {
+        "item": ".job-card",
+        "title": "h2",
+        "company": "h3",
+        "location": ".location",
+        "url": "a"
+      },
+      "_comment": "Partially client-rendered — if static cards come back empty, switch type to 'stealth'. Selectors unverified."
+    },
+    {
+      "id": "jobspresso",
+      "name": "Jobspresso",
+      "url": "https://jobspresso.co/remote-work/",
+      "type": "static",
+      "enabledByDefault": false,
+      "experience": "mid",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["global"],
+      "selectors": {
+        "item": ".job-card",
+        "title": "h3",
+        "company": ".job-company",
+        "location": ".job-location",
+        "url": "a"
+      },
+      "_comment": "Hand-curated mid-level remote roles. Selectors unverified — verify manually before relying on extraction."
+    },
+    {
+      "id": "skipthedrive",
+      "name": "SkipTheDrive",
+      "url": "https://www.skipthedrive.com/",
+      "type": "static",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["global"],
+      "selectors": {
+        "item": ".job-listing",
+        "title": "h2",
+        "company": ".company",
+        "location": ".location",
+        "url": "a"
+      },
+      "_comment": "Long-running remote aggregator; homepage lists the latest postings. Selectors unverified."
+    },
+    {
+      "id": "hubstafftalent",
+      "name": "HubStaff Talent",
+      "url": "https://talent.hubstaff.com/",
+      "type": "static",
+      "enabledByDefault": false,
+      "experience": "mid",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["global"],
+      "selectors": {
+        "item": ".job-row",
+        "title": "h4",
+        "company": ".company-name",
+        "location": ".location",
+        "url": "a"
+      },
+      "_comment": "Remote talent directory; verify the current listing path and card markup before trusting extraction."
+    },
+    {
+      "id": "dynamitejobs",
+      "name": "Dynamite Jobs",
+      "url": "https://dynamitejobs.co/",
+      "type": "static",
+      "enabledByDefault": false,
+      "experience": "mid",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["global"],
+      "selectors": {
+        "item": ".job-post",
+        "title": "h5",
+        "company": ".company-name",
+        "location": ".job-location",
+        "url": "a"
+      },
+      "_comment": "Remote-first companies (MicroConf network). Selectors unverified — verify manually before relying on extraction."
+    },
+    {
+      "id": "wellfound",
+      "name": "Wellfound (AngelList Talent)",
+      "url": "https://wellfound.com/jobs",
+      "type": "stealth",
+      "enabledByDefault": false,
+      "experience": "mid",
+      "workMode": "all",
+      "sourceType": "general",
+      "markets": ["global"],
+      "selectors": {
+        "item": "[data-testid='job-card']",
+        "title": "h2",
+        "company": "span",
+        "location": "p",
+        "url": "a"
+      },
+      "_comment": "Heavy SPA — stealth browser required and aggressively bot-guarded; expect drift. Selectors unverified."
+    },
+    {
+      "id": "turing_jobs",
+      "name": "Turing Jobs",
+      "url": "https://www.turing.com/jobs/all",
+      "type": "stealth",
+      "enabledByDefault": false,
+      "experience": "senior",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["global"],
+      "selectors": {
+        "item": ".job-card",
+        "title": "h4",
+        "company": "Turing",
+        "location": "Remote",
+        "url": "a"
+      },
+      "_comment": "Senior remote engineering roles; JS-heavy listing — stealth path. Selectors unverified."
+    }
+  ],
+  "europe": [
+    {
+      "id": "wttj_eu",
+      "name": "Welcome to the Jungle Europe",
+      "url": "https://www.welcometothejungle.com/en/jobs?query=developer&page=1",
+      "type": "stealth",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "all",
+      "sourceType": "general",
+      "markets": ["europe"],
+      "selectors": {
+        "item": "li[data-testid='search-results-item']",
+        "title": "h4",
+        "company": "span",
+        "location": "p",
+        "url": "a"
+      },
+      "_comment": "JS-heavy job board — stealth browser required; selectors may drift as the SPA re-renders."
+    },
+    {
+      "id": "euremotejobs",
+      "name": "EU Remote Jobs",
+      "url": "https://euremotejobs.com/",
+      "type": "static",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "remote",
+      "sourceType": "remote_board",
+      "markets": ["europe"],
+      "selectors": {
+        "item": ".job-item",
+        "title": "h3",
+        "company": ".company",
+        "location": "Europe",
+        "url": "a"
+      },
+      "_comment": "EU-only remote listings. Selectors unverified — verify manually before relying on extraction."
+    },
+    {
+      "id": "germantechjobs",
+      "name": "GermanTechJobs.de",
+      "url": "https://germantechjobs.de/",
+      "type": "static",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "all",
+      "sourceType": "general",
+      "markets": ["europe"],
+      "selectors": {
+        "item": ".job-list-item",
+        "title": "h3",
+        "company": ".company-name",
+        "location": ".job-location",
+        "url": "a"
+      },
+      "_comment": "German tech board mixing remote and on-site roles. Selectors unverified — verify manually before relying on extraction."
+    },
+    {
+      "id": "stepstone_de",
+      "name": "StepStone Germany",
+      "url": "https://www.stepstone.de/jobs/developer",
+      "type": "stealth",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "onsite",
+      "sourceType": "general",
+      "markets": ["europe"],
+      "selectors": {
+        "item": "article[data-testid='job-item']",
+        "title": "h2",
+        "company": "span[data-testid='company-name']",
+        "location": "span[data-testid='location']",
+        "url": "a"
+      },
+      "_comment": "Large German generalist board, mostly on-site/hybrid roles; aggressive anti-bot — stealth path, expect drift. Selectors unverified."
+    },
+    {
+      "id": "hellowork_fr",
+      "name": "HelloWork France",
+      "url": "https://www.hellowork.com/fr-fr/emploi/recherche.html",
+      "type": "static",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "onsite",
+      "sourceType": "general",
+      "markets": ["europe"],
+      "selectors": {
+        "item": "article.job",
+        "title": "h2",
+        "company": ".company",
+        "location": ".location",
+        "url": "a"
+      },
+      "_comment": "French generalist board (ex-RegionsJob). Append ?k=keyword for targeted searches. Selectors unverified."
+    },
+    {
+      "id": "labonnealternance",
+      "name": "La Bonne Alternance",
+      "url": "https://labonnealternance.francetravail.fr/apprentissage/recherche-apprentissage",
+      "type": "stealth",
+      "enabledByDefault": false,
+      "experience": "entry",
+      "workMode": "onsite",
+      "sourceType": "general",
+      "markets": ["europe"],
+      "selectors": {
+        "item": "[data-testid='result-card']",
+        "title": "h2",
+        "company": "h3",
+        "location": "p",
+        "url": "a"
+      },
+      "_comment": "French apprenticeship/entry-level board run by France Travail; JS-heavy results — stealth path. Selectors unverified."
+    },
+    {
+      "id": "jobteaser",
+      "name": "JobTeaser",
+      "url": "https://www.jobteaser.com/en/job-search",
+      "type": "stealth",
+      "enabledByDefault": false,
+      "experience": "entry",
+      "workMode": "hybrid",
+      "sourceType": "general",
+      "markets": ["europe"],
+      "selectors": {
+        "item": ".job-teaser-card",
+        "title": "h3",
+        "company": ".organisation",
+        "location": ".location",
+        "url": "a"
+      },
+      "_comment": "University career network — internships, apprenticeships and graduate roles across Europe; JS-heavy — stealth path. Selectors unverified."
+    }
+  ],
   "mena": [
     {
       "id": "keejob_tn",
       "name": "Keejob Tunisia",
       "url": "https://www.keejob.com/offres-emploi/",
       "type": "static",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "onsite",
+      "sourceType": "general",
+      "markets": ["mena"],
       "selectors": {
         "item": ".block_recrutement",
         "title": "a.title",
@@ -122,6 +464,11 @@
       "name": "Tanqeeb MENA & Qatar",
       "url": "https://qatar.tanqeeb.com/en/jobs/search",
       "type": "static",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "onsite",
+      "sourceType": "general",
+      "markets": ["mena"],
       "selectors": {
         "item": ".job-box",
         "title": "h2",
@@ -130,6 +477,63 @@
         "url": "a"
       },
       "_comment": "MENA/Qatar board; the search page currently returns few/no cards statically."
+    },
+    {
+      "id": "bayt_mena",
+      "name": "Bayt MENA",
+      "url": "https://www.bayt.com/en/qatar/jobs/it-software-development-jobs/",
+      "type": "stealth",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "onsite",
+      "sourceType": "general",
+      "markets": ["mena"],
+      "selectors": {
+        "item": "li[data-js-job]",
+        "title": "h2",
+        "company": "b",
+        "location": "span",
+        "url": "a[data-js-aid='jobID']"
+      },
+      "_comment": "Largest MENA job board; aggressive anti-bot — stealth path, expect drift. Swap the country slug in the URL as needed. Selectors unverified."
+    },
+    {
+      "id": "wuzzuf_eg",
+      "name": "Wuzzuf Egypt",
+      "url": "https://wuzzuf.net/search/jobs/?q=developer&a=hpb",
+      "type": "static",
+      "enabledByDefault": false,
+      "experience": "entry",
+      "workMode": "onsite",
+      "sourceType": "general",
+      "markets": ["mena"],
+      "selectors": {
+        "item": "div[data-testid='JobCard']",
+        "title": "h2",
+        "company": "b",
+        "location": "span",
+        "url": "a"
+      },
+      "_comment": "Egypt's main board with many entry/junior IT roles; partially client-rendered — switch to 'stealth' if static cards come back empty. Selectors unverified."
+    },
+    {
+      "id": "gulftalent",
+      "name": "GulfTalent",
+      "url": "https://www.gulftalent.com/uae/jobs-by-category/it-telecom-jobs",
+      "type": "static",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "onsite",
+      "sourceType": "general",
+      "markets": ["mena"],
+      "selectors": {
+        "item": ".job-row",
+        "title": "h3",
+        "company": ".company-name",
+        "location": ".job-location",
+        "url": "a"
+      },
+      "_comment": "Gulf-region (UAE/KSA/Qatar) professional jobs; may require login for full listings. Selectors unverified."
     }
   ],
   "global": [
@@ -138,6 +542,11 @@
       "name": "HackerNews Who is Hiring",
       "url": "https://news.ycombinator.com/submitted?id=whoishiring",
       "type": "static",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "all",
+      "sourceType": "community",
+      "markets": ["global"],
       "selectors": {
         "item": "tr.athing",
         "title": "span.titleline > a",
@@ -152,6 +561,11 @@
       "name": "HackerNews Jobs",
       "url": "https://news.ycombinator.com/jobs",
       "type": "static",
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "all",
+      "sourceType": "community",
+      "markets": ["global"],
       "selectors": {
         "item": "tr.athing",
         "title": "span.titleline > a",
@@ -170,6 +584,11 @@
       "type": "posts",
       "keyword": "developer",
       "maxCards": 60,
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "all",
+      "sourceType": "community",
+      "markets": ["global"],
       "selectors": {
         "item": "tr.athing.comtr",
         "text": ".commtext",
@@ -187,6 +606,11 @@
       "type": "posts",
       "keyword": "remote",
       "maxCards": 60,
+      "enabledByDefault": false,
+      "experience": "all",
+      "workMode": "remote",
+      "sourceType": "community",
+      "markets": ["global"],
       "selectors": {
         "item": "tr.athing.comtr",
         "text": ".commtext",

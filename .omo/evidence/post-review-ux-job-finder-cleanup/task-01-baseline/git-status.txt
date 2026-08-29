@@ -1,0 +1,179 @@
+ M .gitignore
+ M AGENTS.md
+ M README.md
+ M docs/ARCHITECTURE.md
+ D docs/screenshots/assistant.png
+ D docs/screenshots/dashboard.png
+ D docs/screenshots/jobs.png
+ D docs/screenshots/resume.png
+ D docs/screenshots/settings.png
+ D docs/screenshots/tracker.png
+ M eslint.config.mjs
+ M next.config.ts
+ M package-lock.json
+ M package.json
+ M scrapling-agent/server.py
+ M scrapling-agent/sources.json
+ M src/agents/__tests__/applyAgent.test.ts
+ M src/agents/__tests__/multiAgentAppGraph.test.ts
+ M src/agents/__tests__/returns.show.test.ts
+ M src/agents/employerSimulatorAgent.ts
+ M src/agents/multiAgentAppGraph.ts
+ M src/agents/orchestrator.ts
+ M src/agents/resumeAgent.ts
+ M src/app/(app)/agent/page.tsx
+ M src/app/(app)/assistant/page.tsx
+ M src/app/(app)/jobs/[id]/page.tsx
+ M src/app/(app)/jobs/page.tsx
+ M src/app/(app)/page.tsx
+ M src/app/(app)/resume/page.tsx
+ M src/app/(app)/settings/page.tsx
+ M src/app/(app)/tracker/page.tsx
+ M src/app/(app)/vault/page.tsx
+ M src/app/api/agent/activity/route.ts
+ M src/app/api/agent/multi-apply/route.ts
+ M src/app/api/agent/partial-pipeline/route.ts
+ M src/app/api/apply-agent/route.ts
+ M src/app/api/assistant/route.ts
+ M src/app/api/crawl/route.ts
+ M src/app/api/data/[collection]/[id]/route.ts
+ M src/app/api/data/[collection]/route.ts
+ M src/app/api/data/import/route.ts
+ M src/app/api/data/reset/route.ts
+ M src/app/api/generate/route.ts
+ M src/app/api/linkedin/login/route.ts
+ M src/app/api/resume/copilot/route.ts
+ M src/app/api/vault/route.ts
+ M src/app/api/vault/search/route.ts
+ M src/app/globals.css
+ M src/app/layout.tsx
+ M src/components/AddJobModal.tsx
+ M src/components/AgentLiveConsole.tsx
+ M src/components/JobCard.tsx
+ M src/components/JobDetailDrawer.tsx
+ M src/components/MemoryFeed.tsx
+ M src/components/Sidebar.tsx
+ M src/components/UsagePanel.tsx
+ M src/components/agent/AutoApplyPanel.tsx
+ M src/components/crawler/EmployerReviewModal.tsx
+ M src/components/crawler/JobSwipeDeck.tsx
+ M src/components/documents/DocumentsPanel.tsx
+ D src/components/intel/IntelligencePanel.tsx
+ M src/components/match/MatchAnalysis.tsx
+ D src/components/overview/OverviewPanel.tsx
+ M src/components/ui/DateField.tsx
+ M src/components/ui/Toaster.tsx
+ M src/context/AppContext.tsx
+ M src/lib/__tests__/api-apply-agent.test.ts
+ M src/lib/__tests__/api-assistant.test.ts
+ M src/lib/__tests__/api-data.test.ts
+ M src/lib/__tests__/api-generate.test.ts
+ M src/lib/__tests__/api-memory-usage.test.ts
+ M src/lib/__tests__/crawl.test.ts
+ M src/lib/__tests__/db.test.ts
+ M src/lib/__tests__/fitScoring.test.ts
+ M src/lib/__tests__/resumeTemplates.test.ts
+ M src/lib/agents/checkpointer.ts
+ M src/lib/agents/context.ts
+ M src/lib/agents/executeApply.ts
+ M src/lib/agents/memory.ts
+ M src/lib/agents/tools/multiAgentTools.ts
+ M src/lib/assistant/streamClient.ts
+ M src/lib/ats/analyze.ts
+ M src/lib/db.ts
+ M src/lib/llm/sanitize.ts
+ M src/lib/masking.ts
+ M src/lib/pdf/compileLatex.ts
+ M src/lib/pdf/resumeTemplates.ts
+ M src/lib/pdf/templates/classic-ats.tex
+ M src/lib/pdf/templates/creative-portfolio.tex
+ M src/lib/pdf/templates/creative-sidebar.tex
+ M src/lib/pdf/templates/developer-dashboard.tex
+ M src/lib/pdf/templates/letter-anschreiben-de.tex
+ M src/lib/pdf/templates/letter-cover.tex
+ M src/lib/pdf/templates/letter-minimal.tex
+ M src/lib/pdf/templates/letter-modern.tex
+ M src/lib/pdf/templates/letter-motivation-fr.tex
+ M src/lib/pdf/templates/letter-motivation.tex
+ M src/lib/pdf/templates/mena-cv.tex
+ M src/lib/pdf/templates/minimal-clean.tex
+ M src/lib/pdf/templates/modern-french.tex
+ M src/lib/pdf/templates/modern-professional.tex
+ M src/lib/pdf/templates/nordic-clean.tex
+ M src/lib/pdf/templates/tabular-german.tex
+ M src/lib/pdf/templates/technical-modern.tex
+ M src/lib/prompts/generationPrompts.ts
+ M src/lib/prompts/multiAgentPrompts.ts
+ M src/lib/prompts/resumeAgentPrompts.ts
+ M src/lib/theme.ts
+ M src/lib/vault/index.ts
+ M src/types/index.ts
+ M vitest.config.ts
+?? .dockerignore
+?? .github/
+?? .omo/
+?? .playwright-mcp/
+?? Dockerfile
+?? docker-compose.yml
+?? docs/AGENT-OPERATIONS.md
+?? docs/DEPLOYMENT.md
+?? docs/INTELLIGENCE-PRINCIPLES.md
+?? docs/PRODUCT.md
+?? docs/RAG-AND-DOCUMENT-VAULT.md
+?? docs/RESUME-ENGINE.md
+?? docs/TRUST-BOUNDARIES.md
+?? docs/features/
+?? scrapling-agent/Dockerfile
+?? scrapling-agent/test_linkedin_states.py
+?? src/agents/__tests__/multiAgent11NodeHardening.test.ts
+?? src/app/api/agent/config/
+?? src/app/api/agent/heal-selectors/
+?? src/app/api/agent/resume/
+?? src/app/api/agent/screenshot/
+?? src/app/api/agent/sources/
+?? src/app/api/crawl/stream/
+?? src/app/api/health/
+?? src/app/api/memory/consolidate/
+?? src/app/api/notifications/
+?? src/app/api/resume/agent-loop/
+?? src/app/api/tracker/
+?? src/app/api/vault/assist/
+?? src/app/api/vault/chunks/
+?? src/components/JobDetailView.tsx
+?? src/components/NotificationCenter.tsx
+?? src/components/StatsPanel.tsx
+?? src/components/agent/AgentPlannerCard.tsx
+?? src/components/agent/AgentRunMonitor.tsx
+?? src/components/crawler/BoardLiveCard.tsx
+?? src/components/crawler/JobMatrixView.tsx
+?? src/components/detail/
+?? src/components/resume/
+?? src/components/ui/AIStatusBadge.tsx
+?? src/lib/__tests__/api-partial-pipeline.test.ts
+?? src/lib/__tests__/boardUpdate.test.ts
+?? src/lib/__tests__/challenger-m1-empirical.test.ts
+?? src/lib/__tests__/challenger-m2-2-stress.test.ts
+?? src/lib/__tests__/challenger-m2-resilience.test.ts
+?? src/lib/__tests__/challenger-m3-1-empirical.test.ts
+?? src/lib/__tests__/challenger-m3-2-empirical.test.ts
+?? src/lib/__tests__/challenger-m3-empirical.test.ts
+?? src/lib/__tests__/challenger-m3-it2-validation-stress.test.ts
+?? src/lib/__tests__/jobDisplay.test.ts
+?? src/lib/__tests__/memoryRanking.test.ts
+?? src/lib/__tests__/optimistic-rollback.test.ts
+?? src/lib/__tests__/state-resilience-stress.test.ts
+?? src/lib/__tests__/vaultBm25.test.ts
+?? src/lib/__tests__/vaultEval.test.ts
+?? src/lib/agentScreenshot.ts
+?? src/lib/agents/__tests__/
+?? src/lib/agents/companyResearch.ts
+?? src/lib/agents/consolidator.ts
+?? src/lib/agents/contextWindow.ts
+?? src/lib/api/
+?? src/lib/boardUpdate.ts
+?? src/lib/cloudinaryConfig.ts
+?? src/lib/jobDisplay.ts
+?? src/lib/pdf/resumeTemplatesMeta.ts
+?? src/lib/validation.ts
+?? src/lib/vault/bm25.ts
+?? tests/

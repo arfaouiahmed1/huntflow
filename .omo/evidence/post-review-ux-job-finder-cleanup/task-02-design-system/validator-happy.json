@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "design": "C:\\Users\\ahmed\\Desktop\\Personal Projects\\Job Finder\\DESIGN.md",
+  "checked": 77,
+  "unknown": [],
+  "liveCounts": {
+    "themeExports": 4,
+    "paletteKeys": 15,
+    "cssDefinedVars": 41,
+    "cssReferencedVars": 20,
+    "utilityClasses": 12,
+    "keyframes": 3
+  }
+}

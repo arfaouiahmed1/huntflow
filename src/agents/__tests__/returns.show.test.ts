@@ -69,7 +69,7 @@ describe("live agent returns", () => {
     expect(out.usedTools).toEqual(["remember"]);
   });
 
-  it("APPLY AGENT — skipped (score below threshold)", async () => {
+  it("APPLY AGENT — prepares a low-score role without a match gate", async () => {
     const out = await runApplyAgent({
       job: { ...agentJob, matchScore: 40 },
       profile: testProfile,
@@ -78,11 +78,12 @@ describe("live agent returns", () => {
       llmSettings: null,
       agentUrl: "http://fake-agent.test",
     });
-    console.log("APPLY AGENT (skipped):\n" + JSON.stringify(out, null, 2) + "\n");
-    expect(out.status).toBe("skipped");
+    console.log("APPLY AGENT (low-score preparation):\n" + JSON.stringify(out, null, 2) + "\n");
+    expect(out.status).toBe("failed");
+    expect(out.decision.proceed).toBe(true);
   });
 
-  it("APPLY AGENT — applied (LLM pitch + simulated submit)", async () => {
+  it("APPLY AGENT — fails safely when submit mode cannot reach the browser", async () => {
     vi.mocked(resolveChain).mockReturnValue([providerWithKey()]);
     vi.mocked(callLLM).mockResolvedValue({ text: "Three-sentence pitch tailored to the role.", providerId: "openrouter", model: "google/gemini-2.5-flash", attempts: 0 });
     const out = await runApplyAgent({
@@ -94,11 +95,11 @@ describe("live agent returns", () => {
       llmSettings: null,
       agentUrl: "http://fake-agent.test",
     });
-    console.log("APPLY AGENT (applied):\n" + JSON.stringify(out, null, 2) + "\n");
-    expect(out.status).toBe("applied");
+    console.log("APPLY AGENT (offline submit):\n" + JSON.stringify(out, null, 2) + "\n");
+    expect(out.status).toBe("failed");
   });
 
-  it("APPLY AGENT — manual review (prefill mode)", async () => {
+  it("APPLY AGENT — fails safely when prefill cannot reach the browser", async () => {
     const out = await runApplyAgent({
       job: { ...agentJob, matchScore: 88 },
       profile: testProfile,
@@ -107,7 +108,7 @@ describe("live agent returns", () => {
       llmSettings: null,
       agentUrl: "http://fake-agent.test",
     });
-    console.log("APPLY AGENT (manual_required):\n" + JSON.stringify(out, null, 2) + "\n");
-    expect(out.status).toBe("manual_required");
+    console.log("APPLY AGENT (offline prefill):\n" + JSON.stringify(out, null, 2) + "\n");
+    expect(out.status).toBe("failed");
   });
 });

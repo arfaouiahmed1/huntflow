@@ -61,15 +61,16 @@ describe("runApplyAgent — return contract", () => {
   });
 });
 
-describe("runApplyAgent — threshold gating", () => {
-  it("skips when the match score is below minMatch and says why", async () => {
+describe("runApplyAgent — match score is evidence, not a gate", () => {
+  it("continues preparation when a low score is below a legacy minMatch value", async () => {
     const res = await runApplyAgent(
       baseInput({ minMatch: 100, job: { ...agentJob, matchScore: 40 } })
     );
-    expect(res.status).toBe("skipped");
-    expect(res.decision.proceed).toBe(false);
-    expect(res.decision.reason).toContain("below threshold");
-    expect(res.logs.some((l) => l.message.includes("threshold not met"))).toBe(true);
+    expect(res.status).not.toBe("skipped");
+    expect(res.decision.proceed).toBe(true);
+    expect(res.decision.reason).toContain("Score 40%");
+    expect(res.logs.some((l) => l.message.includes("Skill analysis"))).toBe(true);
+    expect(res.logs.some((l) => l.message.toLowerCase().includes("threshold"))).toBe(false);
   });
 
   it("computes the match score locally when none is provided", async () => {
@@ -81,11 +82,11 @@ describe("runApplyAgent — threshold gating", () => {
     expect(res.logs.some((l) => l.message.includes("Local fit engine"))).toBe(true);
   });
 
-  it("proceeds when the score meets the threshold", async () => {
+  it("keeps a high score visible without using it as a decision threshold", async () => {
     const res = await runApplyAgent(baseInput({ minMatch: 0, job: { ...agentJob, matchScore: 88 } }));
     expect(res.status).not.toBe("skipped");
     expect(res.decision.proceed).toBe(true);
-    expect(res.decision.reason).toContain("meets threshold");
+    expect(res.decision.reason).toContain("Score 88%");
   });
 });
 
@@ -114,9 +115,9 @@ describe("runApplyAgent — pitch (prepare node)", () => {
     mockResolveChain.mockReturnValue([]);
     const res = await runApplyAgent(baseInput());
     expect(mockCallLLM).not.toHaveBeenCalled();
-    /* prefill mode reached execute with a fallback pitch */
-    expect(res.status).toBe("manual_required");
-    expect(res.logs.some((l) => l.message.includes("review & submit"))).toBe(true);
+    /* preparation succeeded; the unavailable browser is still reported truthfully */
+    expect(res.status).toBe("failed");
+    expect(res.logs.some((l) => l.message.includes("No fields were filled"))).toBe(true);
   });
 
   it("uses the LLM pitch when a provider key exists", async () => {
@@ -144,32 +145,32 @@ describe("runApplyAgent — pitch (prepare node)", () => {
     mockResolveChain.mockReturnValue([providerWithKey()]);
     mockCallLLM.mockRejectedValue(new Error("provider down"));
     const res = await runApplyAgent(baseInput());
-    expect(res.status).toBe("manual_required");
+    expect(res.status).toBe("failed");
     expect(res.logs.some((l) => l.message.includes("LLM pitch failed"))).toBe(true);
   });
 });
 
 describe("runApplyAgent — execution (execute node)", () => {
-  it("requires a URL — goes to guided prefill without one", async () => {
+  it("requires a URL and reports a failed browser run without one", async () => {
     const res = await runApplyAgent(baseInput({ job: { ...agentJob, url: undefined } }));
-    expect(res.status).toBe("manual_required");
+    expect(res.status).toBe("failed");
     expect(res.logs.some((l) => l.message.includes("No application URL"))).toBe(true);
   });
 
-  it("reports manual_required in prefill mode (submit=false) when the agent is unreachable", async () => {
+  it("reports failed in prefill mode when the agent is unreachable", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
     const res = await runApplyAgent(baseInput({ submit: false }));
-    expect(res.status).toBe("manual_required");
-    expect(res.fields).toContain("cover_letter");
+    expect(res.status).toBe("failed");
+    expect(res.fields).toEqual([]);
     expect(res.logs.some((l) => l.message.includes("unreachable"))).toBe(true);
-    expect(res.logs.some((l) => l.message.includes("Prefill mode"))).toBe(true);
+    expect(res.logs.some((l) => l.message.includes("No fields were filled"))).toBe(true);
   });
 
-  it("simulates a successful submission when submit=true and the agent is unreachable", async () => {
+  it("does not simulate success when submit=true and the agent is unreachable", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
     const res = await runApplyAgent(baseInput({ submit: true }));
-    expect(res.status).toBe("applied");
-    expect(res.logs.some((l) => l.type === "success" && l.message.includes("Simulated application submitted"))).toBe(true);
+    expect(res.status).toBe("failed");
+    expect(res.logs.some((l) => l.type === "error" && l.message.includes("Submission was not attempted"))).toBe(true);
   });
 
   it("uses the scrapling agent's verdict when it responds", async () => {
@@ -191,10 +192,10 @@ describe("runApplyAgent — execution (execute node)", () => {
     expect(res.logs.some((l) => l.message.includes("Scrapling agent executed"))).toBe(true);
   });
 
-  it("falls back to simulation when the agent answers with HTTP 500", async () => {
+  it("fails safely when the agent answers with HTTP 500", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("boom", { status: 500 })));
     const res = await runApplyAgent(baseInput({ submit: true }));
-    expect(res.status).toBe("applied");
+    expect(res.status).toBe("failed");
     expect(res.logs.some((l) => l.message.includes("unreachable"))).toBe(true);
   });
 });

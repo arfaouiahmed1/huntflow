@@ -1,13 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, Check, Plus, Target, TrendingUp } from "lucide-react";
+import { AlertTriangle, Sparkles, Check, Plus, Target, TrendingUp } from "lucide-react";
 import { JobApplication } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { useApp } from "@/context/AppContext";
 import { useToast } from "@/components/ui/Toaster";
 import ScoreRing from "@/components/match/ScoreRing";
+import AIStatusBadge from "@/components/ui/AIStatusBadge";
+
+function uniqueText(values: string[] | undefined): string[] {
+  return Array.from(
+    new Set((values || []).map((value) => value.trim()).filter(Boolean)),
+  );
+}
 
 export default function MatchAnalysis({ job }: { job: JobApplication }) {
   const { generateMatchAnalysis } = useApp();
@@ -15,6 +22,23 @@ export default function MatchAnalysis({ job }: { job: JobApplication }) {
   const [loading, setLoading] = useState(false);
 
   const analysis = job.skillsGap;
+  const matchingSkills = uniqueText(analysis?.matchingSkills);
+  const missingSkills = uniqueText(analysis?.missingSkills);
+  const keyTermFrequency = useMemo(() => {
+    const merged = new Map<string, { term: string; count: number; inResume: boolean }>();
+    for (const k of analysis?.keyTermFrequency ?? []) {
+      const term = typeof k?.term === "string" ? k.term.trim() : "";
+      if (!term) continue;
+      const existing = merged.get(term);
+      if (existing) {
+        existing.count += Number(k.count) || 0;
+        existing.inResume = existing.inResume || Boolean(k.inResume);
+      } else {
+        merged.set(term, { term, count: Number(k.count) || 0, inResume: Boolean(k.inResume) });
+      }
+    }
+    return Array.from(merged.values());
+  }, [analysis]);
 
   const runAnalysis = async () => {
     setLoading(true);
@@ -42,28 +66,59 @@ export default function MatchAnalysis({ job }: { job: JobApplication }) {
         </div>
       ) : (
         <>
+          {/* Header Provenance & Re-run */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] pb-3">
+            <AIStatusBadge
+              source={analysis.source}
+              provider={analysis.provider}
+              model={analysis.model}
+              timestamp={analysis.analyzedAt}
+            />
+            <Button variant="outline" size="sm" onClick={runAnalysis} loading={loading}>
+              <Sparkles className="h-3.5 w-3.5" /> {loading ? "Analyzing…" : "Re-analyze"}
+            </Button>
+          </div>
+
           {/* Score + summary */}
           <div className="grid grid-cols-[auto_1fr] items-center gap-6">
             <ScoreRing score={analysis.matchScore} />
             <div>
-              <h3 className="font-display text-sm font-semibold text-[var(--paper)]">Fit Assessment</h3>
+              <h3 className="font-display text-sm font-semibold text-[var(--paper)]">Explainable fit</h3>
               <p className="mt-1 text-xs leading-relaxed text-dim">
-                {analysis.matchScore >= 85
-                  ? "Excellent alignment — your profile closely matches this role's core requirements. High-priority target."
-                  : analysis.matchScore >= 70
-                  ? "Strong alignment — you're a solid candidate, but closing the gaps below will meaningfully boost your odds."
-                  : "Moderate alignment — focus on the gap recommendations to strengthen your application."}
+                The score is measured from structured profile and job evidence. Generated text explains it; it does not determine hard constraints.
               </p>
+              {analysis.fit && (
+                <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--paper)]/75">
+                  Deterministic fit band: {analysis.fit.replace("_", " ")}
+                </p>
+              )}
             </div>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--amber)]/20 bg-[var(--amber)]/[0.035] p-4">
+            <h4 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--amber)]">
+              <AlertTriangle className="h-3.5 w-3.5" /> Hard constraints
+            </h4>
+            {analysis.dealbreakers?.length ? (
+              <ul className="space-y-1.5">
+                {analysis.dealbreakers.map((constraint) => (
+                  <li key={constraint} className="text-xs leading-relaxed text-[var(--paper)]/90">FAIL · {constraint}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs leading-relaxed text-dim">
+                No explicit failure was detected. Unknown visa, language, clearance, or location requirements still need confirmation.
+              </p>
+            )}
           </div>
 
           {/* Matching skills */}
           <div>
             <h4 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-dim">
-              <Check className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> Matching Skills
+              <Check className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> Evidence present
             </h4>
             <div className="flex flex-wrap gap-2">
-              {analysis.matchingSkills.map((s, i) => (
+              {matchingSkills.map((s, i) => (
                 <motion.span
                   key={s}
                   initial={{ opacity: 0, scale: 0.9 }}
@@ -80,10 +135,10 @@ export default function MatchAnalysis({ job }: { job: JobApplication }) {
           {/* Missing skills */}
           <div>
             <h4 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-dim">
-              <Plus className="h-3.5 w-3.5 text-[var(--coral)]" /> Skills Gap — what to build
+              <Plus className="h-3.5 w-3.5 text-[var(--coral)]" /> Missing from current evidence
             </h4>
             <div className="flex flex-wrap gap-2">
-              {analysis.missingSkills.map((s) => (
+              {missingSkills.map((s) => (
                 <span
                   key={s}
                   className="inline-flex items-center gap-1 rounded-full border border-[var(--coral)]/25 bg-[var(--coral)]/10 px-3 py-1 text-xs font-medium text-[var(--coral)]"
@@ -91,17 +146,20 @@ export default function MatchAnalysis({ job }: { job: JobApplication }) {
                   <Plus className="h-3 w-3" /> {s}
                 </span>
               ))}
+              {missingSkills.length === 0 && (
+                <span className="text-xs text-dim">No missing skill term was identified in the current extraction.</span>
+              )}
             </div>
           </div>
 
           {/* Key term frequency */}
-          {analysis.keyTermFrequency && analysis.keyTermFrequency.length > 0 && (
+          {keyTermFrequency.length > 0 && (
             <div>
               <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-dim">
                 Keyword Resonance
               </h4>
               <div className="space-y-2.5">
-                {analysis.keyTermFrequency.map((k) => (
+                {keyTermFrequency.map((k) => (
                   <div key={k.term} className="flex items-center gap-3">
                     <span className="w-36 truncate text-xs text-[var(--paper)]">{k.term}</span>
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.05]">

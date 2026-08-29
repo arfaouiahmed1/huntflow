@@ -1,0 +1,22 @@
+== Production served-HTML verification (2026-08-23T01:21:14.2072071+01:00) ==
+HTML bytes: 57561
+marker matches in served HTML: 0
+script srcs in HTML:
+  /_next/static/chunks/11jq0c2_zavac.js
+  /_next/static/chunks/0275240s2ok1s.js
+  /_next/static/chunks/3bun2zf8vz7y9.js
+  /_next/static/chunks/turbopack-3wsc8czknj53s.js
+  /_next/static/chunks/0w0164v4xhtv2.js
+  /_next/static/chunks/39fx_ujmn2qej.js
+  /_next/static/chunks/0_22ce1ymec2m.js
+  /_next/static/chunks/2i0lo2wxri4_0.js
+  /_next/static/chunks/1_gcalf0hq-w0.js
+  /_next/static/chunks/33pdf_b7fpn15.js
+  /_next/static/chunks/16gyrvv4s5l1z.js
+  /_next/static/chunks/0cz1d0mv5g_q7.js
+  /_next/static/chunks/36rtzcaem231q.js
+data-dev-diagnostics attribute present: False
+
+-- /api/dev-tools in production --
+GET http://127.0.0.1:3014/api/dev-tools -> HTTP 404 (404 expected)
+GET http://127.0.0.1:3014/api/dev-tools?asset=react-scan -> HTTP 404 (404 expected)

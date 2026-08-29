@@ -19,7 +19,8 @@ export interface ApplyAgentInput {
   profile: UserProfile;
   documents?: TailoredDocuments;
   submit: boolean;
-  minMatch: number;
+  /** @deprecated Kept only so older local callers do not break; it is ignored. */
+  minMatch?: number;
   llmSettings?: LLMSettings | null;
   agentUrl?: string;
   sharedContext?: string;
@@ -34,7 +35,6 @@ const ApplyState = Annotation.Root({
   profile: Annotation<UserProfile>,
   documents: Annotation<TailoredDocuments>({ reducer: (_a, b) => b, default: () => ({}) }),
   submit: Annotation<boolean>({ reducer: (_a, b) => b, default: () => false }),
-  minMatch: Annotation<number>({ reducer: (_a, b) => b, default: () => 0 }),
   llmSettings: Annotation<LLMSettings | null>({ reducer: (_a, b) => b, default: () => null }),
   agentUrl: Annotation<string>({ reducer: (_a, b) => b, default: () => "" }),
   logs: Annotation<AutoApplyLog[]>({
@@ -61,9 +61,8 @@ async function analyzeJob(state: typeof ApplyState.State) {
   const logs: AutoApplyLog[] = [];
   let matchScore = state.job.matchScore ?? null;
 
-  // Always run the deterministic fit engine so the apply decision can also
-  // respect profile dealbreakers (visa, clearance, on-site-only, salary floor),
-  // not just the skill-overlap threshold.
+  // Always run the deterministic fit engine so the user sees profile
+  // dealbreakers (visa, clearance, on-site-only, salary floor) as evidence.
   const jobLike = {
     id: state.job.id,
     title: state.job.title,
@@ -99,12 +98,10 @@ async function analyzeJob(state: typeof ApplyState.State) {
   });
 
   const fitGate = analysis.fit === "skip";
-  const proceed = matchScore >= state.minMatch && !fitGate;
+  const proceed = !fitGate;
   const reason = fitGate
     ? `Fit is "skip" — ${(analysis.dealbreakers ?? []).slice(0, 1).join("; ") || "profile dealbreaker"}`
-    : matchScore >= state.minMatch
-      ? `Score ${matchScore}% meets threshold ${state.minMatch}%`
-      : `Score ${matchScore}% below threshold ${state.minMatch}%`;
+    : `Score ${matchScore}% recorded as fit evidence; preparation remains supervised.`;
 
   return {
     matchScore,
@@ -166,7 +163,6 @@ async function execute(state: typeof ApplyState.State) {
     documents: state.documents,
     pitch: state.pitch,
     submit: state.submit,
-    minMatch: state.minMatch,
     matchScore: state.matchScore,
     agentUrl: state.agentUrl,
   });
@@ -180,7 +176,7 @@ async function verify(state: typeof ApplyState.State) {
   } else if (state.status === "manual_required") {
     logs.push({ timestamp: ts(), message: "⏸ Human review required before submission", type: "warning" });
   } else if (state.status === "skipped") {
-    logs.push({ timestamp: ts(), message: "🛑 Auto-apply skipped — threshold not met", type: "warning" });
+    logs.push({ timestamp: ts(), message: "🛑 Auto-apply skipped — profile safety review requires attention", type: "warning" });
   } else if (state.status === "failed") {
     logs.push({ timestamp: ts(), message: "❌ Application failed to submit — check previous logs for errors", type: "error" });
   }
@@ -209,7 +205,6 @@ export async function runApplyAgent(input: ApplyAgentInput) {
     profile: input.profile,
     documents: input.documents ?? {},
     submit: input.submit,
-    minMatch: input.minMatch,
     llmSettings: input.llmSettings ?? null,
     agentUrl: input.agentUrl ?? "",
     sharedContext: input.sharedContext ?? "",

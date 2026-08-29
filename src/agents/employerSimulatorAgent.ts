@@ -1,16 +1,37 @@
-import { UserProfile, JobApplication, TailoredDocuments, EmployerReview } from "@/types";
+import { UserProfile, JobApplication, TailoredDocuments, EmployerReview, CompanyResearch } from "@/types";
 import { LLMSettings } from "@/lib/llm/providers";
 import { generateJSON } from "@/lib/llm/client";
 import { buildProfileContext, buildJobContext, extractJdTerms, SYSTEM_PREAMBLE, JSON_RULE } from "@/lib/prompts/commonPrompts";
+import { executeCompanyIntelTool } from "@/lib/agents/tools/multiAgentTools";
 
 export interface EmployerSimulatorInput {
-  job: Pick<JobApplication, "id" | "title" | "company" | "location" | "jobDescription" | "url">;
+  job: Pick<JobApplication, "id" | "title" | "company" | "location" | "jobDescription" | "url" | "multiAgentOutputs">;
   profile: UserProfile;
   documents?: TailoredDocuments;
   llmSettings?: LLMSettings | null;
 }
 
-export function employerReviewFallback(job: Pick<JobApplication, "title" | "company" | "location" | "jobDescription">, profile: UserProfile): EmployerReview {
+function companyIntelFromResearch(research: CompanyResearch | undefined): EmployerReview["companyIntel"] {
+  if (!research) return undefined;
+  const fact = (label: string) => research.facts.find((item) => item.label === label)?.value;
+  const postingFact = (label: string) => (fact(label) || "").split(",").map((value) => value.trim()).filter(Boolean);
+  return {
+    history: research.summary,
+    headquarters: fact("Headquarters"),
+    foundingYear: fact("Founded"),
+    stage: fact("Organization type"),
+    products: [],
+    techStack: postingFact("Technologies named in posting"),
+    cultureSignals: postingFact("Culture language in posting"),
+    research,
+  };
+}
+
+export function employerReviewFallback(
+  job: Pick<JobApplication, "title" | "company" | "location" | "jobDescription">,
+  profile: UserProfile,
+  research?: CompanyResearch,
+): EmployerReview {
   const terms = extractJdTerms(job.jobDescription, profile.skills);
   const matched = terms.filter((t) => t.inResume).map((t) => t.term);
   const missing = terms.filter((t) => !t.inResume).map((t) => t.term);
@@ -40,20 +61,26 @@ export function employerReviewFallback(job: Pick<JobApplication, "title" | "comp
       `Quantify the impact of your top 2 work experience bullets with specific percentages/revenue metrics.`,
       `Align your cover letter opening hook to directly reference ${job.company}'s core product focus.`,
     ],
-    companyIntel: {
-      history: `${job.company} is an active technology company operating in ${job.location || "global markets"}, developing high-scale systems and modern software platforms.`,
-      headquarters: job.location || "Global Remote",
-      stage: "Growth Stage / Tech Enterprise",
-      products: ["Cloud Platforms", "Enterprise Software", "AI & Developer Tooling"],
-      techStack: matched.length ? matched : ["TypeScript", "Python", "Cloud Services", "PostgreSQL"],
-      cultureSignals: ["Engineering ownership & autonomy", "Fast product iteration cycles", "High standard for code quality & testing"],
-    },
+    companyIntel: companyIntelFromResearch(research),
     reviewedAt: new Date().toISOString(),
   };
 }
 
 export async function runEmployerSimulator(input: EmployerSimulatorInput): Promise<EmployerReview> {
   const { job, profile, documents, llmSettings } = input;
+  let research = job.multiAgentOutputs?.companyResearch;
+  if (!research) {
+    try {
+      const companyIntel = await executeCompanyIntelTool({
+        company: job.company,
+        jobDescription: job.jobDescription,
+        jobUrl: job.url,
+      });
+      research = companyIntel.research;
+    } catch {
+      research = undefined;
+    }
+  }
 
   const docContext = documents
     ? `
@@ -65,7 +92,7 @@ SUBMITTED DOCUMENTS:
 
   const system = `${SYSTEM_PREAMBLE}
 You are an executive hiring strategist and senior technical recruiter evaluating ${job.company}.
-You perform in-depth company background research, technical culture analysis, and ATS candidate screening.
+You cannot browse. Evaluate the candidate only from the supplied profile, job posting, documents, and verified research block. Never invent company facts.
 
 ${JSON_RULE}`;
 
@@ -74,22 +101,19 @@ ${JSON_RULE}`;
 ${buildJobContext(job)}
 ${docContext}
 
-TASK: Conduct deep company research on ${job.company} (location: ${job.location || "Global"}) and evaluate this candidate's application papers.
+VERIFIED COMPANY RESEARCH (may be empty; every statement includes source IDs):
+${research?.facts.map((item) => `- ${item.label}: ${item.value} [${item.sourceIds.join(", ")}]`).join("\n") || "No verified company facts available."}
+Sources:
+${research?.sources.map((source) => `- [${source.id}] ${source.title}: ${source.url}`).join("\n") || "None."}
+
+TASK: Evaluate this candidate's application papers for the role at ${job.company} (location: ${job.location || "Global"}).
 Respond as JSON:
 - "acceptanceProbability": integer 0-100 (estimated % probability candidate gets invited to an interview).
 - "atsPassScore": integer 0-100 (ATS keyword & formatting parser score).
 - "verdict": "interview_likely" (score >= 80) | "possible_callback" (55-79) | "likely_reject" (< 55).
 - "strengths": string[] — 3 concrete reasons this application stands out to a recruiter.
 - "riskFactors": string[] — 3 red flags or gaps that decrease callback odds.
-- "actionableFixes": string[] — 3 specific edits to candidate documents that will boost acceptance probability by +15-30%.
-- "companyIntel": object with:
-  - "history": string (2-3 sentences covering company founding background, core mission, growth trajectory, and market positioning)
-  - "headquarters": string (city/country)
-  - "foundingYear": string
-  - "stage": string (e.g. "Series B Startup", "Public Enterprise", "Bootstrapped Scale-up")
-  - "products": string[] (3 main product lines or services)
-  - "techStack": string[] (key engineering technologies used)
-  - "cultureSignals": string[] (3 verified engineering culture traits, e.g. remote-first, high autonomy, rapid shipping)`;
+- "actionableFixes": string[] — 3 specific edits to candidate documents. Do not claim a numeric boost.`;
 
   try {
     const res = await generateJSON<EmployerReview>(llmSettings, system, user, "employer-simulator");
@@ -103,20 +127,10 @@ Respond as JSON:
       strengths: cleanArr(res.strengths).length ? cleanArr(res.strengths) : ["Strong skill overlap with core tech stack."],
       riskFactors: cleanArr(res.riskFactors).length ? cleanArr(res.riskFactors) : ["Resume could use more quantified achievement metrics."],
       actionableFixes: cleanArr(res.actionableFixes).length ? cleanArr(res.actionableFixes) : ["Tailor cover letter hook specifically to this company."],
-      companyIntel: res.companyIntel
-        ? {
-            history: res.companyIntel.history || `${job.company} is an active technology company.`,
-            headquarters: res.companyIntel.headquarters || job.location || "Global",
-            foundingYear: res.companyIntel.foundingYear || "Established",
-            stage: res.companyIntel.stage || "Technology Company",
-            products: cleanArr(res.companyIntel.products),
-            techStack: cleanArr(res.companyIntel.techStack),
-            cultureSignals: cleanArr(res.companyIntel.cultureSignals),
-          }
-        : undefined,
+      companyIntel: companyIntelFromResearch(research),
       reviewedAt: new Date().toISOString(),
     };
   } catch {
-    return employerReviewFallback(job, profile);
+    return employerReviewFallback(job, profile, research);
   }
 }

@@ -162,6 +162,22 @@ ${current}
 TASK: Tailor this document to the job above. Return it as JSON with the SAME shape used for drafting (${shapeNote}). Mirror the posting's terminology for skills the candidate actually has, reorder skills by relevance to this role, and rewrite the summary/paragraphs around the role. Never invent skills or metrics.`;
 }
 
+export function resumeTexPatchSystemPrompt(): string {
+  return `${SYSTEM_PREAMBLE}
+You are a LaTeX compilation expert. Fix the provided LaTeX so it compiles with pdflatex/xelatex without errors. Keep all visible content and template structure intact, only repair syntax, escaping, and environment balance. Output ONLY the corrected LaTeX source — no markdown fences, no commentary.`;
+}
+
+export function resumeTexPatchUserPrompt(badTex: string, logTail: string): string {
+  const errors = logTail.slice(0, 4000);
+  return `The following LaTeX failed to compile. Fix it so it compiles cleanly.
+
+COMPILER LOG (tail):
+${errors || "(no log captured)"}
+
+BROKEN TEX (fix this, return the full corrected source):
+${badTex.slice(0, 12000)}`;
+}
+
 /** Fallback resume content built deterministically from the profile. */
 export function resumeFallbackContent(
   profile: UserProfile,

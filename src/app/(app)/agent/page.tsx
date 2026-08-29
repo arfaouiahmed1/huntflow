@@ -1,67 +1,97 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot,
-  Play,
-  Loader2,
-  CheckCircle2,
-  XCircle,
-  Cpu,
-  ShieldCheck,
-  Radar,
-  Terminal,
-  Zap,
-  Gauge,
-  Send,
-  Search,
-  ArrowDown,
-  Scale,
-  FileSignature,
-  MousePointerClick,
-  BadgeCheck,
-  Workflow,
-  WifiOff,
   Activity,
+  Bot,
+  CheckCircle2,
+  ChevronDown,
+  Copy,
+  Ellipsis,
+  ExternalLink,
+  Gauge,
+  Loader2,
+  MousePointerClick,
+  Play,
+  Radar,
+  RefreshCw,
+  WifiOff,
+  XCircle,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Button";
-import { palette, tint } from "@/lib/theme";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { useToast } from "@/components/ui/Toaster";
-import AgentLiveConsole from "@/components/AgentLiveConsole";
+import AgentRunMonitor from "@/components/agent/AgentRunMonitor";
 import MemoryFeed from "@/components/MemoryFeed";
 import { cn } from "@/lib/utils";
+import { displayJobCompany, displayJobTitle } from "@/lib/jobDisplay";
+import { scoreColor } from "@/lib/utils";
+import { RegionCode } from "@/lib/agents/regionalNorms";
 
 type HealthState = "checking" | "online" | "offline";
 
-const PIPELINE = [
-  { key: "companyIntel", label: "1. Intel & ATS", icon: Search, desc: "ATS vendor detection & culture research" },
-  { key: "regionalNorms", label: "2. Regional Rules", icon: Scale, desc: "Global standards & layout constraints" },
-  { key: "piiSanitizer", label: "3. PII Guard", icon: ShieldCheck, desc: "Scrub sensitive fields & GDPR compliance" },
-  { key: "resumeCVTailor", label: "4. Resume Tailor", icon: FileSignature, desc: "STAR bullet tailoring & LaTeX compilation" },
-  { key: "letterTailor", label: "5. Letter Tailor", icon: FileSignature, desc: "Cover / Motivation letter drafting" },
-  { key: "interviewPrep", label: "6. STAR Prep", icon: Radar, desc: "Behavioral flashcards & technical prep" },
-  { key: "salaryIntel", label: "7. Salary Intel", icon: Gauge, desc: "Regional compensation & negotiation range" },
-  { key: "outreachEmail", label: "8. Recruiter Outreach", icon: Send, desc: "Draft cold LinkedIn & follow-up notes" },
-  { key: "atsAudit", label: "9. ATS Audit", icon: BadgeCheck, desc: "Simulated parsing & keyword density check" },
-  { key: "autoApplyExecution", label: "10. Scrapling Driver", icon: MousePointerClick, desc: "Live form prefill & browser automation" },
-  { key: "orchestratorGate", label: "11. Quality Gate", icon: BadgeCheck, desc: "Terminal verification & proof logging" },
-] as const;
+const REGIONS: { code: RegionCode; label: string }[] = [
+  { code: "US", label: "US & Canada" },
+  { code: "DE", label: "Germany (DACH)" },
+  { code: "FR", label: "France" },
+  { code: "TN", label: "Tunisia (MENA)" },
+  { code: "UK", label: "UK & Australia" },
+  { code: "ES", label: "Spain & LATAM" },
+  { code: "JP", label: "Japan" },
+  { code: "CH", label: "Switzerland" },
+  { code: "NL", label: "Netherlands & Nordics" },
+  { code: "UAE", label: "UAE & Gulf" },
+  { code: "INTL", label: "Global Remote" },
+];
+
+const SIDECAR_COMMAND = "uv run uvicorn server:app --port 8001";
 
 export default function AgentPage() {
-  const { applications, triggerAutoApply, llmSettings } = useApp();
-  const { success, error: errToast, warn, celebrate } = useToast();
-  const [runningId, setRunningId] = useState<string | null>(null);
-  const [submit, setSubmit] = useState(false);
-  const [minMatch, setMinMatch] = useState(60);
+  const { applications, triggerAutoApply } = useApp();
+  const { success, error: errToast, warn } = useToast();
   const [health, setHealth] = useState<HealthState>("checking");
-  const [step, setStep] = useState<number>(-1);
+  const [targetId, setTargetId] = useState<string>("");
+  const [region, setRegion] = useState<RegionCode>("US");
+  const [submitMode, setSubmitMode] = useState<"review" | "submit">("review");
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
 
-  const autoApplied = applications.filter((a) => a.autoApplyStatus === "applied");
-  const queued = applications.filter((a) => a.autoApplyStatus === "queued" || a.autoApplyStatus === "processing");
-  const ready = applications.filter((a) => !a.autoApplyStatus || a.autoApplyStatus === "idle" || a.autoApplyStatus === "failed" || a.autoApplyStatus === "manual_required");
+  const autoApplied = applications.filter((a) => a.autoApplyStatus === "applied").length;
+  const queued = applications.filter(
+    (a) => a.autoApplyStatus === "queued" || a.autoApplyStatus === "processing"
+  ).length;
+  const awaitingUrl = applications.filter((a) => !a.url).length;
+
+  const runnable = useMemo(
+    () =>
+      applications
+        .filter((a) => a.url && a.autoApplyStatus !== "applied")
+        .sort((a, b) => {
+          const rank = (s?: string) =>
+            s === "failed" || s === "manual_required" ? 0 : s === "queued" || s === "processing" ? 1 : 2;
+          return rank(a.autoApplyStatus) - rank(b.autoApplyStatus);
+        }),
+    [applications]
+  );
+
+  const appliedJobs = useMemo(
+    () => applications.filter((a) => a.autoApplyStatus === "applied"),
+    [applications]
+  );
+
+  const effectiveTargetId = targetId || runnable[0]?.id || "";
+
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) setOverflowOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [overflowOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -71,245 +101,293 @@ export default function AgentPage() {
     return () => controller.abort();
   }, []);
 
-  const run = async (id: string) => {
-    if (runningId) return;
-    setRunningId(id);
-    setStep(0);
+  const checkHealth = () => {
+    setHealth("checking");
+    fetch("/api/agent/health")
+      .then((r) => setHealth(r.ok ? "online" : "offline"))
+      .catch(() => setHealth("offline"));
+  };
+
+  const target = applications.find((a) => a.id === effectiveTargetId) ?? null;
+
+  const queueAllReady = async () => {
+    if (batchRunning) return;
+    if (runnable.length === 0) {
+      warn("No ready targets with a posting URL.");
+      return;
+    }
+    setBatchRunning(true);
     try {
-      const result = await triggerAutoApply(id, { submit, minMatch });
-      if (result.status === "applied") {
-        success(`Application submitted for ${applications.find((a) => a.id === id)?.title}.`);
-        celebrate();
-      } else if (result.status === "skipped") {
-        warn(`Match gate: ${result.matchScore}% < ${minMatch}% — pipeline held fire.`);
-      } else if (result.status === "manual_required") {
-        warn("Form filled — paused before submit. Finish it in the browser.");
+      for (const job of runnable) {
+        try {
+          await triggerAutoApply(job.id, { submit: false });
+        } catch {}
       }
-    } catch (e) {
-      errToast(e instanceof Error ? e.message : "Pipeline failed.");
+      success(`Queued ${runnable.length} supervised review run(s).`);
     } finally {
-      setRunningId(null);
-      setStep(-1);
+      setBatchRunning(false);
+      setOverflowOpen(false);
     }
   };
 
-  const queueAll = async () => {
-    for (const job of applications.filter((a) => a.url && a.autoApplyStatus !== "applied")) {
-      await run(job.id);
+  const copySidecarCommand = async () => {
+    try {
+      await navigator.clipboard.writeText(SIDECAR_COMMAND);
+      success("Sidecar start command copied.");
+    } catch {
+      errToast("Clipboard copy failed.");
     }
+    setOverflowOpen(false);
   };
 
   const stats = [
-    { label: "Auto-Applied", value: autoApplied.length, color: palette.chartreuse, icon: CheckCircle2 },
-    { label: "In Queue", value: queued.length, color: palette.amber, icon: Gauge },
-    { label: "Awaiting URL", value: applications.filter((a) => !a.url).length, color: palette.sky, icon: Radar },
+    { label: "Verified submits", value: autoApplied, icon: CheckCircle2, color: "var(--chartreuse)" },
+    { label: "In queue", value: queued, icon: Gauge, color: "var(--amber)" },
+    { label: "Awaiting URL", value: awaitingUrl, icon: Radar, color: "var(--sky)" },
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.3em] text-[var(--chartreuse)]">/agent</p>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-[var(--paper)]">Auto-Apply Command Center</h1>
-          <p className="mt-1 text-sm text-dim">
-            A LangGraph pipeline drives Scrapling to analyze, fill, submit, and verify — your hands stay clean.
+          <h1 className="font-display text-2xl font-bold tracking-tight text-[var(--paper)]">
+            Auto-Apply Command Center
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-dim">
+            One supervised pipeline per role. Every decision, step, and browser action stays visible.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold",
-              health === "online"
-                ? "border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
-                : health === "checking"
-                ? "border-[var(--line)] text-dim"
-                : "border-[var(--coral)]/40 bg-[var(--coral)]/10 text-[var(--coral)]"
-            )}
-          >
-            {health === "online" ? (
-              <><Activity className="h-3.5 w-3.5" /> Scrapling agent online</>
-            ) : health === "checking" ? (
-              <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Probing port 8001…</>
-            ) : (
-              <><WifiOff className="h-3.5 w-3.5" /> Agent offline — start it</>
-            )}
-          </span>
-          <Button onClick={queueAll} disabled={queued.length > 0 || runningId !== null}>
-            <Zap className="h-4 w-4" /> Run All Pipelines
-          </Button>
-        </div>
+        <button
+          type="button"
+          onClick={checkHealth}
+          className={cn(
+            "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-colors",
+            health === "online"
+              ? "border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
+              : health === "checking"
+              ? "border-[var(--line)] text-dim"
+              : "border-[var(--coral)]/40 bg-[var(--coral)]/10 text-[var(--coral)]"
+          )}
+        >
+          {health === "online" ? (
+            <>
+              <Activity className="h-3.5 w-3.5" /> Scrapling agent online
+            </>
+          ) : health === "checking" ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Probing port 8001…
+            </>
+          ) : (
+            <>
+              <WifiOff className="h-3.5 w-3.5" /> Agent offline — retry
+            </>
+          )}
+        </button>
       </div>
 
-      {/* Live activity — what the agent is doing right now */}
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5">
-        <AgentLiveConsole />
-      </section>
+      {/* Dispatch strip */}
+      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex min-w-[220px] flex-1 flex-col gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Target</span>
+            <select
+              value={effectiveTargetId}
+              onChange={(e) => setTargetId(e.target.value)}
+              className="w-full rounded-lg border border-[var(--line)] bg-black/40 px-2.5 py-2 text-xs text-[var(--paper)] outline-none focus:border-[var(--chartreuse)]/60"
+            >
+              {runnable.length === 0 && appliedJobs.length === 0 && <option value="">No applications yet</option>}
+              {runnable.map((job) => (
+                <option key={job.id} value={job.id}>
+                  {displayJobTitle(job)} — {displayJobCompany(job)}
+                </option>
+              ))}
+              {appliedJobs.map((job) => (
+                <option key={job.id} value={job.id} disabled>
+                  {displayJobTitle(job)} — applied
+                </option>
+              ))}
+            </select>
+          </label>
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {stats.map(({ label, value, color, icon: Icon }) => (
-          <div key={label} className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5">
-            <Icon className="h-5 w-5" style={{ color }} />
-            <p className="mt-3 font-mono text-3xl font-bold tabular-nums" style={{ color }}>
-              {String(value).padStart(2, "0")}
-            </p>
-            <p className="mt-1 text-xs text-dim">{label}</p>
-          </div>
-        ))}
-      </div>
+          <label className="flex min-w-[150px] flex-col gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Region norms</span>
+            <select
+              value={region}
+              onChange={(e) => setRegion(e.target.value as RegionCode)}
+              className="w-full rounded-lg border border-[var(--line)] bg-black/40 px-2.5 py-2 text-xs text-[var(--paper)] outline-none focus:border-[var(--chartreuse)]/60"
+            >
+              {REGIONS.map((r) => (
+                <option key={r.code} value={r.code}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      {/* LangGraph pipeline */}
-      <div className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5">
-        <p className="mb-5 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-dim">
-          <Workflow className="h-4 w-4 text-[var(--chartreuse)]" /> LangGraph State Machine — {runningId ? "running" : "armed"}
-        </p>
-        <div className="flex flex-col gap-2 md:flex-row md:items-center">
-          {PIPELINE.map(({ key, label, icon: Icon, desc }, i) => (
-            <div key={key} className="flex flex-1 items-center gap-2">
-              <motion.div
-                animate={
-                  runningId
-                    ? step === i
-                      ? { scale: 1.06, borderColor: "var(--chartreuse)", boxShadow: `0 0 24px ${tint(palette.chartreuse, 0.25)}` }
-                      : step > i
-                      ? { opacity: 1 }
-                      : { opacity: 0.5 }
-                    : {}
-                }
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Dispatch</span>
+            <div className="flex items-center rounded-lg border border-[var(--line)] bg-black/40 p-0.5">
+              <button
+                type="button"
+                onClick={() => setSubmitMode("review")}
                 className={cn(
-                  "flex w-full flex-col items-center gap-2 rounded-xl border p-4 text-center transition-colors",
-                  runningId && step === i
-                    ? "border-[var(--chartreuse)]/60 bg-[var(--chartreuse)]/10"
-                    : runningId && step > i
-                    ? "border-[var(--chartreuse)]/25 bg-[var(--chartreuse)]/5"
-                    : "border-[var(--line)] bg-white/[0.02]"
+                  "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all",
+                  submitMode === "review"
+                    ? "bg-[var(--chartreuse)] text-neutral-950"
+                    : "text-dim hover:text-[var(--paper)]"
                 )}
               >
-                {runningId && step === i ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-[var(--chartreuse)]" />
-                ) : runningId && step > i ? (
-                  <CheckCircle2 className="h-5 w-5 text-[var(--chartreuse)]" />
-                ) : (
-                  <Icon className="h-5 w-5 text-dim" />
+                <MousePointerClick className="h-3.5 w-3.5" /> Review
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubmitMode("submit")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all",
+                  submitMode === "submit"
+                    ? "bg-[var(--coral)] text-white"
+                    : "text-dim hover:text-[var(--paper)]"
                 )}
-                <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-dim">0{i + 1}</p>
-                  <p className="text-xs font-bold text-[var(--paper)]">{label}</p>
-                  <p className="mt-0.5 text-[10px] leading-tight text-dim">{desc}</p>
-                </div>
-              </motion.div>
-              {i < PIPELINE.length - 1 && <ArrowDown className="mx-auto h-4 w-4 shrink-0 text-dim md:rotate-[-90deg]" />}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" /> Submit after gate
+              </button>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      {/* Dispatch config */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-[var(--line)] bg-white/[0.02] p-5">
-          <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-dim">Dispatch Mode</p>
-          <div className="space-y-2.5">
+          <div className="relative ml-auto self-end" ref={overflowRef}>
             <button
-              onClick={() => setSubmit(false)}
-              className={cn(
-                "flex w-full items-center justify-between rounded-xl border p-3.5 text-left transition-colors",
-                !submit ? "border-[var(--sky)]/40 bg-[var(--sky)]/10" : "border-[var(--line)] hover:border-[var(--line)]/60"
-              )}
+              type="button"
+              aria-label="More agent actions"
+              onClick={() => setOverflowOpen((v) => !v)}
+              className="grid h-9 w-9 cursor-pointer place-items-center rounded-lg border border-[var(--line)] text-dim transition-colors hover:border-white/20 hover:text-[var(--paper)]"
             >
-              <div>
-                <p className="flex items-center gap-1.5 text-xs font-bold text-[var(--paper)]">
-                  <MousePointerClick className="h-3.5 w-3.5 text-[var(--sky)]" /> Review mode
-                </p>
-                <p className="mt-0.5 text-[10px] text-dim">Agent fills everything; you click submit in the browser.</p>
-              </div>
-              {!submit && <CheckCircle2 className="h-4 w-4 text-[var(--sky)]" />}
+              <Ellipsis className="h-4 w-4" />
             </button>
-            <button
-              onClick={() => setSubmit(true)}
-              className={cn(
-                "flex w-full items-center justify-between rounded-xl border p-3.5 text-left transition-colors",
-                submit ? "border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10" : "border-[var(--line)] hover:border-[var(--line)]/60"
-              )}
-            >
-              <div>
-                <p className="flex items-center gap-1.5 text-xs font-bold text-[var(--paper)]">
-                  <Send className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> Full auto-submit
-                </p>
-                <p className="mt-0.5 text-[10px] text-dim">Irreversible — the agent actually sends your application.</p>
+            {overflowOpen && (
+              <div className="absolute right-0 top-full z-40 mt-1.5 w-60 space-y-0.5 rounded-xl border border-[var(--line)] bg-[var(--ink-soft)]/95 p-1.5 shadow-2xl backdrop-blur-xl">
+                <button
+                  type="button"
+                  disabled={batchRunning || runnable.length === 0}
+                  onClick={queueAllReady}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-[var(--paper)] transition-colors hover:bg-white/[0.05] disabled:opacity-50"
+                >
+                  {batchRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                  Review all ready ({runnable.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={copySidecarCommand}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-[var(--paper)] transition-colors hover:bg-white/[0.05]"
+                >
+                  <Copy className="h-3.5 w-3.5" /> Copy sidecar start command
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    checkHealth();
+                    setOverflowOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-[var(--paper)] transition-colors hover:bg-white/[0.05]"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" /> Re-check agent health
+                </button>
+                <a
+                  href="https://github.com/arfaouiahmed1/huntflow/blob/main/docs/AGENT-OPERATIONS.md"
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => setOverflowOpen(false)}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-[var(--paper)] transition-colors hover:bg-white/[0.05]"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" /> Agent operations guide
+                </a>
               </div>
-              {submit && <CheckCircle2 className="h-4 w-4 text-[var(--chartreuse)]" />}
-            </button>
+            )}
           </div>
         </div>
-
-        <div className="rounded-2xl border border-[var(--line)] bg-white/[0.02] p-5">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-dim">Match Gate</p>
-            <span className="font-mono text-lg font-bold text-[var(--amber)]">{minMatch}%</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={minMatch}
-            onChange={(e) => setMinMatch(Number(e.target.value))}
-            className="mt-3 w-full"
-          />
-          <div className="mt-2 flex justify-between font-mono text-[10px] text-dim">
-            <span>spray & pray</span>
-            <span>elite only</span>
-          </div>
-          <p className="mt-3 text-[10px] leading-relaxed text-dim">
-            Below the gate the Decide node marks the run skipped — your reputation is never spent on weak fits.
+        {submitMode === "submit" && (
+          <p className="mt-3 rounded-lg border border-[var(--coral)]/25 bg-[var(--coral)]/5 px-3 py-2 text-[11px] leading-relaxed text-dim">
+            Submission still pauses at the human review gate — nothing is sent until you approve there.
           </p>
-          <p className="mt-2 text-[10px] leading-relaxed text-dim">
-            LLM engine: <span className="font-mono font-bold text-[var(--chartreuse)]">{llmSettings?.providerId || "gemini"}</span>
-            {llmSettings?.model && ` · ${llmSettings.model}`}
-          </p>
-        </div>
-      </div>
+        )}
+      </section>
 
-      {/* Capabilities */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {[
-          { icon: Radar, title: "DOM Schema Detection", desc: "Scrapling inspects each application form and maps fields to your profile automatically." },
-          { icon: ShieldCheck, title: "Bot Detection Evasion", desc: "Human-like input simulation and randomized behavior keeps submissions natural." },
-          { icon: Terminal, title: "Live Execution Logs", desc: "Watch every step — navigation, field injection, and confirmation — in real time." },
-          { icon: Cpu, title: "AI Document Injection", desc: "Attaches the tailored resume, cover letter, and pitch for each specific role." },
-        ].map(({ icon: Icon, title, desc }) => (
-          <div key={title} className="flex gap-4 rounded-2xl border border-[var(--line)] bg-white/[0.02] p-5">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10">
-              <Icon className="h-5 w-5 text-[var(--chartreuse)]" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-[var(--paper)]">{title}</h3>
-              <p className="mt-1 text-xs leading-relaxed text-dim">{desc}</p>
-            </div>
-          </div>
+      {/* Run view — reasoning timeline + steps + collapsible console */}
+      {target ? (
+        <AgentRunMonitor
+          key={target.id}
+          job={target}
+          submit={submitMode === "submit"}
+          region={region}
+        />
+      ) : (
+        <section className="rounded-2xl border border-dashed border-[var(--line)] bg-[var(--ink-card)]/40 p-12 text-center">
+          <Bot className="mx-auto h-8 w-8 text-dim" />
+          <p className="mt-3 text-sm text-dim">
+            Add an application with a job URL to arm the supervised pipeline.
+          </p>
+        </section>
+      )}
+
+      {/* Compact stats */}
+      <div className="flex flex-wrap gap-2">
+        {stats.map(({ label, value, icon: Icon, color }) => (
+          <span
+            key={label}
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--ink-card)]/70 px-3.5 py-1.5 text-xs"
+          >
+            <Icon className="h-3.5 w-3.5" style={{ color }} />
+            <span className="font-mono font-bold tabular-nums text-[var(--paper)]">{String(value).padStart(2, "0")}</span>
+            <span className="text-dim">{label}</span>
+          </span>
         ))}
+      </div>
+
+      {/* Shared memory — collapsed by default */}
+      <div className="overflow-hidden rounded-2xl border border-[var(--line)]">
+        <button
+          type="button"
+          onClick={() => setMemoryOpen((v) => !v)}
+          className="flex w-full cursor-pointer items-center justify-between bg-[var(--ink-card)]/70 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]"
+        >
+          <span className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-dim">
+            Shared agent memory
+          </span>
+          <ChevronDown className={cn("h-4 w-4 text-dim transition-transform", memoryOpen && "rotate-180")} />
+        </button>
+        {memoryOpen && (
+          <div className="border-t border-[var(--line)] p-4">
+            <MemoryFeed />
+          </div>
+        )}
       </div>
 
       {/* Queue */}
       <div>
-        <h2 className="mb-4 font-display text-sm font-semibold text-[var(--paper)]">Application Queue</h2>
+        <h2 className="mb-3 font-display text-sm font-semibold text-[var(--paper)]">Application queue</h2>
         <div className="overflow-x-auto rounded-2xl border border-line">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-[var(--line)] bg-white/[0.02] text-[10px] uppercase tracking-[0.18em] text-dim">
                 <th className="px-4 py-3 font-semibold">Opportunity</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Match</th>
+                <th className="px-4 py-3 font-semibold">Fit</th>
                 <th className="px-4 py-3 font-semibold text-right">Action</th>
               </tr>
             </thead>
             <tbody>
-              {applications.map((job) => (
-                <tr key={job.id} className="border-b border-[var(--line)]/50 transition-colors hover:bg-white/[0.02]">
+              {[...runnable, ...appliedJobs].slice(0, 20).map((job) => (
+                <tr
+                  key={job.id}
+                  className={cn(
+                    "border-b border-[var(--line)]/50 transition-colors hover:bg-white/[0.02]",
+                    effectiveTargetId === job.id && "bg-[var(--chartreuse)]/[0.04]"
+                  )}
+                >
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-[var(--paper)]">{job.title}</p>
-                    <p className="text-xs text-dim">{job.company}</p>
+                    <p className="font-semibold text-[var(--paper)]">{displayJobTitle(job)}</p>
+                    <p className="text-xs text-dim">{displayJobCompany(job)}</p>
                   </td>
                   <td className="px-4 py-3">
                     {job.autoApplyStatus === "applied" ? (
@@ -330,7 +408,7 @@ export default function AgentPage() {
                   </td>
                   <td className="px-4 py-3">
                     {typeof job.matchScore === "number" ? (
-                      <span className={cn("font-mono text-xs font-bold", job.matchScore >= minMatch ? "text-[var(--chartreuse)]" : "text-[var(--amber)]")}>
+                      <span className="font-mono text-xs font-bold" style={{ color: scoreColor(job.matchScore) }}>
                         {job.matchScore}%
                       </span>
                     ) : (
@@ -338,22 +416,21 @@ export default function AgentPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Button
-                      size="sm"
-                      variant={job.autoApplyStatus === "applied" ? "outline" : "primary"}
-                      onClick={() => run(job.id)}
-                      loading={runningId === job.id}
-                      disabled={runningId !== null || !job.url || job.autoApplyStatus === "applied"}
-                    >
-                      {runningId === job.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : job.autoApplyStatus === "applied" ? (
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      ) : (
-                        <Play className="h-3.5 w-3.5" />
-                      )}
-                      {!job.url ? "No URL" : runningId === job.id ? "Applying…" : job.autoApplyStatus === "applied" ? "Applied" : submit ? "Auto-Apply" : "Run Agent"}
-                    </Button>
+                    {job.autoApplyStatus === "applied" ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-dim">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Done
+                      </span>
+                    ) : !job.url ? (
+                      <span className="text-xs text-dim">No URL</span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant={effectiveTargetId === job.id ? "primary" : "outline"}
+                        onClick={() => setTargetId(job.id)}
+                      >
+                        <Play className="h-3.5 w-3.5" /> {effectiveTargetId === job.id ? "In run view" : "Select"}
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -362,48 +439,11 @@ export default function AgentPage() {
           {applications.length === 0 && (
             <div className="p-10 text-center">
               <Bot className="mx-auto h-8 w-8 text-dim" />
-              <p className="mt-3 text-sm text-dim">
-                Queue is empty — add applications with a job URL to arm the agent.
-              </p>
+              <p className="mt-3 text-sm text-dim">Queue is empty — add applications with a job URL to arm the agent.</p>
             </div>
           )}
         </div>
       </div>
-
-      {/* Shared memory — what the agents remember between runs */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <MemoryFeed />
-        </div>
-        <div className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5">
-          <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-dim">
-            <Workflow className="h-4 w-4 text-[var(--chartreuse)]" /> Context Pipeline
-          </p>
-          <ul className="mt-3 space-y-2 text-[11px] leading-relaxed text-dim">
-            <li className="flex gap-2"><span className="text-[var(--chartreuse)]">1.</span> Profile + pipeline snapshot (jobs, statuses, follow-ups)</li>
-            <li className="flex gap-2"><span className="text-[var(--chartreuse)]">2.</span> Recent email + interview activity</li>
-            <li className="flex gap-2"><span className="text-[var(--chartreuse)]">3.</span> Shared memory — every remembered note and outcome</li>
-            <li className="flex gap-2"><span className="text-[var(--chartreuse)]">4.</span> Token-budgeted to the model, truncated tail-first</li>
-          </ul>
-          <p className="mt-3 rounded-lg border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/5 p-2.5 text-[10px] text-[var(--chartreuse)]/90">
-            Phase 4 wires this into the orchestrator agent and the chat assistant.
-          </p>
-        </div>
-      </div>
-
-      {/* Agent status pulse */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex items-center gap-3 rounded-2xl border border-[var(--chartreuse)]/25 bg-[var(--chartreuse)]/5 p-4"
-      >
-        <Bot className="h-5 w-5 text-[var(--chartreuse)]" />
-        <p className="text-xs text-[var(--chartreuse)]">
-          {health === "online"
-            ? `Scrapling agent detected — real form filling is live. ${ready.length} targets awaiting dispatch.`
-            : "Scrapling agent not detected — runs fall back to guided simulation. Start it with: uv run uvicorn server:app --port 8001"}
-        </p>
-      </motion.div>
     </div>
   );
 }

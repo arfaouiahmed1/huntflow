@@ -18,9 +18,12 @@ import {
   ArrowUpDown,
   Globe,
   Sparkles,
+  Lightbulb,
+  FileSearch,
+  Quote,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
-import { ApplicationStatus, LinkedInJob, EmployerReview, JobApplication } from "@/types";
+import { ApplicationStatus, LinkedInJob, EmployerReview, JobApplication, SkillsGapAnalysis } from "@/types";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/Toaster";
 import JobCard from "@/components/JobCard";
@@ -30,6 +33,7 @@ import { JobSwipeDeck } from "@/components/crawler/JobSwipeDeck";
 import { EmployerReviewModal } from "@/components/crawler/EmployerReviewModal";
 import { palette } from "@/lib/theme";
 import { buildBoardGuidance, COLUMN_HINTS } from "@/lib/boardGuidance";
+import { matchFallback } from "@/lib/prompts/generationPrompts";
 
 const columns: { id: ApplicationStatus; label: string; accent: string; hint: string }[] = [
   { id: "wishlist", label: "Wishlist", accent: palette.sky, hint: COLUMN_HINTS.wishlist },
@@ -51,19 +55,16 @@ const SORT_OPTIONS: { id: SortKey; label: string }[] = [
 ];
 
 export default function TrackerPage() {
-  const { applications, interviews, emails, searchLinkedInJobs, saveLinkedInJob, updateApplication, triggerAutoApply } = useApp();
+  const { applications, profile, interviews, emails, searchLinkedInJobs, saveLinkedInJob, addApplication, updateApplication, triggerAutoApply } = useApp();
   const router = useRouter();
   const openJob = (id: string) => router.push(`/jobs/${id}`);
   const { success, error } = useToast();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 0);
-    return () => clearTimeout(t);
-  }, []);
+  // AppProvider has deterministic server defaults, so the tracker can render
+  // useful pipeline content before client-side persistence reconciliation.
+  const mounted = true;
   const [view, setView] = useState<"board" | "table" | "deck">("board");
-  const [showAdd, setShowAdd] = useState<boolean>(() =>
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("add") === "1"
-  );
+  const [showAdd, setShowAdd] = useState(false);
+  const [coachingOpen, setCoachingOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ApplicationStatus | "all">("all");
   const [sortKey, setSortKey] = useState<SortKey>("newest");
@@ -78,6 +79,99 @@ export default function TrackerPage() {
   const [reviewJob, setReviewJob] = useState<JobApplication | null>(null);
   const [reviewData, setReviewData] = useState<EmployerReview | null>(null);
 
+  const MAX_ITERATIONS = 3;
+  const [explainJobId, setExplainJobId] = useState<string | null>(null);
+  const [explainLoading, setExplainLoading] = useState(false);
+  const [explainStream, setExplainStream] = useState("");
+  const [explainAnalysis, setExplainAnalysis] = useState<SkillsGapAnalysis | null>(null);
+  const [explainHits, setExplainHits] = useState<{ docName: string; chunkIndex: number; text: string; score: number; model: string }[]>([]);
+  const [explainIter, setExplainIter] = useState(0);
+  const [explainError, setExplainError] = useState("");
+  const [explainBudget, setExplainBudget] = useState({ maxPrompt: 10000, maxOutput: 2000 });
+
+  const handleExplainFit = async (job: JobApplication) => {
+    if (explainLoading) return;
+    if (explainIter >= MAX_ITERATIONS) {
+      setExplainError(`MAX_ITERATIONS guard hit (${MAX_ITERATIONS}) — using offline fallback.`);
+      const fb = matchFallback(job, profile);
+      setExplainAnalysis(fb);
+      setExplainStream(`[offline fallback — MAX_ITERATIONS guard]\nFit: ${fb.fit}\nScore: ${fb.matchScore}%\nStrengths: ${fb.strengths.slice(0, 2).join(" | ")}\nVault: no citation (guard)`);
+      fetch("/api/memory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "insight", content: `Explain fit guard hit for ${job.title} @ ${job.company} — fallback used`, jobId: job.id, source: "tracker-explain", importance: 2 }) }).catch((err) => {
+        error(err instanceof Error ? err.message : "Failed to log explain guard to memory.");
+      });
+      return;
+    }
+    setExplainJobId(job.id);
+    setExplainLoading(true);
+    setExplainError("");
+    setExplainAnalysis(null);
+    setExplainStream("");
+    setExplainHits([]);
+    setExplainIter((n) => n + 1);
+
+    let analysis: SkillsGapAnalysis | null = null;
+    let source: string = "live_llm";
+    let vaultTopHits: { docName: string; chunkIndex: number; text: string; score: number; model: string }[] = [];
+    let budget = { maxPrompt: 10000, maxOutput: 2000 };
+    try {
+      const res = await fetch("/api/tracker/explain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: job.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error?.message || data?.error || `explain failed ${res.status}`);
+      const payload = data.analysis as SkillsGapAnalysis | undefined;
+      if (!payload || typeof payload.matchScore !== "number") throw new Error("Invalid analysis payload");
+      analysis = payload;
+      source = (payload as unknown as { source?: string })?.source ?? data.source ?? "live_llm";
+      vaultTopHits = (data.vaultHits ?? []) as typeof vaultTopHits;
+      budget = data.budget ?? budget;
+      setExplainHits(vaultTopHits);
+      setExplainBudget(budget);
+      if (source === "heuristic_fallback") {
+        setExplainError("Offline — using deterministic matchFallback (heuristic_fallback).");
+      }
+    } catch (err) {
+      analysis = matchFallback(job, profile);
+      source = "heuristic_fallback";
+      vaultTopHits = [];
+      setExplainHits([]);
+      setExplainError(`Offline — using deterministic matchFallback (heuristic_fallback).${err instanceof Error ? ` ${err.message.slice(0, 80)}` : ""}`);
+    }
+
+    if (analysis) {
+      setExplainAnalysis(analysis);
+      updateApplication(job.id, { matchScore: analysis.matchScore, skillsGap: analysis });
+      const cites = vaultTopHits.length ? vaultTopHits.map((h) => `${h.docName}#${h.chunkIndex} [${h.model} · ${(h.score * 100).toFixed(0)}%]`).join(" · ") : "no vault hits (upload evidence to cite)";
+      const budgetNote = `budget ${budget.maxPrompt}/${budget.maxOutput} (match_analysis 10k/2k)`;
+      const fullText = [
+        `Fit: ${analysis.fit ?? "medium"} · Score ${analysis.matchScore}% · source:${source} · ${budgetNote}`,
+        analysis.dealbreakers?.length ? `Dealbreakers: ${analysis.dealbreakers.join("; ")}` : "No hard constraints flagged.",
+        `Strengths: ${analysis.strengths.slice(0, 2).join(" | ")}`,
+        `Missing: ${analysis.missingSkills.slice(0, 3).join(", ") || "none flagged"}`,
+        `Vault cites (${vaultTopHits.length}): ${cites}`,
+        analysis.recommendations[0] ? `Next: ${analysis.recommendations[0]}` : "",
+      ].filter(Boolean).join("\n\n");
+
+      let idx = 0;
+      const streamStep = () => {
+        if (idx >= fullText.length) {
+          fetch("/api/memory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "insight", content: `Explain fit ${job.title} @ ${job.company}: ${analysis!.fit} ${analysis!.matchScore}% — ${analysis!.strengths[0]?.slice(0, 120) ?? ""} [cites ${vaultTopHits.length}]`, jobId: job.id, source: "tracker-explain", importance: 2 }) }).catch((err) => {
+            error(err instanceof Error ? err.message : "Failed to log explain fit to memory.");
+          });
+          return;
+        }
+        const chunk = fullText.slice(idx, idx + 8);
+        idx += 8;
+        setExplainStream((prev) => prev + chunk);
+        window.setTimeout(streamStep, 18);
+      };
+      streamStep();
+    }
+    setExplainLoading(false);
+  };
+
   const [liOpen, setLiOpen] = useState(false);
   const [liKeywords, setLiKeywords] = useState("");
   const [liLocation, setLiLocation] = useState("");
@@ -90,6 +184,9 @@ export default function TrackerPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const openAddTimer = params.get("add") === "1"
+      ? window.setTimeout(() => setShowAdd(true), 0)
+      : undefined;
     const open = params.get("open");
     if (open && applications.some((a) => a.id === open)) {
       openJob(open);
@@ -97,26 +194,71 @@ export default function TrackerPage() {
     if (window.location.search) {
       window.history.replaceState({}, "", "/tracker");
     }
+    return () => {
+      if (openAddTimer !== undefined) window.clearTimeout(openAddTimer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCrawlWeb = async () => {
+    if (crawling) return;
     setCrawling(true);
     try {
+      const concurrency = 4;
       const res = await fetch("/api/crawl", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category: "all", limit: 8 }),
+        body: JSON.stringify({ category: "all", limit: 8, concurrency }),
       });
       const data = await res.json();
-      if (res.ok && data.jobs) {
-        success(`Scrapling Crawler discovered ${data.count} jobs across Remote, MENA & EU boards!`);
-        setView("deck");
-      } else {
+      if (res.ok && Array.isArray(data.jobs) && data.jobs.length > 0) {
+        let addedCount = 0;
+        const existingKeys = new Set(
+          applications.map((a) => `${(a.company || "").toLowerCase().trim()}:::${(a.title || "").toLowerCase().trim()}`)
+        );
+
+        for (const job of data.jobs) {
+          const key = `${(job.company || "").toLowerCase().trim()}:::${(job.title || "").toLowerCase().trim()}`;
+          if (existingKeys.has(key)) continue;
+          existingKeys.add(key);
+
+          addApplication({
+            title: job.title || "Discovered Opportunity",
+            company: job.company || "Unknown Company",
+            location: job.location || "Remote",
+            salary: job.salary,
+            url: job.url,
+            status: "wishlist",
+            jobDescription: job.jobDescription || "",
+            matchScore: job.matchScore,
+            fitCategory: job.fitCategory,
+            skillsGap: job.skillsGap,
+            source: job.source || "Scrapling Crawler",
+            hiringPost: job.hiringPost,
+            screenshotUrl: job.screenshotUrl,
+            cloudinaryUrl: job.cloudinaryUrl,
+            notes: job.source ? `Discovered via ${job.source}` : "Discovered via Scrapling Crawler",
+            autoApplyStatus: "idle",
+            autoApplyLogs: [],
+          });
+          addedCount++;
+        }
+
+        if (addedCount > 0) {
+          success(
+            `Scrapling Crawler added ${addedCount} fresh opportunit${addedCount === 1 ? "y" : "ies"} to your Wishlist!`
+          );
+          setView("deck");
+        } else {
+          success("Crawl complete — all discovered roles are already tracked in your pipeline.");
+        }
+      } else if (data.offline) {
+        error("Crawler engine is offline. Run 'npm run dev:scrapling' to start the local sidecar.");
+        } else {
         error(data.error || "Crawl completed with zero new matches.");
       }
-    } catch {
-      error("Failed to connect to web crawler endpoint.");
+    } catch (err) {
+      error(err instanceof Error ? err.message : "Failed to connect to web crawler endpoint.");
     } finally {
       setCrawling(false);
     }
@@ -143,8 +285,8 @@ export default function TrackerPage() {
       } else {
         error(data.error || "Employer Review failed.");
       }
-    } catch {
-      error("Failed to run Employer Simulator.");
+    } catch (err) {
+      error(err instanceof Error ? err.message : "Failed to run Employer Simulator.");
     }
   };
 
@@ -251,12 +393,11 @@ export default function TrackerPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={handleCrawlWeb}
-            disabled={crawling}
-            className="inline-flex items-center gap-2 rounded-xl bg-purple-600/20 border border-purple-500/30 px-3.5 py-2.5 text-sm font-bold text-purple-300 hover:bg-purple-500/30 transition-colors disabled:opacity-50"
+            onClick={() => router.push("/jobs")}
+            className="inline-flex items-center gap-2 rounded-xl border border-[var(--sky)]/30 bg-[var(--sky)]/10 px-3.5 py-2.5 text-sm font-bold text-[var(--sky)] transition-colors hover:bg-[var(--sky)]/15"
           >
-            {crawling ? <Loader2 className="h-4 w-4 animate-spin text-purple-400" /> : <Globe className="h-4 w-4 text-purple-400" />}
-            {crawling ? "Crawling Web..." : "Scrapling Crawler"}
+            <Globe className="h-4 w-4" />
+            Crawler console
           </button>
           <motion.button
             whileHover={{ y: -1 }}
@@ -278,12 +419,23 @@ export default function TrackerPage() {
       <>
       {/* Coaching panel */}
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-[var(--chartreuse)]" />
-          <h2 className="text-sm font-bold text-[var(--paper)]">Coaching</h2>
-          <span className="text-[10px] text-dim">Deterministic insights from your live pipeline — updated as you move cards</span>
-        </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <button
+          type="button"
+          onClick={() => setCoachingOpen((open) => !open)}
+          className="flex w-full items-center gap-3 text-left"
+          aria-expanded={coachingOpen}
+        >
+          <span className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/[0.05]">
+            <Sparkles className="h-4 w-4 text-[var(--chartreuse)]" />
+          </span>
+          <span className="flex-1">
+            <span className="block text-sm font-bold text-[var(--paper)]">Pipeline guidance</span>
+            <span className="block text-[10px] text-dim">Deterministic next-step prompts from the current board · no LLM call</span>
+          </span>
+          <ChevronDown className={cn("h-4 w-4 text-dim transition-transform", coachingOpen && "rotate-180")} />
+        </button>
+        {coachingOpen && (
+        <div className="mt-4 grid grid-cols-1 gap-3 border-t border-[var(--line)] pt-4 md:grid-cols-2 xl:grid-cols-5">
           {columns.map((col) => {
             const g = guidance[col.id];
             return (
@@ -297,6 +449,7 @@ export default function TrackerPage() {
             );
           })}
         </div>
+        )}
       </section>
 
       {/* LinkedIn Jobs */}
@@ -528,14 +681,100 @@ export default function TrackerPage() {
               view === "deck" ? "bg-[var(--chartreuse)] text-ink" : "text-dim hover:text-[var(--paper)]"
             )}
           >
-            <Sparkles className="h-3.5 w-3.5" /> Spout Deck
+            <Sparkles className="h-3.5 w-3.5" /> Review Deck
           </button>
         </div>
       </div>
 
+      <section data-testid="explain-fit-panel" className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/[0.06]">
+              <Lightbulb className="h-4 w-4 text-[var(--chartreuse)]" />
+            </span>
+            <div>
+              <p className="text-sm font-bold text-[var(--paper)]">Explain fit — inline assist</p>
+              <p className="text-[11px] text-dim">LLM assist with vault cite · {explainBudget.maxPrompt}/{explainBudget.maxOutput} tokens · iter {explainIter}/{MAX_ITERATIONS}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              aria-label="Pick job to explain"
+              value={explainJobId ?? ""}
+              onChange={(e) => setExplainJobId(e.target.value || null)}
+              className="max-w-[220px] rounded-xl border border-[var(--line)] bg-white/[0.03] px-3 py-2 text-xs font-semibold text-[var(--paper)] outline-none focus:border-[var(--chartreuse)]/50"
+            >
+              <option value="">Select a role…</option>
+              {applications.map((j) => (
+                <option key={j.id} value={j.id}>{j.title} @ {j.company}</option>
+              ))}
+            </select>
+            <button
+              data-testid="explain-fit-button"
+              onClick={() => {
+                const job = applications.find((a) => a.id === explainJobId) ?? sorted[0] ?? applications[0];
+                if (job) handleExplainFit(job);
+              }}
+              disabled={explainLoading || (!explainJobId && !sorted[0] && !applications[0])}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--chartreuse)] px-4 py-2 text-xs font-bold text-ink shadow-[var(--glow)] hover:bg-chartreuse-bright disabled:opacity-40"
+            >
+              {explainLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSearch className="h-3.5 w-3.5" />}
+              Explain fit
+            </button>
+          </div>
+        </div>
+        {(explainStream || explainLoading || explainError || explainHits.length > 0) && (
+          <div className="mt-4 rounded-xl border border-[var(--line)] bg-black/15 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Quote className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-dim">Streaming citation</span>
+              {explainAnalysis && <span className="ml-auto rounded-full border border-[var(--line)] bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] text-dim">{explainAnalysis.source ?? "heuristic_fallback"}</span>}
+            </div>
+            <pre data-testid="explain-stream" className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-[var(--paper)]/90">{explainStream || (explainLoading ? "…" : "")}</pre>
+            {explainHits.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {explainHits.map((h) => (
+                  <span key={`${h.docName}-${h.chunkIndex}`} className="inline-flex items-center gap-1 rounded-full border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/10 px-2 py-1 text-[10px] font-semibold text-[var(--chartreuse)]">
+                    <Quote className="h-3 w-3" />{h.docName}#{h.chunkIndex} · {(h.score * 100).toFixed(0)}% · {h.model}
+                  </span>
+                ))}
+              </div>
+            )}
+            {explainHits.length > 0 && explainAnalysis && (
+              <div className="mt-3 space-y-1.5">
+                {explainHits.map((h) => (
+                  <div key={`txt-${h.docName}-${h.chunkIndex}`} className="rounded-lg border border-[var(--line)] bg-white/[0.02] px-3 py-2">
+                    <p className="font-mono text-[10px] font-bold text-dim">{h.docName}#{h.chunkIndex} [{h.model}]</p>
+                    <p className="mt-1 text-xs leading-relaxed text-[var(--paper)]/85 line-clamp-3">{h.text.slice(0, 320)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {explainError && <p className="mt-2 text-xs text-[var(--amber)]">{explainError}</p>}
+            {explainAnalysis && (
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div className="rounded-lg border border-[var(--line)] bg-white/[0.02] p-2.5">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-dim">Fit</p>
+                  <p className="mt-1 text-xs font-bold text-[var(--paper)]">{explainAnalysis.fit ?? "medium"} · {explainAnalysis.matchScore}%</p>
+                </div>
+                <div className="rounded-lg border border-[var(--line)] bg-white/[0.02] p-2.5">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-dim">Budget</p>
+                  <p className="mt-1 font-mono text-xs text-dim">{explainBudget.maxPrompt}/{explainBudget.maxOutput} (10k/2k)</p>
+                </div>
+                <div className="rounded-lg border border-[var(--line)] bg-white/[0.02] p-2.5">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-dim">Iter</p>
+                  <p className="mt-1 font-mono text-xs text-dim">{explainIter} / {MAX_ITERATIONS}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {!applications.length && <p className="mt-3 text-xs text-dim">Add a job to run Explain fit.</p>}
+      </section>
+
       {/* Board View */}
       {view === "board" ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory xl:grid xl:grid-cols-5 xl:overflow-x-visible no-scrollbar">
           {columns.map((col) => {
             const jobs = sorted.filter((a) => a.status === col.id);
             return (
@@ -558,7 +797,7 @@ export default function TrackerPage() {
                   }
                 }}
                 className={cn(
-                  "min-w-0 rounded-2xl transition-all",
+                  "w-[85vw] sm:w-[320px] shrink-0 snap-center xl:w-auto min-w-0 rounded-2xl transition-all",
                   dragTarget === col.id && "bg-white/[0.03] ring-1 ring-[var(--chartreuse)]/30"
                 )}
               >
@@ -581,7 +820,17 @@ export default function TrackerPage() {
                 <div className="flex flex-col gap-3">
                   <AnimatePresence mode="popLayout">
                     {jobs.map((job, i) => (
-                      <JobCard key={job.id} job={job} index={i} onOpen={(id) => openJob(id)} />
+                      <div key={job.id} className="space-y-1.5">
+                        <JobCard job={job} index={i} onOpen={(id) => openJob(id)} />
+                        <button
+                          onClick={() => { setExplainJobId(job.id); handleExplainFit(job); }}
+                          disabled={explainLoading}
+                          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--line)] bg-white/[0.02] px-2.5 py-1.5 text-[11px] font-semibold text-dim hover:border-[var(--chartreuse)]/30 hover:text-[var(--chartreuse)] disabled:opacity-40"
+                          data-testid={`explain-fit-inline-${job.id}`}
+                        >
+                          <FileSearch className="h-3 w-3" /> Explain fit
+                        </button>
+                      </div>
                     ))}
                   </AnimatePresence>
                   {jobs.length === 0 && (
@@ -597,7 +846,7 @@ export default function TrackerPage() {
       ) : view === "table" ? (
         /* Table View */
         <div className="overflow-x-auto rounded-2xl border border-line">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <thead>
               <tr className="border-b border-[var(--line)] bg-white/[0.02] text-[10px] uppercase tracking-[0.18em] text-dim">
                 <th
@@ -606,6 +855,9 @@ export default function TrackerPage() {
                 >
                   <span className="inline-flex items-center gap-1">Position <ArrowUpDown className="h-3 w-3" /></span>
                 </th>
+                <th className="px-4 py-3 font-semibold">Fit · Verdict</th>
+                <th className="px-4 py-3 font-semibold">Salary intel</th>
+                <th className="px-4 py-3 font-semibold">Evidence</th>
                 <th className="px-4 py-3 font-semibold">Location</th>
                 <th className="px-4 py-3 font-semibold">Salary</th>
                 <th
@@ -621,6 +873,7 @@ export default function TrackerPage() {
                 >
                   <span className="inline-flex items-center gap-1">Applied <ArrowUpDown className="h-3 w-3" /></span>
                 </th>
+                <th className="px-4 py-3 font-semibold">Explain</th>
               </tr>
             </thead>
             <tbody>
@@ -633,6 +886,77 @@ export default function TrackerPage() {
                   <td className="px-4 py-3">
                     <p className="font-semibold text-[var(--paper)]">{job.title}</p>
                     <p className="text-xs text-dim">{job.company}</p>
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      {job.skipReason && (
+                        <span className="rounded-full border border-[var(--coral)]/30 bg-[var(--coral)]/10 px-1.5 py-0.5 text-[10px] font-bold text-[var(--coral)]">{job.skipReason.replace(/_/g, " ")}</span>
+                      )}
+                      {job.jobBrief?.summary && (
+                        <span className="rounded-full border border-[var(--line)] bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-dim">brief</span>
+                      )}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="flex flex-wrap gap-1">
+                      {job.fitCategory ? (
+                        <span
+                          className={cn(
+                            "rounded-full border px-1.5 py-0.5 text-[10px] font-bold",
+                            job.fitCategory === "direct_fit"
+                              ? "border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
+                              : "border-[var(--violet)]/30 bg-[var(--violet)]/10 text-[var(--violet)]"
+                          )}
+                        >
+                          {job.fitCategory.replace(/_/g, " ")}
+                        </span>
+                      ) : (
+                        <span className="rounded-full border border-[var(--line)] bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-dim">—</span>
+                      )}
+                      {job.employerReview?.verdict ? (
+                        <span
+                          className={cn(
+                            "rounded-full border px-1.5 py-0.5 text-[10px] font-bold",
+                            job.employerReview.verdict === "interview_likely"
+                              ? "border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
+                              : job.employerReview.verdict === "possible_callback"
+                              ? "border-[var(--amber)]/30 bg-[var(--amber)]/10 text-[var(--amber)]"
+                              : "border-[var(--coral)]/30 bg-[var(--coral)]/10 text-[var(--coral)]"
+                          )}
+                        >
+                          {job.employerReview.verdict.replace(/_/g, " ")}
+                        </span>
+                      ) : null}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {job.salaryIntel?.disclosedRange ? (
+                      <span className="rounded-full border border-[var(--sky)]/30 bg-[var(--sky)]/10 px-2 py-0.5 text-[11px] font-semibold text-[var(--sky)]">{job.salaryIntel.disclosedRange}</span>
+                    ) : job.salaryIntel ? (
+                      <span className="rounded-full border border-[var(--amber)]/30 bg-[var(--amber)]/10 px-2 py-0.5 text-[11px] font-semibold text-[var(--amber)]">
+                        Est {job.salaryIntel.estimateLow ?? "?"}–{job.salaryIntel.estimateHigh ?? "?"}
+                      </span>
+                    ) : (
+                      <span className="text-dim">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="flex flex-wrap items-center gap-1">
+                      {job.skillsGap && (
+                        <span className="rounded-full border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/5 px-1.5 py-0.5 text-[10px] text-[var(--chartreuse)]">
+                          gap {job.skillsGap.missingSkills?.length ?? 0} missing
+                        </span>
+                      )}
+                      {job.multiAgentOutputs && Object.keys(job.multiAgentOutputs).length > 0 && (
+                        <span className="rounded-full border border-[var(--sky)]/20 bg-[var(--sky)]/5 px-1.5 py-0.5 text-[10px] text-[var(--sky)]">
+                          {Object.keys(job.multiAgentOutputs).length} chips
+                        </span>
+                      )}
+                      {(job.screenshotUrl || job.cloudinaryUrl) && (
+                        <span className="rounded-full border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/5 px-1.5 py-0.5 text-[10px] text-[var(--chartreuse)]">proof</span>
+                      )}
+                      {!!job.autoApplyLogs?.length && (
+                        <span className="rounded-full border border-[var(--line)] bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-dim">{job.autoApplyLogs.length} logs</span>
+                      )}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-dim">{job.location}</td>
                   <td className="px-4 py-3 font-mono text-xs text-dim">{job.salary || "—"}</td>
@@ -645,6 +969,16 @@ export default function TrackerPage() {
                   </td>
                   <td className="px-4 py-3"><StatusBadge status={job.status} size="sm" /></td>
                   <td className="px-4 py-3 text-xs text-dim">{job.appliedDate || "—"}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setExplainJobId(job.id); handleExplainFit(job); }}
+                      disabled={explainLoading}
+                      data-testid={`explain-fit-row-${job.id}`}
+                      className="inline-flex items-center gap-1 rounded-lg border border-[var(--line)] bg-white/[0.02] px-2.5 py-1 text-[11px] font-semibold text-dim hover:border-[var(--chartreuse)]/30 hover:text-[var(--chartreuse)] disabled:opacity-40"
+                    >
+                      <FileSearch className="h-3 w-3" /> Explain fit
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -678,6 +1012,16 @@ export default function TrackerPage() {
           onTailor={(j) => openJob(j.id)}
           onRunEmployerReview={handleRunEmployerReview}
           onCrawlMore={handleCrawlWeb}
+          onSave={(j) => {
+            updateApplication(j.id, { status: "wishlist" });
+            success(`Saved "${j.title}" to wishlist.`);
+          }}
+          onReviewed={(j, reason) => {
+            if (reason) {
+              updateApplication(j.id, { skipReason: reason, status: "rejected" });
+              success(`Marked as skipped: ${reason.replace(/_/g, " ")}.`);
+            }
+          }}
         />
       )}
 

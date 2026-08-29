@@ -1,0 +1,11 @@
+﻿Command: npx vitest run src/lib/__tests__/sourceTaxonomy.test.ts
+Captured: 2026-08-23 after the unknown-market review repair
+Exit code: 0
+
+RUN  v4.1.10 C:/Users/ahmed/Desktop/Personal Projects/Job Finder
+
+Test Files  1 passed (1)
+Tests       25 passed (25)
+Duration    444ms (transform 72ms, setup 40ms, import 165ms, tests 18ms, environment 0ms)
+
+Non-failing Vite notices: configLoader native compatibility and vite-tsconfig-paths deprecation.

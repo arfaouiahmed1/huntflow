@@ -8,7 +8,6 @@ export interface ApplyExecutionInput {
   documents?: TailoredDocuments;
   pitch?: string;
   submit: boolean;
-  minMatch: number;
   matchScore: number | null;
   agentUrl?: string;
 }
@@ -25,9 +24,9 @@ const ts = () => new Date().toLocaleTimeString("en-US", { hour12: false });
  * Drive the Scrapling sidecar to prefill/submit an application form.
  *
  * Shared by both the single-agent graph (applyAgent.ts) and the multi-agent
- * graph (multiAgentAppGraph.ts) so they execute identically. When the sidecar
- * is unreachable, `submit` degrades to a *simulated* "applied" (never a real
- * submission) and prefill mode reports `manual_required`.
+ * graph (multiAgentAppGraph.ts) so they execute identically. An unreachable
+ * sidecar is always a failed run: the product never labels a simulated action
+ * as a real application or claims fields were filled without browser proof.
  */
 export async function executeApply(input: ApplyExecutionInput): Promise<ApplyExecutionResult> {
   const logs: AutoApplyLog[] = [];
@@ -39,7 +38,6 @@ export async function executeApply(input: ApplyExecutionInput): Promise<ApplyExe
     },
     documents: input.documents ?? {},
     submit: input.submit,
-    min_match: input.minMatch,
     match_score: input.matchScore,
   };
 
@@ -75,17 +73,14 @@ export async function executeApply(input: ApplyExecutionInput): Promise<ApplyExe
     logs.push({ timestamp: ts(), message: `⚠ Scrapling agent unreachable (${msg}) — cannot reach the form`, type: "warning" });
     logs.push({ timestamp: ts(), message: `🌐 Attempted navigation to ${input.url || ""} careers page`, type: "info" });
 
-    if (input.submit) {
-      logs.push({
-        timestamp: ts(),
-        message: `Simulated application submitted (Scrapling offline — not a live apply). Start it with 'npm run dev:scrapling' for a real submission.`,
-        type: "success",
-      });
-      return { status: "applied", fields: [], logs };
-    }
-
-    logs.push({ timestamp: ts(), message: "🧪 Prefill mode — review & submit manually once the sidecar is running", type: "warning" });
-    return { status: "manual_required", fields: ["full_name", "email", "phone", "cover_letter"], logs };
+    logs.push({
+      timestamp: ts(),
+      message: input.submit
+        ? "Submission was not attempted because the browser agent is offline."
+        : "No fields were filled because the browser agent is offline.",
+      type: "error",
+    });
+    return { status: "failed", fields: [], logs };
   } finally {
     // Clear the abort timer on every exit path (success, throw, early return)
     // so a pending 90s timer never outlives the request.

@@ -1,0 +1,14 @@
+.git
+.github
+.next
+node_modules
+data
+tmp
+output
+*.log
+.env
+.env.*
+!.env.local.example
+scrapling-agent/.venv
+scrapling-agent/.agent_runs
+scrapling-agent/__pycache__

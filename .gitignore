@@ -53,3 +53,13 @@ next-env.d.ts
 .claude/settings.local.json
 .claude/worktrees/
 session-export-*/
+
+# process artifacts — never commit
+.agents/
+ORIGINAL_REQUEST.md
+PROJECT.md
+TEST_INFRA.md
+TEST_READY.md
+tmp/
+output/
+tsc_errors.log

@@ -1,0 +1,111 @@
+
+> job-finder-app@0.1.0 build
+> next build
+
+Gû¦ Next.js 16.3.1 (Turbopack)
+- Environments: .env
+node.exe : GÜá Warning: Next.js ignored package-lock.json in C:\Users\ahmed because it is outside the current Git repository (C:\Users\ahmed\Desktop\Personal Projects\Job Finder).
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (GÜá Warning: Ne...ts\Job Finder).:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ To use this directory, set `turbopack.root` in your Next.js config.
+
+G£ô Running next.config.ts took 200ms
+
+  Creating an optimized production build ...
+G£ô Compiled successfully in 43s
+  Running TypeScript ...
+  Finished TypeScript in 22.8s ...
+  Collecting page data using 15 workers ...
+  Generating static pages using 15 workers (0/58) ...
+  Generating static pages using 15 workers (14/58) 
+  Generating static pages using 15 workers (28/58) 
+  Generating static pages using 15 workers (43/58) 
+G£ô Generating static pages using 15 workers (58/58) in 10.3s
+  Finalizing page optimization ...
+
+Route (app)
+Göî Gùï /
+Gö£ Gùï /_not-found
+Gö£ Gùï /agent
+Gö£ ¦Æ /api/agent/activity
+Gö£ ¦Æ /api/agent/config
+Gö£ ¦Æ /api/agent/employer-review
+Gö£ ¦Æ /api/agent/heal-selectors
+Gö£ ¦Æ /api/agent/health
+Gö£ ¦Æ /api/agent/multi-apply
+Gö£ ¦Æ /api/agent/partial-pipeline
+Gö£ ¦Æ /api/agent/resume
+Gö£ ¦Æ /api/agent/run-history
+Gö£ ¦Æ /api/agent/screenshot/[...path]
+Gö£ ¦Æ /api/agent/sources
+Gö£ ¦Æ /api/apply-agent
+Gö£ ¦Æ /api/assistant
+Gö£ ¦Æ /api/auth/gmail/authorize
+Gö£ ¦Æ /api/auth/gmail/callback
+Gö£ ¦Æ /api/auth/gmail/config
+Gö£ ¦Æ /api/auth/gmail/revoke
+Gö£ ¦Æ /api/auth/gmail/status
+Gö£ ¦Æ /api/crawl
+Gö£ ¦Æ /api/crawl/stream
+Gö£ ¦Æ /api/data
+Gö£ ¦Æ /api/data/[collection]
+Gö£ ¦Æ /api/data/[collection]/[id]
+Gö£ ¦Æ /api/data/export
+Gö£ ¦Æ /api/data/import
+Gö£ ¦Æ /api/data/reset
+Gö£ ¦Æ /api/data/stats
+Gö£ ¦Æ /api/generate
+Gö£ ¦Æ /api/health
+Gö£ ¦Æ /api/linkedin/cookie
+Gö£ ¦Æ /api/linkedin/import
+Gö£ ¦Æ /api/linkedin/jobs
+Gö£ ¦Æ /api/linkedin/login
+Gö£ ¦Æ /api/linkedin/logout
+Gö£ ¦Æ /api/linkedin/profile
+Gö£ ¦Æ /api/linkedin/session
+Gö£ ¦Æ /api/llm/test
+Gö£ ¦Æ /api/mail/send
+Gö£ ¦Æ /api/mail/sync
+Gö£ ¦Æ /api/mail/test
+Gö£ ¦Æ /api/memory
+Gö£ ¦Æ /api/memory/consolidate
+Gö£ ¦Æ /api/notifications
+Gö£ ¦Æ /api/notifications/[id]
+Gö£ ¦Æ /api/pdf
+Gö£ ¦Æ /api/resume
+Gö£ ¦Æ /api/resume/agent
+Gö£ ¦Æ /api/resume/agent-loop
+Gö£ ¦Æ /api/resume/ats
+Gö£ ¦Æ /api/resume/compile
+Gö£ ¦Æ /api/resume/copilot
+Gö£ ¦Æ /api/resume/import
+Gö£ ¦Æ /api/resume/render
+Gö£ ¦Æ /api/resume/synctex/forward
+Gö£ ¦Æ /api/resume/synctex/reverse
+Gö£ ¦Æ /api/scrape
+Gö£ ¦Æ /api/tracker/explain
+Gö£ ¦Æ /api/usage
+Gö£ ¦Æ /api/vault
+Gö£ ¦Æ /api/vault/assist
+Gö£ ¦Æ /api/vault/chunks
+Gö£ ¦Æ /api/vault/search
+Gö£ Gùï /assistant
+Gö£ Gùï /interviews
+Gö£ Gùï /jobs
+Gö£ ¦Æ /jobs/[id]
+Gö£ Gùï /network
+Gö£ Gùï /outreach
+Gö£ Gùï /resume
+Gö£ Gùï /settings
+Gö£ Gùï /tracker
+Göö Gùï /vault
+
+
+Gùï  (Static)   prerendered as static content
+¦Æ  (Dynamic)  server-rendered on demand
+
+

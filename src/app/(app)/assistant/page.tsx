@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Bot, Send, Loader2, Sparkles, Wrench, User, Sparkle } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/Toaster";
 import { consumeAssistant } from "@/lib/assistant/streamClient";
 
 interface Msg {
@@ -24,31 +25,54 @@ const SUGGESTIONS = [
 ];
 
 export default function AssistantPage() {
-  const { profile, llmSettings } = useApp();
-  const [messages, setMessages] = useState<Msg[]>(() => {
-    try {
-      const saved = localStorage.getItem(HISTORY_KEY);
-      return saved ? (JSON.parse(saved) as Msg[]) : [];
-    } catch {
-      return [];
-    }
-  });
+  const { llmSettings } = useApp();
+  const { error: toastError } = useToast();
+  const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const liveIndexRef = useRef<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const hydratedRef = useRef(false);
 
   useEffect(() => {
     try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(messages.slice(-15)));
-    } catch {
-      /* storage full — ignore */
+      const saved = localStorage.getItem(HISTORY_KEY);
+      const parsed = saved ? (JSON.parse(saved) as Msg[]) : [];
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from localStorage
+      if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+    } catch (err) {
+      localStorage.removeItem(HISTORY_KEY);
+      toastError(err instanceof Error ? err.message : "Saved assistant history was corrupted — starting fresh.");
+    } finally {
+      hydratedRef.current = true;
     }
-  }, [messages]);
+  }, [toastError]);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(messages.slice(-15)));
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : "Failed to persist assistant history — storage full.");
+    }
+  }, [messages, toastError]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, thinking]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) abortRef.current?.abort();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, []);
 
   /** Immutably replace one message while a stream is updating it in place. */
   const patchLive = (patch: (m: { content: string; steps?: Msg["steps"]; reasoning?: string[] }) => void) => {
@@ -69,64 +93,81 @@ export default function AssistantPage() {
 
   const send = async (text?: string) => {
     const content = (text ?? input).trim();
-    if (!content || thinking) return;
+    if (!content) return;
+    if (thinking) abortRef.current?.abort();
     setInput("");
     const history: Msg[] = messages.slice(-8);
     const next: Msg[] = [...messages, { role: "user", content }];
     setMessages(next);
     setThinking(true);
 
-    // Seed an empty assistant bubble that the stream fills in live.
     const liveIndex = next.length;
     liveIndexRef.current = liveIndex;
     setMessages((prev) => [...prev, { role: "assistant", content: "", steps: [], reasoning: [] }]);
 
-    await consumeAssistant(JSON.stringify({ message: content, history: history.map((m) => ({ role: m.role, content: m.content })) }), {
-      onEvent: {
-        onReasoning: (note) => {
-          patchLive((m) => {
-            m.reasoning = [...(m.reasoning ?? []), note];
-          });
-        },
-        onToolCall: (label, detail) => {
-          patchLive((m) => {
-            m.steps = [...(m.steps ?? []), { kind: "tool", label, detail }];
-          });
-        },
-        onToken: (delta) => {
-          patchLive((m) => {
-            m.content += delta;
-          });
-        },
-        onDone: (result) => {
-          setMessages((prev) => {
-            const idx = liveIndexRef.current;
-            if (idx === null || idx < 0 || idx >= prev.length) return prev;
-            const next = prev.slice();
-            const current = next[idx];
-            next[idx] = {
-              ...current,
-              content: result.reply || current.content,
-              steps: result.steps && result.steps.length ? result.steps : current.steps,
-            };
-            return next;
-          });
-          liveIndexRef.current = null;
-        },
-        onError: (message) => {
-          setMessages((prev) => {
-            const idx = liveIndexRef.current;
-            if (idx === null || idx < 0 || idx >= prev.length) return prev;
-            const next = prev.slice();
-            next[idx] = { ...next[idx], content: message || "Something went wrong." };
-            return next;
-          });
-          liveIndexRef.current = null;
-        },
-      },
-    });
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-    setThinking(false);
+    try {
+      await consumeAssistant(
+        JSON.stringify({ message: content, history: history.map((m) => ({ role: m.role, content: m.content })) }),
+        {
+          signal: controller.signal,
+          onEvent: {
+            onReasoning: (note) => {
+              patchLive((m) => {
+                m.reasoning = [...(m.reasoning ?? []), note];
+              });
+            },
+            onToolCall: (label, detail) => {
+              patchLive((m) => {
+                m.steps = [...(m.steps ?? []), { kind: "tool", label, detail }];
+              });
+            },
+            onToken: (delta) => {
+              patchLive((m) => {
+                m.content += delta;
+              });
+            },
+            onDone: (result) => {
+              setMessages((prev) => {
+                const idx = liveIndexRef.current;
+                if (idx === null || idx < 0 || idx >= prev.length) return prev;
+                const n = prev.slice();
+                const current = n[idx];
+                n[idx] = {
+                  ...current,
+                  content: result.reply || current.content,
+                  steps: result.steps && result.steps.length ? result.steps : current.steps,
+                };
+                return n;
+              });
+              liveIndexRef.current = null;
+            },
+            onError: (message) => {
+              if (controller.signal.aborted) return;
+              setMessages((prev) => {
+                const idx = liveIndexRef.current;
+                if (idx === null || idx < 0 || idx >= prev.length) return prev;
+                const n = prev.slice();
+                n[idx] = { ...n[idx], content: message || "Something went wrong." };
+                return n;
+              });
+              liveIndexRef.current = null;
+            },
+          },
+        }
+      );
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      if ((err as Error)?.name === "AbortError") return;
+      toastError(err instanceof Error ? err.message : "Assistant request failed.");
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
+      if (!controller.signal.aborted) setThinking(false);
+      else setThinking(false);
+    }
   };
 
   return (

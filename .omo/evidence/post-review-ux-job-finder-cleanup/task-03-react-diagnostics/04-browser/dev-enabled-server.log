@@ -1,0 +1,25 @@
+▲ Next.js 16.3.1 (Turbopack)
+- Local:         http://localhost:3013
+- Network:       http://192.168.1.15:3013
+- Environments: .env
+✓ Ready in 939ms
+⚠ Warning: Next.js ignored package-lock.json in C:\Users\ahmed because it is outside the current Git repository (C:\Users\ahmed\Desktop\Personal Projects\Job Finder).
+ To use this directory, set `turbopack.root` in your Next.js config.
+
+✓ Running next.config.ts took 42ms
+
+ GET / 200 in 503ms (next.js: 241ms, application-code: 262ms)
+ GET /api/data/stats 200 in 130ms (next.js: 67ms, application-code: 64ms)
+ GET /api/data/stats 200 in 19ms (next.js: 5ms, application-code: 13ms)
+ GET /api/data 200 in 147ms (next.js: 60ms, application-code: 87ms)
+ GET /api/notifications 200 in 119ms (next.js: 89ms, application-code: 30ms)
+ GET /api/usage 200 in 239ms (next.js: 228ms, application-code: 11ms)
+ GET /api/dev-tools 200 in 705ms (next.js: 359ms, application-code: 346ms)
+ GET /api/vault 200 in 1033ms (next.js: 547ms, application-code: 487ms)
+ GET /api/agent/health 503 in 1042ms (next.js: 172ms, application-code: 870ms)
+ GET /api/agent/activity?since=0 503 in 1049ms (next.js: 293ms, application-code: 756ms)
+ GET /api/notifications 200 in 15ms (next.js: 5ms, application-code: 10ms)
+ GET /api/dev-tools 200 in 28ms (next.js: 19ms, application-code: 9ms)
+ GET /api/dev-tools?asset=react-scan 200 in 107ms (next.js: 5ms, application-code: 102ms)
+ GET /api/dev-tools?asset=react-grab 200 in 210ms (next.js: 14ms, application-code: 197ms)
+[?25h

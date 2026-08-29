@@ -6,20 +6,24 @@ import {
   EmailMessage,
   InterviewEvent,
   JobApplication,
+  NotificationItem,
   Reminder,
   ResumeContent,
   ResumeDoc,
 } from "@/types";
 import { seedJobs } from "./seedData";
+import { initialProfile } from "./initialData";
 
-const DATA_DIR = process.env.HUNTFLOW_DATA_DIR || path.join(process.cwd(), "data");
+// A relative default resolves against the process working directory at runtime
+// without asking Next's file tracer to follow the entire repository.
+const DATA_DIR = process.env.HUNTFLOW_DATA_DIR || "data";
 const DB_PATH = process.env.HUNTFLOW_DB_PATH || path.join(DATA_DIR, "huntflow.db");
 
 let db: DatabaseSync | null = null;
 
 export function getDb(): DatabaseSync {
   if (db) return db;
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(DATA_DIR, { recursive: true });
   db = new DatabaseSync(DB_PATH);
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
@@ -70,6 +74,9 @@ export function migrate(database: DatabaseSync) {
       hiring_post INTEGER NOT NULL DEFAULT 0,
       created_date TEXT NOT NULL,
       company_logo TEXT,
+      screenshot_url TEXT,
+      cloudinary_url TEXT,
+      skip_reason TEXT,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS contacts (
@@ -154,6 +161,15 @@ export function migrate(database: DatabaseSync) {
       job_id TEXT,
       source TEXT NOT NULL DEFAULT 'system',
       importance INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT,
+      run_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS memory_embeddings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      memory_id INTEGER NOT NULL,
+      embedding TEXT NOT NULL DEFAULT '[]',
+      model TEXT NOT NULL DEFAULT 'local',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS agent_state (
@@ -207,6 +223,18 @@ export function migrate(database: DatabaseSync) {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id)
     );
+    CREATE TABLE IF NOT EXISTS agent_checkpoint_writes (
+      thread_id TEXT NOT NULL,
+      checkpoint_ns TEXT NOT NULL DEFAULT '',
+      checkpoint_id TEXT NOT NULL,
+      task_id TEXT NOT NULL,
+      idx INTEGER NOT NULL,
+      channel TEXT NOT NULL,
+      type TEXT,
+      value BLOB NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
+    );
     CREATE TABLE IF NOT EXISTS agent_run_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       thread_id TEXT NOT NULL,
@@ -220,6 +248,15 @@ export function migrate(database: DatabaseSync) {
       logs TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'info',
+      link TEXT,
+      read INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE INDEX IF NOT EXISTS idx_emails_job_id ON emails(job_id);
     CREATE INDEX IF NOT EXISTS idx_emails_contact_id ON emails(contact_id);
     CREATE INDEX IF NOT EXISTS idx_jobs_created_date ON jobs(created_date);
@@ -231,7 +268,9 @@ export function migrate(database: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_memory_job_id ON memory(job_id);
     CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage_log(ts);
     CREATE INDEX IF NOT EXISTS idx_agent_checkpoints_thread ON agent_checkpoints(thread_id);
+    CREATE INDEX IF NOT EXISTS idx_agent_checkpoint_writes_thread ON agent_checkpoint_writes(thread_id);
     CREATE INDEX IF NOT EXISTS idx_agent_run_history_thread ON agent_run_history(thread_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
   `);
   /* Idempotent column additions for databases created before a column existed */
   const addColumn = (table: string, column: string, ddl: string) => {
@@ -246,6 +285,13 @@ export function migrate(database: DatabaseSync) {
   addColumn("jobs", "multi_agent_outputs", "multi_agent_outputs TEXT");
   addColumn("jobs", "source", "source TEXT");
   addColumn("jobs", "hiring_post", "hiring_post INTEGER NOT NULL DEFAULT 0");
+  addColumn("jobs", "screenshot_url", "screenshot_url TEXT");
+  addColumn("jobs", "cloudinary_url", "cloudinary_url TEXT");
+  addColumn("jobs", "skip_reason", "skip_reason TEXT");
+  addColumn("memory", "expires_at", "expires_at TEXT");
+  addColumn("memory", "run_id", "run_id TEXT");
+  database.exec("CREATE INDEX IF NOT EXISTS idx_memory_expires_at ON memory(expires_at);");
+  database.exec("CREATE INDEX IF NOT EXISTS idx_memory_embeddings_memory_id ON memory_embeddings(memory_id);");
 }
 
 // ---------------------------------------------------------------------------
@@ -259,6 +305,7 @@ const JOB_COLUMNS = [
   "interview_questions", "job_brief", "salary_intel", "auto_apply_status",
   "auto_apply_logs", "employer_review", "fit_category", "multi_agent_outputs",
   "source", "hiring_post", "created_date", "company_logo",
+  "screenshot_url", "cloudinary_url", "skip_reason",
 ] as const;
 
 function rowToJob(row: Record<string, unknown>): JobApplication {
@@ -300,6 +347,9 @@ function rowToJob(row: Record<string, unknown>): JobApplication {
     hiringPost: row.hiring_post ? Boolean(Number(row.hiring_post)) : undefined,
     createdDate: String(row.created_date),
     companyLogo: (row.company_logo as string) || undefined,
+    screenshotUrl: (row.screenshot_url as string) || undefined,
+    cloudinaryUrl: (row.cloudinary_url as string) || undefined,
+    skipReason: (row.skip_reason as string) || undefined,
   };
 }
 
@@ -334,6 +384,9 @@ function jobToRow(job: JobApplication): Record<string, unknown> {
     hiring_post: job.hiringPost ? 1 : 0,
     created_date: job.createdDate,
     company_logo: job.companyLogo ?? null,
+    screenshot_url: job.screenshotUrl ?? null,
+    cloudinary_url: job.cloudinaryUrl ?? null,
+    skip_reason: job.skipReason ?? null,
     updated_at: new Date().toISOString(),
   };
 }
@@ -446,9 +499,12 @@ export const jobsRepo = {
          fit_category=excluded.fit_category, multi_agent_outputs=excluded.multi_agent_outputs,
          source=excluded.source, hiring_post=excluded.hiring_post,
          company_logo=excluded.company_logo,
+         screenshot_url=excluded.screenshot_url,
+         cloudinary_url=excluded.cloudinary_url,
+         skip_reason=excluded.skip_reason,
          updated_at=excluded.updated_at`
     );
-    stmt.run(...(keys.map((k) => row[k]) as never[]));
+    stmt.run(...(keys.map((k) => (row[k] === undefined ? null : row[k])) as never[]));
     return job;
   },
   remove(id: string) {
@@ -490,6 +546,10 @@ export const contactsRepo = {
     const stmt = getDb().prepare("SELECT * FROM contacts ORDER BY created_at DESC");
     return stmt.all().map((r) => rowToContact(r as Record<string, unknown>));
   },
+  get(id: string): Contact | null {
+    const row = getDb().prepare("SELECT * FROM contacts WHERE id = ?").get(id);
+    return row ? rowToContact(row as Record<string, unknown>) : null;
+  },
   upsert(contact: Contact) {
     getDb()
       .prepare(
@@ -524,6 +584,10 @@ export const emailsRepo = {
   list(): EmailMessage[] {
     const stmt = getDb().prepare("SELECT * FROM emails ORDER BY sent_at DESC");
     return stmt.all().map((r) => rowToEmail(r as Record<string, unknown>));
+  },
+  get(id: string): EmailMessage | null {
+    const row = getDb().prepare("SELECT * FROM emails WHERE id = ?").get(id);
+    return row ? rowToEmail(row as Record<string, unknown>) : null;
   },
   listForJob(jobId: string): EmailMessage[] {
     const stmt = getDb().prepare("SELECT * FROM emails WHERE job_id = ? ORDER BY sent_at ASC");
@@ -561,6 +625,10 @@ export const interviewsRepo = {
     const stmt = getDb().prepare("SELECT * FROM interviews ORDER BY scheduled_at ASC");
     return stmt.all().map((r) => rowToInterview(r as Record<string, unknown>));
   },
+  get(id: string): InterviewEvent | null {
+    const row = getDb().prepare("SELECT * FROM interviews WHERE id = ?").get(id);
+    return row ? rowToInterview(row as Record<string, unknown>) : null;
+  },
   upsert(interview: InterviewEvent) {
     getDb()
       .prepare(
@@ -596,6 +664,10 @@ export const remindersRepo = {
     const stmt = getDb().prepare("SELECT * FROM reminders ORDER BY due_at ASC");
     return stmt.all().map((r) => rowToReminder(r as Record<string, unknown>));
   },
+  get(id: string): Reminder | null {
+    const row = getDb().prepare("SELECT * FROM reminders WHERE id = ?").get(id);
+    return row ? rowToReminder(row as Record<string, unknown>) : null;
+  },
   upsert(reminder: Reminder) {
     getDb()
       .prepare(
@@ -628,6 +700,9 @@ export const settingsRepo = {
     getDb()
       .prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
       .run(key, value);
+  },
+  remove(key: string) {
+    getDb().prepare("DELETE FROM settings WHERE key = ?").run(key);
   },
   all(): Record<string, string> {
     const rows = getDb().prepare("SELECT key, value FROM settings").all();
@@ -674,6 +749,16 @@ export interface MemoryEntry {
   jobId?: string;
   source: string;
   importance: number;
+  expiresAt?: string | null;
+  runId?: string | null;
+  createdAt?: string;
+}
+
+export interface MemoryEmbedding {
+  id?: number;
+  memoryId: number;
+  embedding: number[];
+  model: string;
   createdAt?: string;
 }
 
@@ -682,18 +767,36 @@ export const memoryRepo = {
     const db = getDb();
     const res = db
       .prepare(
-        `INSERT INTO memory (kind, content, job_id, source, importance)
-         VALUES (?, ?, ?, ?, ?)`
+        `INSERT INTO memory (kind, content, job_id, source, importance, expires_at, run_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(entry.kind, entry.content, entry.jobId ?? null, entry.source, entry.importance);
-    return { id: Number(res.lastInsertRowid), ...entry, createdAt: new Date().toISOString() };
+      .run(
+        entry.kind,
+        entry.content,
+        entry.jobId ?? null,
+        entry.source ?? "manual",
+        entry.importance ?? 0,
+        entry.expiresAt ?? null,
+        entry.runId ?? null
+      );
+    return {
+      id: Number(res.lastInsertRowid),
+      ...entry,
+      source: entry.source ?? "manual",
+      importance: entry.importance ?? 0,
+      expiresAt: entry.expiresAt ?? null,
+      runId: entry.runId ?? null,
+      createdAt: new Date().toISOString(),
+    };
   },
-  list(opts: { kind?: string; jobId?: string; source?: string; limit?: number } = {}): MemoryEntry[] {
+  list(opts: { kind?: string; jobId?: string; source?: string; runId?: string; includeExpired?: boolean; limit?: number } = {}): MemoryEntry[] {
     const where: string[] = [];
     const args: (string | number)[] = [];
     if (opts.kind) { where.push("kind = ?"); args.push(opts.kind); }
     if (opts.jobId) { where.push("job_id = ?"); args.push(opts.jobId); }
     if (opts.source) { where.push("source = ?"); args.push(opts.source); }
+    if (opts.runId !== undefined) { where.push("run_id = ?"); args.push(opts.runId); }
+    if (opts.includeExpired === false) { where.push("(expires_at IS NULL OR expires_at > ?)"); args.push(new Date().toISOString()); }
     const sql = `SELECT * FROM memory ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY id DESC LIMIT ?`;
     args.push(opts.limit ?? 100);
     return getDb()
@@ -708,20 +811,222 @@ export const memoryRepo = {
           jobId: row.job_id ? String(row.job_id) : undefined,
           source: String(row.source),
           importance: Number(row.importance),
+          expiresAt: row.expires_at ? String(row.expires_at) : null,
+          runId: row.run_id ? String(row.run_id) : null,
           createdAt: String(row.created_at),
         };
       });
   },
+  addWithTTL(entry: Omit<MemoryEntry, "id" | "createdAt" | "expiresAt">, daysTTL = 7): MemoryEntry {
+    const days = Math.max(7, Math.min(30, daysTTL));
+    const expiresAt = new Date(Date.now() + days * 86400000).toISOString();
+    return memoryRepo.add({ ...entry, expiresAt });
+  },
+  listShort(opts: { kind?: string; jobId?: string; source?: string; runId?: string; includeExpired?: boolean; limit?: number } = {}): MemoryEntry[] {
+    const where: string[] = ["expires_at IS NOT NULL"];
+    const args: (string | number)[] = [];
+    if (opts.kind) { where.push("kind = ?"); args.push(opts.kind); }
+    if (opts.jobId) { where.push("job_id = ?"); args.push(opts.jobId); }
+    if (opts.source) { where.push("source = ?"); args.push(opts.source); }
+    if (opts.runId !== undefined) { where.push("run_id = ?"); args.push(opts.runId); }
+    if (opts.includeExpired !== true) { where.push("expires_at > ?"); args.push(new Date().toISOString()); }
+    const sql = `SELECT * FROM memory WHERE ${where.join(" AND ")} ORDER BY id DESC LIMIT ?`;
+    args.push(opts.limit ?? 100);
+    return getDb()
+      .prepare(sql)
+      .all(...args)
+      .map((r) => {
+        const row = r as Record<string, unknown>;
+        return {
+          id: Number(row.id),
+          kind: String(row.kind) as MemoryEntry["kind"],
+          content: String(row.content),
+          jobId: row.job_id ? String(row.job_id) : undefined,
+          source: String(row.source),
+          importance: Number(row.importance),
+          expiresAt: row.expires_at ? String(row.expires_at) : null,
+          runId: row.run_id ? String(row.run_id) : null,
+          createdAt: String(row.created_at),
+        };
+      });
+  },
+  listLong(opts: { kind?: string; jobId?: string; source?: string; limit?: number } = {}): MemoryEntry[] {
+    const where: string[] = ["expires_at IS NULL"];
+    const args: (string | number)[] = [];
+    if (opts.kind) { where.push("kind = ?"); args.push(opts.kind); }
+    if (opts.jobId) { where.push("job_id = ?"); args.push(opts.jobId); }
+    if (opts.source) { where.push("source = ?"); args.push(opts.source); }
+    const sql = `SELECT * FROM memory WHERE ${where.join(" AND ")} ORDER BY id DESC LIMIT ?`;
+    args.push(opts.limit ?? 100);
+    return getDb()
+      .prepare(sql)
+      .all(...args)
+      .map((r) => {
+        const row = r as Record<string, unknown>;
+        return {
+          id: Number(row.id),
+          kind: String(row.kind) as MemoryEntry["kind"],
+          content: String(row.content),
+          jobId: row.job_id ? String(row.job_id) : undefined,
+          source: String(row.source),
+          importance: Number(row.importance),
+          expiresAt: null,
+          runId: row.run_id ? String(row.run_id) : null,
+          createdAt: String(row.created_at),
+        };
+      });
+  },
+  embedFor(memoryId: number, embedding: number[], model = "local"): ReturnType<typeof memoryEmbeddingsRepo.upsert> {
+    return memoryEmbeddingsRepo.upsert({ memoryId, embedding, model });
+  },
+  get(id: number): MemoryEntry | null {
+    const row = getDb().prepare("SELECT * FROM memory WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    if (!row) return null;
+    return {
+      id: Number(row.id),
+      kind: String(row.kind) as MemoryEntry["kind"],
+      content: String(row.content),
+      jobId: row.job_id ? String(row.job_id) : undefined,
+      source: String(row.source),
+      importance: Number(row.importance),
+      expiresAt: row.expires_at ? String(row.expires_at) : null,
+      runId: row.run_id ? String(row.run_id) : null,
+      createdAt: String(row.created_at),
+    };
+  },
   delete(id: number) {
-    getDb().prepare("DELETE FROM memory WHERE id = ?").run(id);
+    const db = getDb();
+    db.prepare("DELETE FROM memory_embeddings WHERE memory_id = ?").run(id);
+    db.prepare("DELETE FROM memory WHERE id = ?").run(id);
   },
   prune(max = 500) {
-    getDb()
-      .prepare("DELETE FROM memory WHERE id NOT IN (SELECT id FROM memory ORDER BY id DESC LIMIT ?)")
-      .run(max);
+    try {
+      memoryRepo.deleteExpired();
+    } catch {
+      /* ignore purge errors, continue to cap prune */
+    }
+    const db = getDb();
+    db.exec("BEGIN");
+    try {
+      db.prepare("DELETE FROM memory WHERE id NOT IN (SELECT id FROM memory ORDER BY id DESC LIMIT ?)").run(max);
+      db.prepare("DELETE FROM memory_embeddings WHERE memory_id NOT IN (SELECT id FROM memory)").run();
+      db.exec("COMMIT");
+    } catch (e) {
+      try { db.exec("ROLLBACK"); } catch { /* ignore */ }
+      throw e;
+    }
   },
   wipe() {
-    getDb().prepare("DELETE FROM memory").run();
+    const db = getDb();
+    db.exec("BEGIN");
+    try {
+      db.prepare("DELETE FROM memory_embeddings").run();
+      db.prepare("DELETE FROM memory").run();
+      db.exec("COMMIT");
+    } catch (e) {
+      try { db.exec("ROLLBACK"); } catch { /* ignore */ }
+      throw e;
+    }
+  },
+  deleteExpired(nowIso = new Date().toISOString()) {
+    const db = getDb();
+    const rows = db.prepare("SELECT id FROM memory WHERE expires_at IS NOT NULL AND expires_at <= ?").all(nowIso) as Record<string, unknown>[];
+    if (!rows.length) return 0;
+    db.exec("BEGIN");
+    try {
+      for (const r of rows) {
+        const id = Number(r.id);
+        db.prepare("DELETE FROM memory_embeddings WHERE memory_id = ?").run(id);
+      }
+      db.prepare("DELETE FROM memory WHERE expires_at IS NOT NULL AND expires_at <= ?").run(nowIso);
+      db.exec("COMMIT");
+    } catch (e) {
+      try { db.exec("ROLLBACK"); } catch { /* ignore */ }
+      throw e;
+    }
+    return rows.length;
+  },
+  pruneExpired(nowIso = new Date().toISOString()) {
+    return memoryRepo.deleteExpired(nowIso);
+  },
+};
+
+export const memoryEmbeddingsRepo = {
+  upsert(entry: Omit<MemoryEmbedding, "id" | "createdAt"> & { id?: number }): MemoryEmbedding {
+    const db = getDb();
+    const existing = entry.id
+      ? (db.prepare("SELECT id FROM memory_embeddings WHERE id = ?").get(entry.id) as Record<string, unknown> | undefined)
+      : undefined;
+    if (existing) {
+      db.prepare("UPDATE memory_embeddings SET memory_id = ?, embedding = ?, model = ? WHERE id = ?").run(
+        entry.memoryId,
+        JSON.stringify(entry.embedding),
+        entry.model ?? "local",
+        entry.id!
+      );
+      const row = db.prepare("SELECT * FROM memory_embeddings WHERE id = ?").get(entry.id!) as Record<string, unknown>;
+      return {
+        id: Number(row.id),
+        memoryId: Number(row.memory_id),
+        embedding: parseJsonArray(String(row.embedding)) as number[],
+        model: String(row.model),
+        createdAt: String(row.created_at),
+      };
+    }
+    const res = db
+      .prepare("INSERT INTO memory_embeddings (memory_id, embedding, model) VALUES (?, ?, ?)")
+      .run(entry.memoryId, JSON.stringify(entry.embedding), entry.model ?? "local");
+    const row = db.prepare("SELECT * FROM memory_embeddings WHERE id = ?").get(res.lastInsertRowid) as Record<string, unknown>;
+    return {
+      id: Number(row.id),
+      memoryId: Number(row.memory_id),
+      embedding: parseJsonArray(String(row.embedding)) as number[],
+      model: String(row.model),
+      createdAt: String(row.created_at),
+    };
+  },
+  insert(entry: Omit<MemoryEmbedding, "id" | "createdAt">): MemoryEmbedding {
+    return memoryEmbeddingsRepo.upsert(entry);
+  },
+  list(limit = 10000): MemoryEmbedding[] {
+    const rows = getDb().prepare("SELECT * FROM memory_embeddings ORDER BY id ASC LIMIT ?").all(limit) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      id: Number(row.id),
+      memoryId: Number(row.memory_id),
+      embedding: parseJsonArray(String(row.embedding)) as number[],
+      model: String(row.model),
+      createdAt: String(row.created_at),
+    }));
+  },
+  listByMemoryId(memoryId: number): MemoryEmbedding[] {
+    const rows = getDb().prepare("SELECT * FROM memory_embeddings WHERE memory_id = ? ORDER BY id ASC").all(memoryId) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      id: Number(row.id),
+      memoryId: Number(row.memory_id),
+      embedding: parseJsonArray(String(row.embedding)) as number[],
+      model: String(row.model),
+      createdAt: String(row.created_at),
+    }));
+  },
+  get(id: number): MemoryEmbedding | null {
+    const row = getDb().prepare("SELECT * FROM memory_embeddings WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    if (!row) return null;
+    return {
+      id: Number(row.id),
+      memoryId: Number(row.memory_id),
+      embedding: parseJsonArray(String(row.embedding)) as number[],
+      model: String(row.model),
+      createdAt: String(row.created_at),
+    };
+  },
+  deleteByMemoryId(memoryId: number) {
+    getDb().prepare("DELETE FROM memory_embeddings WHERE memory_id = ?").run(memoryId);
+  },
+  delete(id: number) {
+    getDb().prepare("DELETE FROM memory_embeddings WHERE id = ?").run(id);
+  },
+  wipe() {
+    getDb().prepare("DELETE FROM memory_embeddings").run();
   },
 };
 
@@ -819,6 +1124,9 @@ export const vaultRepo = {
   },
   setLabel(id: string, label: string) {
     getDb().prepare("UPDATE vault_docs SET label = ? WHERE id = ?").run(label, id);
+  },
+  setEmbedModel(id: string, embedModel: string) {
+    getDb().prepare("UPDATE vault_docs SET embed_model = ? WHERE id = ?").run(embedModel, id);
   },
   listDocs(): VaultDoc[] {
     return getDb()
@@ -961,16 +1269,16 @@ export const resumeRepo = {
       .run(
         doc.id,
         doc.name,
-        doc.kind,
-        doc.templateId,
-        doc.tex,
+        doc.kind ?? "resume",
+        doc.templateId ?? "classic-ats",
+        doc.tex ?? "",
         doc.content ? JSON.stringify(doc.content) : null,
-        doc.source,
+        doc.source ?? "scratch",
         doc.sourceDocId ?? null,
         doc.targetJobId ?? null,
         doc.autoCompile ? 1 : 0,
-        doc.createdAt,
-        doc.updatedAt
+        doc.createdAt ?? new Date().toISOString(),
+        doc.updatedAt ?? new Date().toISOString()
       );
     return doc;
   },
@@ -1187,27 +1495,70 @@ export function computeStats(): AnalyticsStats {
 // Seed bootstrap
 // ---------------------------------------------------------------------------
 
+export const ALL_TABLES_IN_DELETION_ORDER = [
+  "reminders",
+  "interviews",
+  "emails",
+  "contacts",
+  "resume_docs",
+  "agent_checkpoint_writes",
+  "agent_checkpoints",
+  "agent_run_history",
+  "memory_embeddings",
+  "memory",
+  "vault_chunks",
+  "vault_docs",
+  "jobs",
+  "agent_state",
+  "usage_log",
+  "notifications",
+  "settings",
+  "meta",
+] as const;
+
+export function resetDatabase() {
+  const database = getDb();
+  migrate(database);
+  try {
+    database.exec("BEGIN");
+    for (const table of ALL_TABLES_IN_DELETION_ORDER) {
+      database.exec(`DELETE FROM ${table};`);
+    }
+    database.exec("COMMIT");
+  } catch (err) {
+    try {
+      database.exec("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  }
+  metaRepo.set("seed_version", "");
+  bootstrapSeed();
+}
+
 export function bootstrapSeed() {
   const database = getDb();
   if (metaRepo.get("seed_version") === "1") return;
   const count = Number((database.prepare("SELECT COUNT(*) AS n FROM jobs").get() as Record<string, unknown>).n);
-  if (count > 0) {
-    markSeeded();
-    return;
-  }
-  const insert = database.prepare(
-    `INSERT OR REPLACE INTO jobs (id, title, company, location, salary, url, status,
-       applied_date, deadline, follow_up_due, priority, job_description, notes,
-       match_score, auto_apply_status, auto_apply_logs, created_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', '[]', ?)`
-  );
-  for (const job of seedJobs) {
-    insert.run(
-      job.id, job.title, job.company, job.location ?? "", job.salary ?? null,
-      job.url ?? null, job.status, job.appliedDate ?? null, job.deadline ?? null,
-      job.followUpDue ?? null, job.priority ?? null, job.jobDescription ?? "",
-      job.notes ?? null, job.matchScore ?? null, job.createdDate
+  if (count === 0) {
+    const insert = database.prepare(
+      `INSERT OR REPLACE INTO jobs (id, title, company, location, salary, url, status,
+         applied_date, deadline, follow_up_due, priority, job_description, notes,
+         match_score, auto_apply_status, auto_apply_logs, created_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', '[]', ?)`
     );
+    for (const job of seedJobs) {
+      insert.run(
+        job.id, job.title, job.company, job.location ?? "", job.salary ?? null,
+        job.url ?? null, job.status, job.appliedDate ?? null, job.deadline ?? null,
+        job.followUpDue ?? null, job.priority ?? null, job.jobDescription ?? "",
+        job.notes ?? null, job.matchScore ?? null, job.createdDate
+      );
+    }
+  }
+  if (!settingsRepo.get("profile")) {
+    settingsRepo.set("profile", JSON.stringify(initialProfile));
   }
   markSeeded();
 }
@@ -1234,6 +1585,10 @@ export interface BackupData {
   vault: { docs: VaultDoc[]; chunks: VaultChunk[] };
   settings: Record<string, string>;
   usage: UsageEntry[];
+  resumeDocs?: ResumeDoc[];
+  notifications?: NotificationItem[];
+  agentRunHistory?: AgentRunHistoryEntry[];
+  memoryEmbeddings?: MemoryEmbedding[];
 }
 
 export function exportAllData(): BackupData {
@@ -1246,7 +1601,11 @@ export function exportAllData(): BackupData {
     memories: memoryRepo.list({ limit: 100000 }),
     vault: { docs: vaultRepo.listDocs(), chunks: vaultRepo.allChunks(100000) },
     settings: settingsRepo.all(),
-    usage: usageRepo.all(),
+    usage: usageRepo.all(100000),
+    resumeDocs: resumeRepo.list(),
+    notifications: notificationsRepo.list(100000),
+    agentRunHistory: agentRunHistoryRepo.listRecent(100000),
+    memoryEmbeddings: memoryEmbeddingsRepo.list(100000),
   };
 }
 
@@ -1256,15 +1615,9 @@ export function importAllData(data: BackupData): { counts: Record<string, number
 
   try {
     db.exec("BEGIN");
-    jobsRepo.removeAll(true);
-    contactsRepo.removeAll();
-    emailsRepo.removeAll();
-    interviewsRepo.removeAll();
-    remindersRepo.removeAll();
-    memoryRepo.wipe();
-    vaultRepo.wipe(true);
-    usageRepo.wipe();
-    settingsRepo.wipe();
+    for (const table of ALL_TABLES_IN_DELETION_ORDER) {
+      db.exec(`DELETE FROM ${table};`);
+    }
 
     for (const job of data.jobs ?? []) jobsRepo.upsert(job);
     for (const contact of data.contacts ?? []) contactsRepo.upsert(contact);
@@ -1272,8 +1625,63 @@ export function importAllData(data: BackupData): { counts: Record<string, number
     for (const interview of data.interviews ?? []) interviewsRepo.upsert(interview);
     for (const reminder of data.reminders ?? []) remindersRepo.upsert(reminder);
     for (const memory of data.memories ?? []) insertMemoryWithId(memory);
+    for (const emb of data.memoryEmbeddings ?? []) {
+      const dbEmb = emb as MemoryEmbedding;
+      db.prepare("INSERT INTO memory_embeddings (id, memory_id, embedding, model, created_at) VALUES (?, ?, ?, ?, ?)").run(
+        dbEmb.id ?? null,
+        dbEmb.memoryId,
+        JSON.stringify(dbEmb.embedding),
+        dbEmb.model ?? "local",
+        dbEmb.createdAt ?? new Date().toISOString()
+      );
+    }
     for (const doc of data.vault?.docs ?? []) vaultRepo.upsertDoc(doc);
-    for (const chunk of data.vault?.chunks ?? []) vaultRepo.insertChunk({ docId: chunk.docId, idx: chunk.idx, content: chunk.content, tokens: chunk.tokens, embedding: chunk.embedding });
+    for (const chunk of data.vault?.chunks ?? []) {
+      vaultRepo.insertChunk({
+        docId: chunk.docId,
+        idx: chunk.idx,
+        content: chunk.content,
+        tokens: chunk.tokens,
+        embedding: chunk.embedding,
+      });
+    }
+    for (const r of data.resumeDocs ?? []) resumeRepo.upsert(r);
+
+    const notifStmt = db.prepare(
+      `INSERT INTO notifications (id, title, message, kind, link, read, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const n of data.notifications ?? []) {
+      notifStmt.run(
+        n.id,
+        n.title,
+        n.message,
+        n.kind ?? "info",
+        n.link ?? null,
+        n.read ? 1 : 0,
+        n.createdAt ?? new Date().toISOString()
+      );
+    }
+
+    const runStmt = db.prepare(
+      `INSERT INTO agent_run_history (thread_id, job_id, agent_name, status, region, ats_score, reasoning, findings, logs, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const run of data.agentRunHistory ?? []) {
+      runStmt.run(
+        run.threadId,
+        run.jobId ?? null,
+        run.agentName,
+        run.status,
+        run.region ?? null,
+        run.atsScore ?? null,
+        run.reasoning ?? null,
+        run.findings ?? null,
+        run.logs ?? null,
+        run.createdAt ?? new Date().toISOString()
+      );
+    }
+
     for (const [key, value] of Object.entries(data.settings ?? {})) settingsRepo.set(key, value);
     for (const entry of data.usage ?? []) usageRepo.log(entry);
 
@@ -1295,17 +1703,46 @@ export function importAllData(data: BackupData): { counts: Record<string, number
       vaultDocs: data.vault?.docs?.length ?? 0,
       vaultChunks: data.vault?.chunks?.length ?? 0,
       usage: data.usage?.length ?? 0,
+      resumeDocs: data.resumeDocs?.length ?? 0,
+      notifications: data.notifications?.length ?? 0,
+      agentRunHistory: data.agentRunHistory?.length ?? 0,
+      memoryEmbeddings: data.memoryEmbeddings?.length ?? 0,
     },
   };
 }
 
 function insertMemoryWithId(memory: MemoryEntry) {
-  getDb()
-    .prepare(
-      `INSERT INTO memory (kind, content, job_id, source, importance, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(memory.kind, memory.content, memory.jobId ?? null, memory.source, memory.importance, memory.createdAt ?? new Date().toISOString());
+  const db = getDb();
+  if (memory.id != null) {
+    db.prepare(
+      `INSERT INTO memory (id, kind, content, job_id, source, importance, expires_at, run_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      memory.id,
+      memory.kind,
+      memory.content,
+      memory.jobId ?? null,
+      memory.source,
+      memory.importance,
+      memory.expiresAt ?? null,
+      memory.runId ?? null,
+      memory.createdAt ?? new Date().toISOString()
+    );
+  } else {
+    db.prepare(
+      `INSERT INTO memory (kind, content, job_id, source, importance, expires_at, run_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      memory.kind,
+      memory.content,
+      memory.jobId ?? null,
+      memory.source,
+      memory.importance,
+      memory.expiresAt ?? null,
+      memory.runId ?? null,
+      memory.createdAt ?? new Date().toISOString()
+    );
+  }
 }
 
 export interface AgentRunHistoryEntry {
@@ -1381,5 +1818,108 @@ export const agentRunHistoryRepo = {
       logs: r.logs ? String(r.logs) : undefined,
       createdAt: String(r.created_at),
     }));
+  },
+
+  prune(keepLast = 100): number {
+    const db = getDb();
+    const keep = Math.max(0, keepLast);
+    if (keep === 0) {
+      const res = db.prepare(`DELETE FROM agent_run_history`).run();
+      return Number((res as unknown as { changes: number }).changes ?? 0);
+    }
+    const keepRows = db
+      .prepare(`SELECT id FROM agent_run_history ORDER BY id DESC LIMIT ?`)
+      .all(keep) as Record<string, unknown>[];
+    if (keepRows.length === 0) return 0;
+    const total = Number((db.prepare(`SELECT COUNT(*) as n FROM agent_run_history`).get() as Record<string, unknown>).n);
+    if (total <= keep) return 0;
+    const keepIds = keepRows.map((r) => Number(r.id));
+    const placeholders = keepIds.map(() => "?").join(", ");
+    const res = db.prepare(`DELETE FROM agent_run_history WHERE id NOT IN (${placeholders})`).run(...keepIds);
+    return Number((res as unknown as { changes: number }).changes ?? 0);
+  },
+
+  pruneThread(threadId: string, keepLast = 10): number {
+    const db = getDb();
+    const keep = Math.max(0, keepLast);
+    if (keep === 0) {
+      const res = db.prepare(`DELETE FROM agent_run_history WHERE thread_id = ?`).run(threadId);
+      return Number((res as unknown as { changes: number }).changes ?? 0);
+    }
+    const keepRows = db
+      .prepare(`SELECT id FROM agent_run_history WHERE thread_id = ? ORDER BY id DESC LIMIT ?`)
+      .all(threadId, keep) as Record<string, unknown>[];
+    if (keepRows.length === 0) return 0;
+    const total = Number(
+      (db.prepare(`SELECT COUNT(*) as n FROM agent_run_history WHERE thread_id = ?`).get(threadId) as Record<string, unknown>).n
+    );
+    if (total <= keep) return 0;
+    const keepIds = keepRows.map((r) => Number(r.id));
+    const placeholders = keepIds.map(() => "?").join(", ");
+    const res = db
+      .prepare(`DELETE FROM agent_run_history WHERE thread_id = ? AND id NOT IN (${placeholders})`)
+      .run(threadId, ...keepIds);
+    return Number((res as unknown as { changes: number }).changes ?? 0);
+  },
+};
+
+export const notificationsRepo = {
+  list(limit = 50): NotificationItem[] {
+    const db = getDb();
+    const rows = db
+      .prepare(`SELECT * FROM notifications ORDER BY created_at DESC LIMIT ?`)
+      .all(limit) as Record<string, unknown>[];
+
+    return rows.map((r) => ({
+      id: String(r.id),
+      title: String(r.title),
+      message: String(r.message),
+      kind: (r.kind || "info") as NotificationItem["kind"],
+      link: r.link ? String(r.link) : undefined,
+      read: Boolean(r.read),
+      createdAt: String(r.created_at),
+    }));
+  },
+
+  add(item: { title: string; message: string; kind?: NotificationItem["kind"]; link?: string }): NotificationItem {
+    const db = getDb();
+    const id = `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const kind = item.kind || "info";
+    const now = new Date().toISOString();
+
+    db.prepare(
+      `INSERT INTO notifications (id, title, message, kind, link, read, created_at)
+       VALUES (?, ?, ?, ?, ?, 0, ?)`
+    ).run(id, item.title, item.message, kind, item.link ?? null, now);
+
+    return {
+      id,
+      title: item.title,
+      message: item.message,
+      kind,
+      link: item.link,
+      read: false,
+      createdAt: now,
+    };
+  },
+
+  markRead(id: string) {
+    const db = getDb();
+    db.prepare(`UPDATE notifications SET read = 1 WHERE id = ?`).run(id);
+  },
+
+  markAllRead() {
+    const db = getDb();
+    db.prepare(`UPDATE notifications SET read = 1 WHERE read = 0`).run();
+  },
+
+  delete(id: string) {
+    const db = getDb();
+    db.prepare(`DELETE FROM notifications WHERE id = ?`).run(id);
+  },
+
+  clear() {
+    const db = getDb();
+    db.prepare(`DELETE FROM notifications`).run();
   },
 };

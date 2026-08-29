@@ -46,8 +46,14 @@ function restoreMaskedSecrets(settings: Record<string, string>): Record<string, 
 
 export async function POST(req: NextRequest) {
   try {
-    const raw = (await req.json()) as { app?: string; format?: number; data?: Partial<BackupData> };
-    if (!raw || raw.app !== "huntflow" || typeof raw.data !== "object" || raw.data === null) {
+    const raw = (await req.json()) as { app?: unknown; format?: number; data?: Partial<BackupData> };
+    if (
+      !raw ||
+      typeof raw.app !== "string" ||
+      raw.app !== "huntflow" ||
+      typeof raw.data !== "object" ||
+      raw.data === null
+    ) {
       throw new AppError("Not a HUNTFLOW backup file.", "BAD_BODY", 400);
     }
     const data = raw.data as BackupData;

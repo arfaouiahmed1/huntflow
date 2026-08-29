@@ -22,24 +22,26 @@ export const COMMON_TECH = [
 /** Extract candidate-relevant keywords present in a job description. */
 export function extractJdTerms(jobDescription: string, skills: string[]) {
   const jd = jobDescription.toLowerCase();
-  const hits: { term: string; count: number; inResume: boolean }[] = [];
+  const profileTerms = new Set(skills.map(normalizeSkill));
+  const hits = new Map<string, { term: string; count: number; inResume: boolean; order: number }>();
 
-  const allTerms = [
-    ...skills.map((s) => ({ term: s })),
-    ...COMMON_TECH.map((t) => ({ term: t })),
-  ];
-
-  for (const { term } of allTerms) {
+  for (const term of [...skills, ...COMMON_TECH]) {
     const norm = normalizeSkill(term);
-    if (norm.length < 2) continue;
-    let count = 0;
+    if (norm.length < 2 || hits.has(norm)) continue;
     const matches = Array.from(jd.matchAll(new RegExp(norm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")));
-    count += matches.length;
-    if (count > 0) {
-      hits.push({ term, count, inResume: skills.some((s) => normalizeSkill(s) === norm) });
+    if (matches.length > 0) {
+      hits.set(norm, {
+        term,
+        count: matches.length,
+        inResume: profileTerms.has(norm),
+        order: hits.size,
+      });
     }
   }
-  return hits.sort((a, b) => b.count - a.count).slice(0, 12);
+  return [...hits.values()]
+    .sort((a, b) => b.count - a.count || a.order - b.order)
+    .slice(0, 12)
+    .map(({ term, count, inResume }) => ({ term, count, inResume }));
 }
 
 export function buildProfileContext(profile: UserProfile): string {

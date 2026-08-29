@@ -1,0 +1,80 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    name: Secret & Env Leak Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure no .env files or secrets in tracked files
+        run: |
+          echo "Auditing repository for accidental .env or secret commits..."
+          COMMITTED_ENV=$(git ls-files | grep -iE '(^|/)\.env($|\.(local|prod|dev|staging))' || true)
+          if [ -n "$COMMITTED_ENV" ]; then
+            echo "::error::Sensitive .env file found tracked in git: $COMMITTED_ENV"
+            exit 1
+          fi
+          echo "No .env files tracked. Secret audit passed."
+
+  quality:
+    name: Lint, Types & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint Check
+        run: npm run lint
+
+      - name: TypeScript Typecheck
+        run: npx tsc --noEmit
+
+      - name: Run Vitest Unit Tests
+        run: npm run test
+
+  build:
+    name: Next.js Production Build
+    runs-on: ubuntu-latest
+    needs: [quality]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js
+        run: npm run build

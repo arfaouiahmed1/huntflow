@@ -51,11 +51,10 @@ export default function DateField({
 
   return (
     <div className={cn("relative", className)} ref={ref}>
-      <button
-        type="button"
+      <div
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-white/[0.03] px-2.5 py-1.5 text-xs outline-none transition-colors",
+          "flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-white/[0.03] px-2.5 py-1.5 text-xs outline-none transition-colors cursor-pointer select-none",
           "hover:border-line/60 focus:border-chartreuse/50",
           open && "border-chartreuse/50"
         )}
@@ -79,7 +78,7 @@ export default function DateField({
         ) : (
           <span />
         )}
-      </button>
+      </div>
 
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1.5">

@@ -1,0 +1,56 @@
+BASELINE REPEAT LOG - post-review-ux-job-finder-cleanup / task-01-baseline
+generated: 2026-08-23T00:16:49.3236458+01:00
+purpose: prove manifest reproducibility (two consecutive SHA256 manifest runs over the same dirty tree)
+
+=== RUN 1 vs RUN 2 per-path comparison (manifest-run1.json vs manifest-run2.json) ===
+IDENTICAL	scrapling-agent/sources.json	2175944bacec8dd5fa1ca9892fb7253f8252aee4cc0befe5eaf28d246257a6fe
+IDENTICAL	scrapling-agent/server.py	d781837d2f5e41043c1d8dc656ded6223dd185dc65c931e238000c18ddaf8a3c
+IDENTICAL	src/app/(app)/jobs/page.tsx	1ecbf6981a1c190e18aa488bf55eaaaa52ed4aaf50458c1524760eebaaded8a0
+IDENTICAL	src/app/(app)/jobs/[id]/page.tsx	d4bf3b58f5e59c30979c59e70803d3739f107ff240ae1331f3bf856d6f89e00a
+IDENTICAL	src/app/(app)/agent/page.tsx	35ecb2379289b54c7e836d73a1941c239e2967d0c82899ec02f590884ac6eb7d
+IDENTICAL	src/app/(app)/resume/page.tsx	88125e96dd2cc03dbadf9331c9b79e05a06059ff94e1b82ac071ba3f00985a4d
+IDENTICAL	src/app/(app)/settings/page.tsx	4282e116f4e45ee43769db0462eaf1f33375daa4d1aa971c66a9e8811f3b066b
+IDENTICAL	src/app/api/crawl/route.ts	033513a7d2beb46c09f855fd0cedbff5bfcc568f207da79b16c0a0f3f0081adc
+IDENTICAL	src/app/api/crawl/stream/route.ts	5e1354e1856a3aade1a3590aea708e2ea9efaaa2001020ad85535c30f12e9921
+IDENTICAL	src/app/api/agent/multi-apply/route.ts	10f8b4a8aa0fbe26016f42ba02e557bb169cc6ee0431bd6b8cf9f508c0d262e2
+IDENTICAL	src/app/api/data/[collection]/route.ts	5a79e9bd731ab9dc628e825524ec40e13c914553d29fbd7ecc5c1ccecc74eed2
+IDENTICAL	src/types/index.ts	325aa1c6dfe5e7f4b57b4bb9d10c98af37d2eb4c0d1ef3d248b46af28fa0ebe0
+IDENTICAL	src/lib/db.ts	f6c92a315d36be41ed9e23ff93bbe6370b62316a45d34e71655bd932ecaddfeb
+IDENTICAL	src/lib/theme.ts	40d837a29c9c07bbed887a580b94e11e7bb1a2ff3ee5146bd82607df5cf85b76
+IDENTICAL	src/lib/utils.ts	9d8b1a06d1e5d91a42d97e031b3dd8ac709bdf475818e940e8bdd3f3e0fb0fb6
+IDENTICAL	src/lib/validation.ts	7c065a5bfb7bfa9d679cb7c5dea5a35842f85109e8a77373ca50c317dea976f9
+IDENTICAL	src/lib/boardUpdate.ts	2933b51fb01e3e493ba6395f2e5cbd626676ec5a0006d4dabf44f200acfcfdc7
+IDENTICAL	src/lib/cloudinaryConfig.ts	ad92533637e491ce610f2a6935cdb23fc30563866c29ecdfec7504239a084db2
+IDENTICAL	src/lib/prompts/commonPrompts.ts	23607f8473bce0dc6fd69248efb9bf928f299b60176987acf3ad875438aecc2e
+IDENTICAL	src/lib/prompts/generationPrompts.ts	fe56dfe4318288bdfe976f36ffb9fe389af6aeedbe9f6f6b0847d466a26505f7
+IDENTICAL	src/components/crawler/BoardLiveCard.tsx	0a43e917749b391b8f928821e2a72c9a47b76f2df1c39039577291dbf4d04a3e
+IDENTICAL	src/components/JobDetailView.tsx	7c99fa1c42cea0b0b7c2eb4c5f91ec5749adf3850295a33c572e961bf0a7fa38
+IDENTICAL	src/components/JobDetailDrawer.tsx	a1c93099d38c6b8ca824b608708a49b3874ffb64bf36e672dd7c1d38cca006ba
+IDENTICAL	src/components/NotificationCenter.tsx	aafe97073c9b66bd54f14024d49bb38ca8a7c1d41f2f6a9c2ba63910474fed52
+IDENTICAL	src/components/Sidebar.tsx	f0715a7d8baa531b23525454ffdb83425ff07d755347c986f72f1cb5e48ad793
+IDENTICAL	src/components/ui/Toaster.tsx	7f76a257e3af3903fa76536e50202f458724294442714f2469f5225922eabed3
+IDENTICAL	src/components/ui/Select.tsx	ed751c090ebbb25d46fa7fe2a6b4fe898ccd1bd8dbeb0e0bdb5bedacf701c8dd
+IDENTICAL	src/components/ui/Button.tsx	601e48697b148575cc4600de1cfbdee5617d4f78d0fc0d489b139ffe66f1952f
+IDENTICAL	src/components/match/MatchAnalysis.tsx	e7cb6a473ad3cb76792c0aaad9c61c64388fe20c57ddbf9c6700fb1b98cff035
+IDENTICAL	src/components/documents/DocumentsPanel.tsx	7d52e8b9ce9786085351d61a35fce4debd5803b0f04a5ed1164b5a300abfe32c
+IDENTICAL	src/components/agent/AutoApplyPanel.tsx	a70d32d37df848f46c2c79dc3eeee23ae8dbec0c4a4bc710446fffcc1cf5884c
+IDENTICAL	src/components/agent/AgentPlannerCard.tsx	e0b9ace755ef9138dfe1772a77cfe101289dbfe8b551409b62f1425a2852fb70
+IDENTICAL	src/components/agent/AgentRunMonitor.tsx	446d38eda60813b4b6332f7a3378d2c10a9c7e0467054503bc5a88081fda89c9
+IDENTICAL	src/context/AppContext.tsx	5e14f86b661290f15df54a18a625bd4974f66e18fe3857c2b8adfaba6afeb5d3
+IDENTICAL	package.json	f7391b4c1357172f956832099192098c001c493f5bb2abb97f75d3d35a4c6cb5
+IDENTICAL	package-lock.json	0d1514e9ab09ec81c6a17d2471757c983fb9fefa2f42941aabbf9629fb4bf843
+IDENTICAL	next.config.ts	b68d9d681d0fea5fe0a92172d5ad1f121bb2fb99bfecd06468f34b84723d2956
+IDENTICAL	vitest.config.ts	bf8e35cf6f04c74a6c93c8b80a235ad75cab1a95ddb600e0fae8101da4319bc6
+IDENTICAL	DESIGN.md	absent
+IDENTICAL	scripts/validate-design-system.mjs	absent
+IDENTICAL	src/lib/sourceTaxonomy.ts	absent
+IDENTICAL	src/lib/__tests__/sourceTaxonomy.test.ts	absent
+
+SUMMARY	identical=42	changed=0	keySetDifferences=0
+
+=== QA FAILURE-DETECTION PROOF (scoped comparison, target: qa-fixture.tmp) ===
+step1: wrote 'alpha' -> sha256: 8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8
+step2: modified to 'beta' -> sha256: f44e64e75f3948e9f73f8dfa94721c4ce8cbb4f265c4790c702b2d41cfbf2753
+scoped comparison output:
+CHANGED	qa-fixture.tmp	8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8 -> f44e64e75f3948e9f73f8dfa94721c4ce8cbb4f265c4790c702b2d41cfbf2753
+DELETION RECEIPT	qa-fixture.tmp	deletedAt=2026-08-23T00:16:49.3206474+01:00	existsAfterDeletion=False

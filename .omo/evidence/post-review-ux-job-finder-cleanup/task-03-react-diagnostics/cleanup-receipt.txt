@@ -1,0 +1,11 @@
+DEV_SERVER_PID=4384 (cmd wrapper); listener PIDs killed via netstat; final state: BUSY
+listener PID 19164 killed (taskkill exit 0); PORT 3013 FREE confirmed
+DISABLED_SERVER_PID=4508
+disabled-run wrapper PID 4508 killed; listeners killed via netstat loop; final: FREE
+ENABLED_RUN_PID=17484
+enabled-run PID 17484 killed; port freed
+DISABLED_RUN_PID=36268
+disabled-run PID 36268 killed; port freed
+PROD_RUN_PID=22092 (next start, incompatible with standalone, killed); STANDALONE_PID=33216
+standalone server wrapper 33216 + node 9388 killed; ports 3013/3014 verified free 2026-08-23T01:22:23.2750040+01:00
+final battery: tests/tsc/lint all exit 0 at 2026-08-23T01:22:49.1671392+01:00

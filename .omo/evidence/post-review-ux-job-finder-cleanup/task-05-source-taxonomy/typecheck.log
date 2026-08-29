@@ -1,0 +1,8 @@
+﻿Command: npx tsc --noEmit
+Captured: 2026-08-23 after the unknown-market review repair
+Exit code: 0
+Compiler output: none (zero diagnostics)
+
+Focused corroboration:
+- npx vitest run src/lib/__tests__/sourceTaxonomy.test.ts -> 25/25 passed
+- npx eslint src/lib/sourceTaxonomy.ts src/lib/__tests__/sourceTaxonomy.test.ts -> exit 0, no findings

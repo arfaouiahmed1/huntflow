@@ -15,17 +15,22 @@ export async function POST(req: NextRequest) {
       profile?: UserProfile;
       documents?: TailoredDocuments;
       submit?: boolean;
-      minMatch?: number;
       llmSettings?: LLMSettings | null;
     };
 
-    const { job, profile, documents, submit, minMatch, llmSettings } = body;
+    const { job, profile, documents, submit, llmSettings } = body;
 
     if (!job?.title || !profile?.name) {
       return Response.json({ error: "Job and profile payload required." }, { status: 400 });
     }
+    if (submit) {
+      return Response.json(
+        { error: "External submission requires a resumed supervised approval." },
+        { status: 400 }
+      );
+    }
 
-    const shared = buildSharedContext({
+    const shared = await buildSharedContext({
       profile,
       jobs: jobsRepo.list(),
       emails: emailsRepo.list(),
@@ -46,7 +51,6 @@ export async function POST(req: NextRequest) {
       profile,
       documents,
       submit: !!submit,
-      minMatch: typeof minMatch === "number" ? minMatch : 0,
       llmSettings: llmSettings ?? null,
       sharedContext: shared.context,
     });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Link2, FileText, Sparkles } from "lucide-react";
+import { Link2, FileText, Sparkles, AlertCircle } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
@@ -9,6 +9,13 @@ import { useApp } from "@/context/AppContext";
 import { ApplicationStatus } from "@/types";
 import { cn } from "@/lib/utils";
 import { statusConfig, STATUS_ORDER } from "@/components/ui/StatusBadge";
+import {
+  AddJobSchema,
+  ScrapeUrlSchema,
+  formatZodErrors,
+  AddJobFormData,
+  FormErrors,
+} from "@/lib/validation";
 
 interface ScrapedJob {
   title: string;
@@ -26,30 +33,38 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
   const [scrapeError, setScrapeError] = useState("");
   const [scraped, setScraped] = useState<ScrapedJob | null>(null);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<AddJobFormData>({
     title: "",
     company: "",
-    location: "",
+    location: "Remote",
     salary: "",
     description: "",
     status: "wishlist" as ApplicationStatus,
   });
 
+  const [errors, setErrors] = useState<FormErrors<AddJobFormData>>({});
+
   const handleScrape = async () => {
-    if (!url.trim()) return;
-    setScraping(true);
     setScrapeError("");
+    const urlValidation = ScrapeUrlSchema.safeParse({ url });
+    if (!urlValidation.success) {
+      setScrapeError(urlValidation.error.issues[0]?.message || "Please enter a valid URL.");
+      return;
+    }
+
+    setScraping(true);
     try {
       const result = await scrapeJobOffer(url.trim());
       setScraped(result);
       setForm({
         title: result.title,
         company: result.company,
-        location: result.location,
+        location: result.location || "Remote",
         salary: result.salary,
         description: result.description,
         status: "wishlist",
       });
+      setErrors({});
     } catch (e: unknown) {
       setScrapeError(e instanceof Error ? e.message : "Failed to scrape job offer.");
     } finally {
@@ -61,19 +76,26 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
     setUrl("");
     setScraped(null);
     setScrapeError("");
-    setForm({ title: "", company: "", location: "", salary: "", description: "", status: "wishlist" });
+    setErrors({});
+    setForm({ title: "", company: "", location: "Remote", salary: "", description: "", status: "wishlist" });
   };
 
   const handleSubmit = () => {
-    if (!form.title || !form.company || !form.description) return;
+    const result = AddJobSchema.safeParse(form);
+    if (!result.success) {
+      const errMap = formatZodErrors(result.error);
+      setErrors(errMap);
+      return;
+    }
+
     addApplication({
-      title: form.title,
-      company: form.company,
-      location: form.location || "Remote",
-      salary: form.salary,
-      url: scraped ? url.trim() : undefined,
-      status: form.status,
-      jobDescription: form.description,
+      title: result.data.title,
+      company: result.data.company,
+      location: result.data.location || "Remote",
+      salary: result.data.salary,
+      url: scraped ? url.trim() : result.data.url,
+      status: result.data.status,
+      jobDescription: result.data.description,
     });
     reset();
     onClose();
@@ -114,10 +136,13 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
             <div className="relative flex-1">
               <Link2 className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-dim" />
               <input
-                className={cn(field, "pl-10")}
+                className={cn(field, "pl-10", scrapeError && "border-[var(--coral)] focus:border-[var(--coral)]")}
                 placeholder="https://careers.awesomecorp.com/jobs/123"
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onChange={(e) => {
+                  setUrl(e.target.value);
+                  if (scrapeError) setScrapeError("");
+                }}
                 onKeyDown={(e) => e.key === "Enter" && handleScrape()}
               />
             </div>
@@ -125,7 +150,12 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
               {scraping ? "Analyzing…" : <><Sparkles className="h-4 w-4" /> Extract</>}
             </Button>
           </div>
-          {scrapeError && <p className="mt-2 text-xs text-[var(--coral)]">{scrapeError}</p>}
+          {scrapeError && (
+            <p className="mt-2 flex items-center gap-1 text-xs text-[var(--coral)]">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              <span>{scrapeError}</span>
+            </p>
+          )}
           {scraping && (
             <div className="mt-4 space-y-2">
               {["Scrapling engine loading…", "Inspecting DOM schema…", "Extracting job intelligence…"].map((s, i) => (
@@ -147,19 +177,55 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-dim">Job Title *</label>
-          <input className={field} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+          <input
+            className={cn(field, errors.title && "border-[var(--coral)] focus:border-[var(--coral)]")}
+            value={form.title}
+            onChange={(e) => {
+              setForm({ ...form, title: e.target.value });
+              if (errors.title) setErrors((err) => { const next = { ...err }; delete next.title; return next; });
+            }}
+          />
+          {errors.title && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-[var(--coral)]">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              <span>{errors.title}</span>
+            </p>
+          )}
         </div>
         <div>
           <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-dim">Company *</label>
-          <input className={field} value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
+          <input
+            className={cn(field, errors.company && "border-[var(--coral)] focus:border-[var(--coral)]")}
+            value={form.company}
+            onChange={(e) => {
+              setForm({ ...form, company: e.target.value });
+              if (errors.company) setErrors((err) => { const next = { ...err }; delete next.company; return next; });
+            }}
+          />
+          {errors.company && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-[var(--coral)]">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              <span>{errors.company}</span>
+            </p>
+          )}
         </div>
         <div>
           <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-dim">Location</label>
-          <input className={field} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+          <input
+            className={field}
+            value={form.location}
+            placeholder="e.g. Remote or Paris, France"
+            onChange={(e) => setForm({ ...form, location: e.target.value })}
+          />
         </div>
         <div>
           <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-dim">Salary Range</label>
-          <input className={field} value={form.salary} onChange={(e) => setForm({ ...form, salary: e.target.value })} />
+          <input
+            className={field}
+            value={form.salary}
+            placeholder="e.g. $120k - $150k"
+            onChange={(e) => setForm({ ...form, salary: e.target.value })}
+          />
         </div>
         <div className="sm:col-span-2">
           <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-dim">Status</label>
@@ -177,17 +243,30 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
             Job Description * {form.description.length > 0 && <span className="text-dim">({form.description.length} chars)</span>}
           </label>
           <textarea
-            className={cn(field, "min-h-[160px] resize-y leading-relaxed")}
+            className={cn(
+              field,
+              "min-h-[160px] resize-y leading-relaxed",
+              errors.description && "border-[var(--coral)] focus:border-[var(--coral)]"
+            )}
             placeholder="Paste the full job description here — the AI engine uses it to tailor resumes, score fit, and build flashcards…"
             value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, description: e.target.value });
+              if (errors.description) setErrors((err) => { const next = { ...err }; delete next.description; return next; });
+            }}
           />
+          {errors.description && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-[var(--coral)]">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              <span>{errors.description}</span>
+            </p>
+          )}
         </div>
       </div>
 
       <div className="mt-6 flex justify-end gap-2">
         <Button variant="ghost" onClick={() => { reset(); onClose(); }}>Cancel</Button>
-        <Button onClick={handleSubmit} disabled={!form.title || !form.company || !form.description}>
+        <Button onClick={handleSubmit}>
           Add to Tracker
         </Button>
       </div>

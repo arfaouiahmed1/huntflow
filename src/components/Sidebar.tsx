@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard,
@@ -21,6 +21,7 @@ import {
   FileSignature,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import NotificationCenter from "./NotificationCenter";
 
 const nav = [
   { href: "/", label: "Command Deck", icon: LayoutDashboard },
@@ -29,7 +30,7 @@ const nav = [
   { href: "/jobs", label: "Job Finder", icon: Radar },
   { href: "/agent", label: "Auto-Apply Agent", icon: Bot },
   { href: "/assistant", label: "Assistant", icon: MessagesSquare },
-  { href: "/vault", label: "My Info & Vault", icon: Archive },
+  { href: "/vault", label: "Profile & Evidence", icon: Archive },
   { href: "/network", label: "Network", icon: Users },
   { href: "/outreach", label: "Outreach", icon: Mail },
   { href: "/interviews", label: "Interviews", icon: CalendarClock },
@@ -38,6 +39,7 @@ const nav = [
 
 function AgentStatus() {
   const [online, setOnline] = useState<boolean | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     let cancelled = false;
@@ -57,12 +59,12 @@ function AgentStatus() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        window.location.href = "/assistant";
+        router.push("/assistant");
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [router]);
 
   const state =
     online === null ? "checking" : online ? "online" : "offline";
@@ -85,7 +87,7 @@ function AgentStatus() {
       <p className="mt-2 flex items-center gap-1.5 text-xs leading-relaxed text-dim">
         {state === "online" ? (
           <>
-            <Activity className="h-3 w-3 text-chartreuse" /> Scrapling engine armed — auto-apply ready.
+            <Activity className="h-3 w-3 text-chartreuse" /> Scrapling connected — actions stay supervised.
           </>
         ) : state === "offline" ? (
           <>
@@ -106,19 +108,22 @@ export default function Sidebar() {
     <>
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[236px] flex-col border-r border-line bg-ink-soft/80 backdrop-blur-xl lg:flex">
-        <div className="flex items-center gap-3 px-6 pt-7 pb-8">
-          <div className="relative grid h-10 w-10 place-items-center rounded-xl border border-[var(--chartreuse)]/40 bg-chartreuse/10">
-            <Crosshair className="h-5 w-5 text-chartreuse" />
-            <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 animate-pulse-dot rounded-full bg-chartreuse" />
+        <div className="flex items-center justify-between px-5 pt-7 pb-8">
+          <div className="flex items-center gap-3">
+            <div className="relative grid h-10 w-10 place-items-center rounded-xl border border-[var(--chartreuse)]/40 bg-chartreuse/10">
+              <Crosshair className="h-5 w-5 text-chartreuse" />
+              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 animate-pulse-dot rounded-full bg-chartreuse" />
+            </div>
+            <div>
+              <p className="font-display text-sm font-semibold tracking-wide">
+                HUNT<span className="laser-text">FLOW</span>
+              </p>
+              <p className="text-[10px] uppercase tracking-[0.22em] text-dim">
+                Job Search OS
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="font-display text-sm font-semibold tracking-wide">
-              HUNT<span className="laser-text">FLOW</span>
-            </p>
-            <p className="text-[10px] uppercase tracking-[0.22em] text-dim">
-              Job Search OS
-            </p>
-          </div>
+          <NotificationCenter />
         </div>
 
         <nav className="flex flex-1 flex-col gap-1.5 px-3 overflow-y-auto">
@@ -138,24 +143,22 @@ export default function Sidebar() {
                 >
                   {active && (
                     <motion.span
-                      layoutId="nav-pill"
-                      className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-chartreuse"
+                      layoutId="sidebar-active"
+                      className="absolute inset-0 rounded-xl bg-chartreuse/10"
+                      transition={{ type: "spring", stiffness: 350, damping: 30 }}
                     />
                   )}
-                  <Icon
-                    className={cn(
-                      "h-4.5 w-4.5 transition-colors",
-                      active ? "text-chartreuse" : "text-dim group-hover:text-paper"
-                    )}
-                  />
-                  {label}
+                  <Icon className={cn("h-4 w-4 shrink-0 transition-colors", active ? "text-chartreuse" : "text-dim group-hover:text-paper")} />
+                  <span className="truncate">{label}</span>
                 </motion.div>
               </Link>
             );
           })}
         </nav>
 
-        <AgentStatus />
+        <div className="mt-auto border-t border-line/60">
+          <AgentStatus />
+        </div>
       </aside>
 
       {/* Mobile top bar */}
@@ -169,27 +172,30 @@ export default function Sidebar() {
               HUNT<span className="laser-text">FLOW</span>
             </p>
           </Link>
-          <nav className="flex max-w-[calc(100vw-9rem)] items-center gap-0.5 overflow-x-auto">
-            {nav.map(({ href, label, icon: Icon }) => {
-              const active = pathname === href;
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  aria-label={label}
-                  title={label}
-                  className={cn(
-                    "grid h-9 w-9 shrink-0 place-items-center rounded-lg transition-colors",
-                    active
-                      ? "bg-chartreuse/15 text-chartreuse"
-                      : "text-dim hover:bg-white/[0.05] hover:text-paper"
-                  )}
-                >
-                  <Icon className="h-4.5 w-4.5" />
-                </Link>
-              );
-            })}
-          </nav>
+          <div className="flex items-center gap-2">
+            <NotificationCenter />
+            <nav className="flex max-w-[calc(100vw-12rem)] items-center gap-0.5 overflow-x-auto">
+              {nav.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href;
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-label={label}
+                    title={label}
+                    className={cn(
+                      "grid h-8 w-8 shrink-0 place-items-center rounded-lg transition-colors",
+                      active
+                        ? "bg-chartreuse/15 text-chartreuse"
+                        : "text-dim hover:bg-white/[0.05] hover:text-paper"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
         </div>
       </header>
     </>

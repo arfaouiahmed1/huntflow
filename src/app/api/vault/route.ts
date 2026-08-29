@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { routeError } from "@/lib/errors";
-import { ingestDocument, listDocuments, deleteDocument, vaultStats, setDocLabel } from "@/lib/vault";
+import { ingestDocument, listDocuments, deleteDocument, vaultStats, setDocLabel, setDocEmbedModel } from "@/lib/vault";
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 const MAX_LABEL_LENGTH = 40;
@@ -39,9 +39,19 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { id, label } = (await req.json()) as { id?: string; label?: string };
+    const body = (await req.json()) as { id?: string; label?: string; embedModel?: string };
+    const { id } = body;
     if (!id) return Response.json({ error: "id is required." }, { status: 400 });
-    const clean = String(label ?? "").trim().slice(0, MAX_LABEL_LENGTH);
+    if (typeof body.embedModel === "string") {
+      const rawModel = body.embedModel.trim();
+      if (!setDocEmbedModel(id, rawModel)) {
+        const exists = listDocuments().some((d) => d.id === id);
+        if (!exists) return Response.json({ error: "not found." }, { status: 404 });
+        return Response.json({ error: "Invalid embedModel. Use \"local\" or \"provider|model\"." }, { status: 400 });
+      }
+      return Response.json({ ok: true, embedModel: rawModel });
+    }
+    const clean = String(body.label ?? "").trim().slice(0, MAX_LABEL_LENGTH);
     if (!setDocLabel(id, clean)) return Response.json({ error: "not found." }, { status: 404 });
     return Response.json({ ok: true, label: clean });
   } catch (err) {

@@ -22,18 +22,33 @@ from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+import concurrent.futures
+from dataclasses import dataclass
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 AGENT_TOKEN = os.environ.get("HUNTFLOW_AGENT_TOKEN", "")
 
-# Optional Cloudinary streaming — when all three are set, screenshots are
-# uploaded live so the web UI can watch agents through a CDN. Empty values
-# keep the local-only screenshot behavior.
-CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
-CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "")
-CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
+# ---------------------------------------------------------------------------
+# Dynamic Agent Config (Cloudinary & Concurrency)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class AgentConfig:
+    cloudinary_cloud_name: str = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+    cloudinary_api_key: str = os.environ.get("CLOUDINARY_API_KEY", "")
+    cloudinary_api_secret: str = os.environ.get("CLOUDINARY_API_SECRET", "")
+    max_concurrency: int = int(os.environ.get("HUNTFLOW_CRAWL_CONCURRENCY", "1"))
+    enabledByDefault: bool = True
+
+config = AgentConfig()
+
+# Per-board enabledByDefault overrides (in-memory only, no auto-write to sources.json)
+_enabled_overrides: dict[str, bool] = {}
+
+# Uptime tracking for health detail
+_START_TS = time.time()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("huntflow-agent")
@@ -49,7 +64,7 @@ _activity_lock = threading.Lock()
 _activity: list[dict[str, Any]] = []       # bounded event log (client-facing)
 _activity_seq = 0
 _runs: dict[str, dict[str, Any]] = {}      # run_id -> summary
-_active_run: Optional[dict[str, Any]] = None
+_active_runs: dict[str, dict[str, Any]] = {}  # concurrent active runs: run_id -> summary
 
 
 def record(run_id: str, message: str, kind: str = "info", data: Optional[dict[str, Any]] = None) -> None:
@@ -74,12 +89,11 @@ def record(run_id: str, message: str, kind: str = "info", data: Optional[dict[st
             run["events"] += 1
 
 
-def start_run(kind: str, url: str, label: str = "") -> str:
+def start_run(kind: str, url: str, label: str = "", data: Optional[dict[str, Any]] = None) -> str:
     """Register a new run and mark it active for the live console."""
-    global _active_run
     run_id = uuid.uuid4().hex[:12]
     with _activity_lock:
-        _runs[run_id] = {
+        summary = {
             "run_id": run_id,
             "kind": kind,
             "url": url,
@@ -91,44 +105,46 @@ def start_run(kind: str, url: str, label: str = "") -> str:
             "status": "running",
             "events": 0,
         }
-        if len(_runs) > 20:
+        _runs[run_id] = summary
+        _active_runs[run_id] = summary
+        if len(_runs) > 40:
             oldest = sorted(_runs, key=lambda k: _runs[k]["started"])[0]
             del _runs[oldest]
-        _active_run = _runs[run_id]
-    record(run_id, f"🚀 {label or kind} dispatched for {url}", "info")
+            if oldest in _active_runs:
+                del _active_runs[oldest]
+    record(run_id, f"🚀 {label or kind} dispatched for {url}", "info", data)
     return run_id
 
 
-def end_run(run_id: str, status: str, message: str) -> None:
+def end_run(run_id: str, status: str, message: str, data: Optional[dict[str, Any]] = None) -> None:
     """Finalize a run (success / failed / manual_required / skipped)."""
-    global _active_run
     with _activity_lock:
         run = _runs.get(run_id)
         if run:
             run["status"] = status
             run["finished"] = datetime.now().strftime("%H:%M:%S")
             run["finished_ts"] = time.time()
-        if _active_run and _active_run.get("run_id") == run_id:
-            _active_run = None
-    record(run_id, message, "success" if status == "success" else "warning")
+        if run_id in _active_runs:
+            del _active_runs[run_id]
+    event_kind = "success" if status in ("success", "applied") else "error" if status == "failed" else "warning"
+    record(run_id, message, event_kind, data)
 
 
 def _cloudinary_upload(file_path: Path) -> Optional[str]:
-    """Upload a PNG to Cloudinary with a signed request.
+    """Upload a PNG to Cloudinary with a signed request."""
+    cloud_name = config.cloudinary_cloud_name or os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+    api_key = config.cloudinary_api_key or os.environ.get("CLOUDINARY_API_KEY", "")
+    api_secret = config.cloudinary_api_secret or os.environ.get("CLOUDINARY_API_SECRET", "")
 
-    Returns the secure URL, or None when Cloudinary isn't configured or the
-    upload fails (the local screenshot is always kept as a fallback). Never
-    raises — the caller must not crash a shot because of an upload problem.
-    """
-    if not (CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET):
+    if not (cloud_name and api_key and api_secret):
         return None
     try:
         timestamp = int(time.time())
         params_to_sign = f"timestamp={timestamp}"
         signature = hmac.new(
-            CLOUDINARY_API_SECRET.encode(), params_to_sign.encode(), hashlib.sha1
+            api_secret.encode(), params_to_sign.encode(), hashlib.sha1
         ).hexdigest()
-        url = f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/image/upload"
+        url = f"https://api.cloudinary.com/v1_1/{cloud_name}/image/upload"
 
         with open(file_path, "rb") as fh:
             file_bytes = fh.read()
@@ -143,7 +159,7 @@ def _cloudinary_upload(file_path: Path) -> Optional[str]:
             ).encode("utf-8")
 
         body = b"".join([
-            _field("api_key", CLOUDINARY_API_KEY),
+            _field("api_key", api_key),
             _field("timestamp", str(timestamp)),
             _field("signature", signature),
             (
@@ -170,12 +186,7 @@ def _cloudinary_upload(file_path: Path) -> Optional[str]:
 
 
 def shot(run_id: str, page, label: str) -> Optional[str]:
-    """Capture a screenshot of the live browser page into the run folder.
-
-    The PNG is written locally under RUN_DIR (as before) and, when Cloudinary
-    is configured, streamed to the CDN so the UI can render it live. The
-    upload is best-effort: failures never break the screenshot itself.
-    """
+    """Capture a screenshot of the live browser page into the run folder."""
     try:
         import re as _re
         safe = _re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")[:40] or "step"
@@ -188,12 +199,13 @@ def shot(run_id: str, page, label: str) -> Optional[str]:
         if cloudinary_url:
             data["cloudinary"] = cloudinary_url
         record(run_id, f"📸 Snapshot — {label}", "shot", data)
-        return name
+        return cloudinary_url or f"{run_id}/{name}"
     except Exception as e:  # noqa: BLE001
         record(run_id, f"⚠ Screenshot failed: {e}", "warning")
         return None
 
-app = FastAPI(title="HUNTFLOW Agent", version="0.1.0")
+
+app = FastAPI(title="HUNTFLOW Agent", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -219,6 +231,104 @@ def require_token(x_huntflow_token: Optional[str] = Header(default=None)) -> Non
         raise HTTPException(status_code=401, detail="Missing or invalid X-Huntflow-Token")
 
 
+class ConfigPayload(BaseModel):
+    cloudinary_cloud_name: Optional[str] = None
+    cloudinary_api_key: Optional[str] = None
+    cloudinary_api_secret: Optional[str] = None
+    max_concurrency: Optional[int] = None
+    enabledByDefault: Optional[bool] = None
+    enabled_overrides: Optional[dict[str, bool]] = None
+    sources_enabled: Optional[dict[str, bool]] = None
+
+
+def _sources_with_effective_enabled() -> list[dict[str, Any]]:
+    try:
+        _, data = _load_crawl_sources()
+    except Exception:
+        return []
+    out: list[dict[str, Any]] = []
+    for cat, boards in data.items():
+        if cat.startswith("_") or not isinstance(boards, list):
+            continue
+        for b in boards:
+            bid = b.get("id", "")
+            default_enabled = b.get("enabledByDefault", True)
+            effective = _enabled_overrides.get(bid, default_enabled)
+            out.append({
+                "id": bid,
+                "name": b.get("name", bid),
+                "category": cat,
+                "experience": b.get("experience", "all"),
+                "workMode": b.get("workMode", "all"),
+                "enabledByDefault": default_enabled,
+                "effectiveEnabled": effective,
+                "overridden": bid in _enabled_overrides,
+            })
+    return out
+
+
+@app.get("/config")
+def get_config(_auth: None = Depends(require_token if AGENT_TOKEN else lambda: None)):
+    sources = _sources_with_effective_enabled()
+    return {
+        "status": "ok",
+        "cloudinary_configured": bool(
+            (config.cloudinary_cloud_name or os.environ.get("CLOUDINARY_CLOUD_NAME", ""))
+            and (config.cloudinary_api_key or os.environ.get("CLOUDINARY_API_KEY", ""))
+            and (config.cloudinary_api_secret or os.environ.get("CLOUDINARY_API_SECRET", ""))
+        ),
+        "cloudinary_cloud_name": config.cloudinary_cloud_name or os.environ.get("CLOUDINARY_CLOUD_NAME", ""),
+        "max_concurrency": config.max_concurrency,
+        "enabledByDefault": config.enabledByDefault,
+        "sources": sources,
+        "enabled_overrides": dict(_enabled_overrides),
+    }
+
+
+@app.post("/config")
+def update_config(payload: ConfigPayload, _auth: None = Depends(require_token if AGENT_TOKEN else lambda: None)):
+    if payload.cloudinary_cloud_name is not None:
+        config.cloudinary_cloud_name = payload.cloudinary_cloud_name.strip()
+    if payload.cloudinary_api_key is not None:
+        config.cloudinary_api_key = payload.cloudinary_api_key.strip()
+    if payload.cloudinary_api_secret is not None:
+        config.cloudinary_api_secret = payload.cloudinary_api_secret.strip()
+    if payload.max_concurrency is not None:
+        try:
+            raw = int(payload.max_concurrency)
+        except Exception:
+            raise HTTPException(status_code=400, detail="max_concurrency must be an integer 1..16")
+        if raw < 1 or raw > 16:
+            raise HTTPException(status_code=400, detail="max_concurrency must be between 1 and 16")
+        config.max_concurrency = max(1, min(raw, 16))
+    if payload.enabledByDefault is not None:
+        config.enabledByDefault = bool(payload.enabledByDefault)
+    overrides = payload.enabled_overrides if payload.enabled_overrides is not None else payload.sources_enabled
+    if overrides is not None:
+        if not isinstance(overrides, dict):
+            raise HTTPException(status_code=400, detail="enabled_overrides must be a map of board id to boolean")
+        for bid, val in overrides.items():
+            if not isinstance(bid, str) or not bid.strip():
+                continue
+            _enabled_overrides[bid.strip()] = bool(val)
+        log.info("⚙ enabledByDefault overrides updated — %s", _enabled_overrides)
+    log.info(
+        "⚙ Config updated — Cloudinary: %s, Concurrency: %d, enabledByDefault: %s",
+        bool(config.cloudinary_cloud_name and config.cloudinary_api_key and config.cloudinary_api_secret),
+        config.max_concurrency,
+        config.enabledByDefault,
+    )
+    sources = _sources_with_effective_enabled()
+    return {
+        "status": "ok",
+        "cloudinary_configured": bool(config.cloudinary_cloud_name and config.cloudinary_api_key and config.cloudinary_api_secret),
+        "cloudinary_cloud_name": config.cloudinary_cloud_name,
+        "max_concurrency": config.max_concurrency,
+        "enabledByDefault": config.enabledByDefault,
+        "sources": sources,
+        "enabled_overrides": dict(_enabled_overrides),
+    }
+
 def ts() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
@@ -236,8 +346,6 @@ class ApplyRequest(BaseModel):
     profile: dict[str, Any] = Field(default_factory=dict)
     documents: dict[str, str] = Field(default_factory=dict)
     submit: bool = False
-    min_match: float = 0.0
-    match_score: Optional[float] = None
 
 
 def _parse_json_ld(page) -> Optional[dict]:
@@ -336,18 +444,60 @@ def _fetch_dynamic(url: str):
     return page
 
 
+def _fetch_dynamic_with_shot(url: str, run_id: str, label: str):
+    """Dynamic fetch that also captures one proof screenshot for the run.
+
+    Returns (page, shot_result) where shot_result is a Cloudinary URL or a
+    local "<run_id>/<file>.png" path served under /screenshots.
+    """
+    from scrapling.fetchers import DynamicFetcher
+
+    shot_result = None
+
+    def page_action(page):
+        nonlocal shot_result
+        if run_id:
+            shot_result = shot(run_id, page, label)
+
+    try:
+        page = DynamicFetcher.fetch(url, headless=True, network_idle=True, page_action=page_action, timeout=45000)
+        return page, shot_result
+    except Exception:
+        return _fetch_dynamic(url), shot_result
+
+
 def _scrape_static(url: str) -> dict[str, str]:
     """Fast HTTP path — TLS impersonation, no browser needed."""
     return _extract_job(_fetch_static(url), url)
 
 
-def _scrape_dynamic(url: str) -> dict[str, str]:
-    """Real-browser path for JS-heavy pages (Scrapling StealthyFetcher)."""
-    return _extract_job(_fetch_dynamic(url), url)
+def _scrape_dynamic(url: str, run_id: str = "") -> dict[str, str]:
+    """Real-browser path for JS-heavy pages (Scrapling DynamicFetcher) with live screenshot."""
+    from scrapling.fetchers import DynamicFetcher
+
+    shot_result = None
+
+    def page_action(page):
+        nonlocal shot_result
+        if run_id:
+            shot_result = shot(run_id, page, "job description page")
+
+    try:
+        page = DynamicFetcher.fetch(url, headless=True, network_idle=True, page_action=page_action, timeout=45000)
+        job_data = _extract_job(page, url)
+        if shot_result:
+            job_data["screenshot"] = shot_result
+            if "cloudinary" in str(shot_result) or str(shot_result).startswith("http"):
+                job_data["cloudinary"] = shot_result
+        return job_data
+    except Exception:
+        # Fallback to StealthyFetcher if DynamicFetcher encounters page_action issues
+        page = _fetch_dynamic(url)
+        return _extract_job(page, url)
 
 
 @app.post("/scrape")
-def scrape(req: ScrapeRequest, _auth: None = Depends(require_token)):
+def scrape(req: ScrapeRequest, _auth: None = Depends(require_token if AGENT_TOKEN else lambda: None)):
     run_id = start_run("scrape", req.url, "Scrape")
     try:
         record(run_id, "⚡ Static fetch via TLS impersonation…", "info")
@@ -358,7 +508,7 @@ def scrape(req: ScrapeRequest, _auth: None = Depends(require_token)):
         log.info("Static fetch failed (%s), falling back to stealth browser…", e)
         record(run_id, f"⚠ Static fetch failed ({e}) — launching stealth browser…", "warning")
         try:
-            result = _scrape_dynamic(req.url)
+            result = _scrape_dynamic(req.url, run_id=run_id)
             end_run(run_id, "success", f"✅ Stealth browser scraped {result['company']} — {result['title']}")
             return result
         except Exception as e2:  # noqa: BLE001
@@ -368,9 +518,49 @@ def scrape(req: ScrapeRequest, _auth: None = Depends(require_token)):
 
 
 class CrawlRequest(BaseModel):
-    category: str = "all"  # "remote" | "europe" | "mena" | "global" | "posts" | "all"
+    category: str = "all"  # "remote" | "general" | "europe" | "mena" | "global" | "posts" | "all"
     keyword: str = "developer"
     limit: int = 20
+    concurrency: Optional[int] = None
+    capture_screenshot: bool = False
+    source_ids: Optional[list[str]] = None
+
+
+def _load_crawl_sources() -> tuple[Path, dict[str, Any]]:
+    sources_file = Path(__file__).resolve().parent / "sources.json"
+    if not sources_file.exists():
+        raise FileNotFoundError("sources.json not found")
+    with open(sources_file, "r", encoding="utf-8") as f:
+        return sources_file, json.load(f)
+
+
+@app.get("/sources")
+def crawl_sources(_auth: None = Depends(require_token if AGENT_TOKEN else lambda: None)):
+    """Return safe, user-facing crawler controls without leaking selectors."""
+    try:
+        _path, sources_data = _load_crawl_sources()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to load crawl sources: {e}") from e
+
+    sources: list[dict[str, Any]] = []
+    for category, boards in sources_data.items():
+        if not isinstance(boards, list):
+            continue
+        for board in boards:
+            sources.append({
+                "id": board.get("id", ""),
+                "name": board.get("name", board.get("id", "")),
+                "category": category,
+                "type": board.get("type", "static"),
+                "url": board.get("url", ""),
+                "sourceType": board.get("sourceType", ""),
+                "markets": board.get("markets", []),
+                "experience": board.get("experience", "all"),
+                "workMode": board.get("workMode", "all"),
+                "enabledByDefault": board.get("enabledByDefault", True),
+                "note": board.get("_comment", ""),
+            })
+    return {"sources": sources, "count": len(sources)}
 
 
 # ---------------------------------------------------------------------------
@@ -608,71 +798,211 @@ def _extract_hiring_posts(page, board, base_url: str, per_board_limit: int) -> l
 
 
 @app.post("/crawl")
-def crawl(req: CrawlRequest, _auth: None = Depends(require_token)):
-    run_id = start_run("crawl", f"category={req.category}", f"Crawl ({req.category})")
-    sources_file = Path(__file__).resolve().parent / "sources.json"
-    if not sources_file.exists():
-        end_run(run_id, "failed", "sources.json not found")
-        return {"jobs": []}
-
+def crawl(req: CrawlRequest, _auth: None = Depends(require_token if AGENT_TOKEN else lambda: None)):
+    max_workers = max(1, min(req.concurrency or config.max_concurrency, 16))
+    run_id = start_run("crawl", f"category={req.category}", f"Parallel Crawl ({req.category}, {max_workers} workers)")
     try:
-        with open(sources_file, "r", encoding="utf-8") as f:
-            sources_data = json.load(f)
+        _sources_file, sources_data = _load_crawl_sources()
     except Exception as e:  # noqa: BLE001
         end_run(run_id, "failed", f"Failed to load sources: {e}")
-        return {"jobs": []}
+        return {"run_id": run_id, "jobs": [], "concurrency": max_workers, "boards_crawled": 0, "source_results": []}
 
-    limit = max(1, min(req.limit, 100))
-    # A category may be a top-level key; "all" (or unknown) sweeps every board.
+    limit = max(1, min(req.limit, 150))
+    # A category may be a top-level key; "all" sweeps every board.
     if req.category in sources_data and isinstance(sources_data[req.category], list):
         target_categories = [req.category]
     else:
         target_categories = [k for k, v in sources_data.items() if isinstance(v, list)]
-    discovered_jobs: list[dict[str, Any]] = []
 
+    # Collect board tasks
+    tasks: list[dict[str, Any]] = []
     for cat in target_categories:
-        boards = sources_data.get(cat, [])
-        for raw_board in boards:
-            if len(discovered_jobs) >= limit:
-                break
-            board = dict(raw_board)
-            board["category"] = cat
-            board_name = board.get("name") or board.get("id") or cat
-            kw = (board.get("keyword") or req.keyword or "").strip().lower()
-            per_board_limit = max(1, limit - len(discovered_jobs))
-            record(run_id, f"🔍 Crawling {board_name} ({cat})…", "info")
-            try:
-                board_type = board.get("type", "static")
-                if board_type == "posts":
-                    page = _fetch_static(board["url"])
-                    found = _extract_hiring_posts(page, board, board["url"], per_board_limit)
-                elif board_type == "stealth":
-                    page = _fetch_dynamic(board["url"])
-                    found = _extract_cards(page, board, board["url"], per_board_limit)
+        for raw_board in sources_data.get(cat, []):
+            b = dict(raw_board)
+            b["category"] = cat
+            tasks.append(b)
+
+    selected_ids = {source_id for source_id in (req.source_ids or []) if source_id}
+    if req.source_ids is not None:
+        tasks = [board for board in tasks if board.get("id") in selected_ids]
+
+    if not tasks:
+        end_run(run_id, "success", "No board sources configured")
+        return {"run_id": run_id, "jobs": [], "concurrency": max_workers, "boards_crawled": 0, "source_results": []}
+
+    record(run_id, f"⚡ Launching parallel crawl across {len(tasks)} boards with {max_workers} concurrent workers…", "info")
+
+    def board_event(
+        board: dict[str, Any],
+        status: str,
+        found: int = 0,
+        matched: int = 0,
+        error: Optional[str] = None,
+        screenshot: Optional[str] = None,
+        cloudinary: Optional[str] = None,
+    ) -> dict[str, Any]:
+        event: dict[str, Any] = {
+            "type": "board",
+            "source_id": board.get("id", ""),
+            "source_name": board.get("name") or board.get("id") or board.get("category", ""),
+            "category": board.get("category", ""),
+            "status": status,
+            "found": found,
+            "matched": matched,
+        }
+        if error:
+            event["error"] = str(error)[:300]
+        if screenshot:
+            event["screenshot"] = screenshot
+        if cloudinary:
+            event["cloudinary"] = cloudinary
+        return event
+
+    # Static boards yield no live page, so the first captured shot is shared
+    # run-wide as every participating card's PROOF thumbnail.
+    run_shots: dict[str, Optional[str]] = {"screenshot": None, "cloudinary": None}
+
+    kw = (req.keyword or "").strip().lower()
+
+    def _remember_shot(shot_result: Optional[str]) -> None:
+        if not shot_result or run_shots["screenshot"] or run_shots["cloudinary"]:
+            return
+        if str(shot_result).startswith("http"):
+            run_shots["cloudinary"] = shot_result
+        else:
+            run_shots["screenshot"] = shot_result
+
+    def crawl_board(board: dict[str, Any], worker_id: int) -> tuple[dict[str, Any], list[dict[str, Any]], int, Optional[str]]:
+        board_name = board.get("name") or board.get("id") or board.get("category", "")
+        cat = board.get("category", "")
+        record(run_id, f"🔍 [Worker #{worker_id}] Crawling {board_name} ({cat})…", "info",
+               data=board_event(board, "running"))
+        per_board_limit = int(board.get("maxCards") or 30)
+        found: list[dict[str, Any]] = []
+        try:
+            board_type = board.get("type", "static")
+            board_shot = None
+            if board_type == "posts":
+                page = _fetch_static(board["url"])
+                found = _extract_hiring_posts(page, board, board["url"], per_board_limit)
+            elif board_type == "stealth":
+                if req.capture_screenshot:
+                    page, board_shot = _fetch_dynamic_with_shot(board["url"], run_id, f"{board_name} results")
                 else:
-                    page = _fetch_static(board["url"])
-                    found = _extract_cards(page, board, board["url"], per_board_limit)
+                    page, board_shot = _fetch_dynamic(board["url"]), None
+                found = _extract_cards(page, board, board["url"], per_board_limit)
+            else:
+                page = _fetch_static(board["url"])
+                found = _extract_cards(page, board, board["url"], per_board_limit)
 
-                for job in found:
-                    if kw:
-                        haystack = " ".join([
-                            str(job.get("title", "")),
-                            str(job.get("company", "")),
-                            str(job.get("location", "")),
-                            str(job.get("jobDescription", "")),
-                        ]).lower()
-                        if kw not in haystack:
-                            continue
-                    discovered_jobs.append(job)
-                    if len(discovered_jobs) >= limit:
-                        break
-                if found:
-                    record(run_id, f"✅ {board_name} yielded {len(found)} card(s)", "info")
+            board_kw = ((board.get("keyword") or kw) or "").strip().lower()
+            matched_cards: list[dict[str, Any]] = []
+            for job in found:
+                if board_kw:
+                    haystack = " ".join([
+                        str(job.get("title", "")),
+                        str(job.get("company", "")),
+                        str(job.get("location", "")),
+                        str(job.get("jobDescription", "")),
+                    ]).lower()
+                    if board_kw not in haystack:
+                        continue
+                if board_shot:
+                    job["screenshot"] = board_shot
+                    if str(board_shot).startswith("http"):
+                        job["cloudinary"] = board_shot
+                matched_cards.append(job)
+
+            _remember_shot(board_shot)
+            success_data = board_event(board, "success", len(found), len(matched_cards))
+            if board_shot:
+                if str(board_shot).startswith("http"):
+                    success_data["cloudinary"] = board_shot
+                else:
+                    success_data["screenshot"] = board_shot
+            record(run_id, f"✅ [Worker #{worker_id}] {board_name} yielded {len(found)} candidate card(s)", "info",
+                   data=success_data)
+            return board, matched_cards, len(found), None
+        except Exception as e:  # noqa: BLE001
+            record(run_id, f"⚠ [Worker #{worker_id}] Skipped {board_name}: {e}", "warning",
+                   data=board_event(board, "failed", error=str(e)))
+            return board, [], 0, str(e)
+
+    discovered_jobs: list[dict[str, Any]] = []
+    source_results: list[dict[str, Any]] = []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_board = {
+            executor.submit(crawl_board, board, idx + 1): board
+            for idx, board in enumerate(tasks)
+        }
+        for future in concurrent.futures.as_completed(future_to_board):
+            board = future_to_board[future]
+            try:
+                _b, cards, found_count, source_error = future.result()
+                discovered_jobs.extend(cards)
+                result_entry: dict[str, Any] = {
+                    "id": board.get("id", ""),
+                    "name": board.get("name", board.get("id", "")),
+                    "category": board.get("category", ""),
+                    "status": "failed" if source_error else "success",
+                    "found": found_count,
+                    "matched": len(cards),
+                    "error": source_error,
+                }
+                if run_shots["cloudinary"]:
+                    result_entry["cloudinary"] = run_shots["cloudinary"]
+                elif run_shots["screenshot"]:
+                    result_entry["screenshot"] = run_shots["screenshot"]
+                source_results.append(result_entry)
             except Exception as e:  # noqa: BLE001
-                record(run_id, f"⚠ Skipped {board_name}: {e}", "warning")
+                record(run_id, f"⚠ Worker exception on {board.get('name')}: {e}", "warning",
+                       data=board_event(board, "failed", error=str(e)))
+                source_results.append({
+                    "id": board.get("id", ""),
+                    "name": board.get("name", board.get("id", "")),
+                    "category": board.get("category", ""),
+                    "status": "failed",
+                    "found": 0,
+                    "matched": 0,
+                    "error": str(e),
+                })
 
-    end_run(run_id, "success", f"🎉 Crawl completed — found {len(discovered_jobs)} job(s)")
-    return {"jobs": discovered_jobs}
+    # Limit and deduplicate
+    seen_urls = set()
+    unique_jobs: list[dict[str, Any]] = []
+    for j in discovered_jobs:
+        u = j.get("url") or j.get("id")
+        if u and u in seen_urls:
+            continue
+        if u:
+            seen_urls.add(u)
+        unique_jobs.append(j)
+        if len(unique_jobs) >= limit:
+            break
+
+    end_data: dict[str, Any] = {
+        "type": "run",
+        "status": "success",
+        "boards_crawled": len(tasks),
+        "found": len(unique_jobs),
+        "matched": len(unique_jobs),
+    }
+    if run_shots["cloudinary"]:
+        end_data["cloudinary"] = run_shots["cloudinary"]
+    elif run_shots["screenshot"]:
+        end_data["screenshot"] = run_shots["screenshot"]
+    end_run(run_id, "success",
+            f"🎉 Parallel crawl completed across {len(tasks)} boards — found {len(unique_jobs)} job(s)",
+            data=end_data)
+    return {
+        "run_id": run_id,
+        "jobs": unique_jobs,
+        "count": len(unique_jobs),
+        "concurrency": max_workers,
+        "boards_crawled": len(tasks),
+        "source_results": sorted(source_results, key=lambda item: item["name"]),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -754,7 +1084,7 @@ def _detect_and_fill(page, profile: dict, documents: dict, logs: list, submit: b
         el_type = el_meta["type"]
         el_name = el_meta["name"]
         el_id = el_meta["id"]
-        label = (el_id + " " + el_name + " " + el_meta["placeholder"])
+        label = (el_id + " " + el_name + " " + el_meta["placeholder"]).replace("_", " ").replace("-", " ")
 
         if el_type in ("hidden", "submit", "button", "checkbox", "radio"):
             continue
@@ -783,12 +1113,14 @@ def _detect_and_fill(page, profile: dict, documents: dict, logs: list, submit: b
                 )), None)
                 if match:
                     locator.select_option(label=match)
-                    record(run_id, f"⌨ Selected '{match}' for {el_name or el_id or el_type}", "info")
+                    target = el_name or el_id or el_type
+                    record(run_id, f"⌨ Selected an option for {target}", "info", {"action": "select", "target": target})
                 continue
             locator.fill(value, timeout=4000)
             mapped += 1
             filled_fields.append(el_name or el_id or el_type)
-            record(run_id, f"✏ Filled {el_name or el_id or el_type} ({rule_key or 'auto'})", "info")
+            target = el_name or el_id or el_type
+            record(run_id, f"✏ Filled {target} ({rule_key or 'auto'})", "info", {"action": "fill", "target": target})
         except Exception as e:  # noqa: BLE001
             msg = f"⚠ Could not fill '{el_name or el_id or el_type}' — {e}"
             logs.append({"timestamp": ts(), "message": msg, "type": "warning"})
@@ -812,34 +1144,37 @@ def _detect_and_fill(page, profile: dict, documents: dict, logs: list, submit: b
         record(run_id, msg, "warning")
         return ("manual_required", filled_fields)
 
-    msg = "⚡ Clicking submit…"
+    msg = "⚡ Clicking the submit control…"
     logs.append({"timestamp": ts(), "message": msg, "type": "info"})
-    record(run_id, msg, "info")
+    record(run_id, msg, "warning", {"action": "click", "target": "submit"})
+    before_url = page.url
     submit_btn.click()
     page.wait_for_timeout(3500)
-    shot(run_id, page, "submitted")
-    msg = f"🎉 Application submitted to {profile.get('name', 'the company')}"
+    shot(run_id, page, "after submit click")
+
+    confirmation = page.locator(
+        "text=/thank you|application (was )?(received|submitted)|successfully submitted|submission confirmed/i"
+    ).first
+    confirmed = confirmation.count() > 0 or bool(
+        re.search(r"thank|success|confirm|submitted", str(page.url), re.I)
+        and str(page.url) != str(before_url)
+    )
+    if not confirmed:
+        msg = "⚠ Submit was clicked, but no confirmation evidence was detected — verify manually"
+        logs.append({"timestamp": ts(), "message": msg, "type": "warning"})
+        record(run_id, msg, "warning", {"action": "verify", "target": "submission"})
+        return ("manual_required", filled_fields)
+
+    msg = "🎉 Submission confirmation detected"
     logs.append({"timestamp": ts(), "message": msg, "type": "success"})
-    record(run_id, msg, "success")
+    record(run_id, msg, "success", {"action": "verify", "target": "submission"})
     return ("applied", filled_fields)
 
 
 @app.post("/apply")
-def apply(req: ApplyRequest, _auth: None = Depends(require_token)):
+def apply(req: ApplyRequest, _auth: None = Depends(require_token if AGENT_TOKEN else lambda: None)):
     logs: list[dict[str, str]] = []
     run_id = start_run("apply", req.url, "Auto-apply")
-
-    match_score = req.match_score
-    min_match = req.min_match
-    if match_score is not None and min_match > 0 and match_score < min_match:
-        logs.append({
-            "timestamp": ts(),
-            "message": f"🛑 Match {match_score}% below threshold {min_match:.0f}% — agent skipped auto-apply",
-            "type": "warning",
-        })
-        record(run_id, f"🛑 Match {match_score}% below threshold {min_match:.0f}% — held fire", "warning")
-        end_run(run_id, "skipped", "🛑 Match gate blocked this application")
-        return {"status": "manual_required", "logs": logs, "fields": []}
 
     logs.append({"timestamp": ts(), "message": f"🚀 Scrapling agent dispatched for {req.url}", "type": "info"})
     record(run_id, "🧭 Navigating to application page…", "info")
@@ -854,10 +1189,11 @@ def apply(req: ApplyRequest, _auth: None = Depends(require_token)):
         from scrapling.fetchers import DynamicFetcher
 
         result: list[str] = []
+        final_status = "failed"
 
         def page_action(page):
-            nonlocal result
-            _status, filled = _detect_and_fill(page, req.profile, req.documents, logs, req.submit, run_id)
+            nonlocal result, final_status
+            final_status, filled = _detect_and_fill(page, req.profile, req.documents, logs, req.submit, run_id)
             result = filled
 
         page = DynamicFetcher.fetch(
@@ -867,10 +1203,10 @@ def apply(req: ApplyRequest, _auth: None = Depends(require_token)):
             page_action=page_action,
             timeout=60000,
         )
-        status = "applied" if req.submit else "manual_required"
+        status = final_status
         msg = f"✅ Agent finished. Status: {status}"
         logs.append({"timestamp": ts(), "message": msg, "type": "info"})
-        end_run(run_id, "success", f"✅ Run complete — {status}")
+        end_run(run_id, status, f"✅ Run complete — {status}")
         return {"status": status, "logs": logs, "fields": result}
     except RuntimeError as e:
         msg = f"✕ Automation error: {e}"
@@ -880,19 +1216,30 @@ def apply(req: ApplyRequest, _auth: None = Depends(require_token)):
 
 
 @app.get("/activity")
-def activity(since: int = Query(0, description="Return only events with id > since")):
-    """Poll endpoint for the live agent console."""
+def activity(
+    since: int = Query(0, description="Return only events with id > since"),
+    _auth: None = Depends(require_token if AGENT_TOKEN else lambda: None),
+):
+    """Poll endpoint for the live agent console with multi-worker telemetry."""
     with _activity_lock:
         events = [e for e in _activity if e["id"] > since][-200:]
         runs = sorted(_runs.values(), key=lambda r: r["started"], reverse=True)
-        active = dict(_active_run) if _active_run else None
-    return {"active": active, "events": events, "runs": runs}
+        active_list = [dict(r) for r in _active_runs.values()]
+        active = active_list[0] if active_list else None
+    return {
+        "active": active,
+        "active_runs": active_list,
+        "concurrency": len(active_list),
+        "events": events,
+        "runs": runs,
+    }
 
 
 @app.get("/health")
 def health():
     fetchers_ok = True
     browser_ok = True
+    stealth_ok = True
     try:
         from scrapling.fetchers import Fetcher  # noqa: F401
     except Exception:  # noqa: BLE001
@@ -901,7 +1248,121 @@ def health():
         from scrapling.fetchers import DynamicFetcher  # noqa: F401
     except Exception:  # noqa: BLE001
         browser_ok = False
-    return {"status": "ok", "scrapling_fetchers": fetchers_ok, "browser_automation": browser_ok}
+    try:
+        from scrapling.fetchers import StealthyFetcher  # noqa: F401
+    except Exception:  # noqa: BLE001
+        stealth_ok = False
+
+    sources_total = 0
+    sources_enabled_default = 0
+    try:
+        _, sdata = _load_crawl_sources()
+        for cat, boards in sdata.items():
+            if cat.startswith("_") or not isinstance(boards, list):
+                continue
+            for b in boards:
+                sources_total += 1
+                if b.get("enabledByDefault", True):
+                    sources_enabled_default += 1
+    except Exception:
+        pass
+
+    effective_enabled = 0
+    try:
+        for s in _sources_with_effective_enabled():
+            if s.get("effectiveEnabled"):
+                effective_enabled += 1
+    except Exception:
+        effective_enabled = sources_enabled_default
+
+    uptime_s = int(time.time() - _START_TS) if "_START_TS" in globals() else 0
+
+    return {
+        "status": "ok",
+        "scrapling_fetchers": fetchers_ok,
+        "browser_automation": browser_ok,
+        "fetcher": "Fetcher ok" if fetchers_ok else "Fetcher unavailable",
+        "fetchers": {
+            "Fetcher": "ok" if fetchers_ok else "unavailable",
+            "DynamicFetcher": "ok" if browser_ok else "unavailable",
+            "StealthyFetcher": "ok" if stealth_ok else "unavailable",
+        },
+        "detail": {
+            "fetcher": "Fetcher ok" if fetchers_ok else "Fetcher unavailable",
+            "dynamicFetcher": "ok" if browser_ok else "unavailable",
+            "stealthFetcher": "ok" if stealth_ok else "unavailable",
+            "sources_total": sources_total,
+            "sources_enabled_default": sources_enabled_default,
+            "sources_effective_enabled": effective_enabled,
+            "max_concurrency": config.max_concurrency,
+            "enabledByDefault": config.enabledByDefault,
+            "uptime_s": uptime_s,
+        },
+        "sources": {
+            "total": sources_total,
+            "enabledByDefault": sources_enabled_default,
+            "effectiveEnabled": effective_enabled,
+        },
+        "concurrency": config.max_concurrency,
+        "uptime_s": uptime_s,
+    }
+
+
+class HealSelectorsPayload(BaseModel):
+    board_ids: Optional[list[str]] = None
+    dry_run: bool = True
+
+
+@app.post("/heal-selectors")
+def heal_selectors(payload: HealSelectorsPayload, _auth: None = Depends(require_token if AGENT_TOKEN else lambda: None)):
+    try:
+        _, sdata = _load_crawl_sources()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to load sources: {e}") from e
+
+    target_ids = {bid.strip() for bid in (payload.board_ids or []) if isinstance(bid, str) and bid.strip()}
+    drifts: list[dict[str, Any]] = []
+    scanned = 0
+
+    for cat, boards in sdata.items():
+        if cat.startswith("_") or not isinstance(boards, list):
+            continue
+        for b in boards:
+            bid = b.get("id", "")
+            if target_ids and bid not in target_ids:
+                continue
+            scanned += 1
+            selectors: dict[str, Any] = b.get("selectors") or {}
+            missing = [k for k in ("item", "title", "url") if not selectors.get(k)]
+            drift_detected = bool(missing)
+            drift_entry: dict[str, Any] = {
+                "id": bid,
+                "name": b.get("name", bid),
+                "category": cat,
+                "type": b.get("type", "static"),
+                "selectors": selectors,
+                "missing_required": missing,
+                "drift": drift_detected,
+                "enabledByDefault": b.get("enabledByDefault", True),
+                "effectiveEnabled": _enabled_overrides.get(bid, b.get("enabledByDefault", True)),
+                "would_heal": False,
+                "note": "no auto-write — report only; sources.json not modified" if drift_detected else "ok",
+            }
+            if drift_detected:
+                log.warning("🩹 heal-selectors drift — board %s (%s) missing %s — no auto-write", bid, cat, missing)
+            else:
+                log.info("🩹 heal-selectors ok — board %s (%s) selectors present", bid, cat)
+            drifts.append(drift_entry)
+
+    return {
+        "status": "ok",
+        "dry_run": True,
+        "scanned": scanned,
+        "drifts": drifts,
+        "drift_count": sum(1 for d in drifts if d["drift"]),
+        "note": "selector healing stub — logs drift only, no auto-write to sources.json",
+        "auto_write": False,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -912,6 +1373,7 @@ SESSION_DIR = Path(__file__).resolve().parent / ".linkedin_session"
 SESSION_DIR.mkdir(exist_ok=True)
 
 LINKEDIN_LOGIN_URL = "https://www.linkedin.com/login"
+_linkedin_lock = threading.Lock()
 
 
 def _li_launch(playwright, headless: bool = False):
@@ -924,60 +1386,107 @@ def _li_launch(playwright, headless: bool = False):
     )
 
 
-def _li_login_state(page) -> str:
-    """Classify the LinkedIn session state from the live page.
-
-    Returns one of "signed_in" | "checkpoint" | "authwall" | "signed_out".
-    """
-    try:
-        page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=45000)
-        page.wait_for_timeout(2500)
-    except Exception:  # noqa: BLE001
-        return "signed_out"
-    url = page.url
-    if "login" in url or "authwall" in url:
+def _li_classify_page(page) -> str:
+    """Classify the current page without navigating away from a login/challenge."""
+    if page.is_closed():
+        return "window_closed"
+    url = page.url.lower()
+    if "checkpoint" in url or "challenge" in url:
+        return "checkpoint"
+    if "authwall" in url:
         return "authwall"
+    if "/login" in url or "/uas/login" in url:
+        return "signed_out"
+    if any(path in url for path in ("/feed", "/mynetwork", "/jobs", "/in/")):
+        return "signed_in"
     try:
-        if "checkpoint" in url:
-            return "checkpoint"
-        checkpoint = page.locator("#challenge-modal, [data-challenge-url], form[action*='checkpoint']")
+        checkpoint = page.locator("#challenge-modal, [data-challenge-url], form[action*='checkpoint'], form[action*='challenge']")
         if checkpoint.count() and checkpoint.first.is_visible():
             return "checkpoint"
     except Exception:  # noqa: BLE001
         pass
     try:
-        if page.locator("nav.global-nav, header.global-nav").first.is_visible():
+        if page.locator("nav.global-nav, header.global-nav, [data-test-global-nav]").first.is_visible():
             return "signed_in"
     except Exception:  # noqa: BLE001
-        return "signed_out"
+        pass
     return "signed_out"
+
+
+def _li_login_state(page) -> str:
+    """Navigate to LinkedIn feed and classify the resulting authenticated state."""
+    try:
+        page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=45000)
+        page.wait_for_timeout(2500)
+    except Exception:  # noqa: BLE001
+        return "error"
+    return _li_classify_page(page)
+
+
+def _li_diagnostics(state: str, method: str, detail: str | None = None) -> dict[str, Any]:
+    messages = {
+        "signed_in": ("LinkedIn authenticated the persistent local session.", "No action required."),
+        "signed_out": ("LinkedIn returned the sign-in page; no valid session was found.", "Use the visible login window, then keep it open until Huntflow confirms the session."),
+        "authwall": ("LinkedIn redirected the session to its authentication wall.", "Sign in with the visible browser flow; cookie-only authentication may be rejected for this session."),
+        "checkpoint": ("LinkedIn requires a security checkpoint or verification challenge.", "Complete the challenge in the visible window. Huntflow now keeps that window open while verification is pending."),
+        "window_closed": ("The visible login window was closed before authentication completed.", "Open the login window again and wait for the success confirmation before closing it."),
+        "login_in_progress": ("A visible LinkedIn login flow is already running.", "Finish or close the existing login window before starting another session check."),
+        "session_locked": ("Chromium could not open the persistent LinkedIn profile because it is already in use.", "Close any previous Huntflow LinkedIn window and retry."),
+        "error": ("The LinkedIn session could not be checked because browser automation failed.", "Check the Agent Console for the exact browser event, then retry."),
+    }
+    reason, recovery = messages.get(state, messages["error"])
+    return {
+        "authenticated": state == "signed_in",
+        "state": state,
+        "checkpoint": state == "checkpoint",
+        "reason": detail or reason,
+        "recovery": recovery,
+        "method": method,
+        "checkedAt": datetime.now().astimezone().isoformat(),
+    }
 
 
 @app.post("/linkedin/login")
 def linkedin_login(_auth: None = Depends(require_token)):
     """Open a visible Chromium window so the user can sign in manually.
-    The session is persisted on disk; closes after login or 4 minutes."""
-    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    The session is persisted on disk; checkpoints remain visible for up to 8 minutes."""
+    from playwright.sync_api import sync_playwright
 
     run_id = start_run("linkedin", LINKEDIN_LOGIN_URL, "LinkedIn sign-in")
     record(run_id, "🪟 Opening visible Chromium window — sign in manually", "info")
     state = "signed_out"
-    with sync_playwright() as p:
-        context = _li_launch(p, headless=False)
-        page = context.new_page()
-        page.goto(LINKEDIN_LOGIN_URL, wait_until="domcontentloaded", timeout=45000)
-        try:
-            # After a successful login LinkedIn redirects to /feed — wait for it.
-            page.wait_for_url(re.compile(r"(feed|mynetwork|checkpoint)", re.I), timeout=240000)
-            page.wait_for_timeout(3000)  # let cookies flush
-        except PWTimeout:
-            pass
-        state = _li_login_state(page)
-        context.close()
+    context = None
+    try:
+        with _linkedin_lock, sync_playwright() as p:
+            context = _li_launch(p, headless=False)
+            page = context.pages[0] if context.pages else context.new_page()
+            page.goto(LINKEDIN_LOGIN_URL, wait_until="domcontentloaded", timeout=45000)
+            deadline = time.monotonic() + 480
+            last_state = ""
+            while time.monotonic() < deadline:
+                state = _li_classify_page(page)
+                if state != last_state:
+                    record(run_id, f"LinkedIn state: {state}", "warning" if state == "checkpoint" else "info")
+                    last_state = state
+                if state in ("signed_in", "window_closed"):
+                    break
+                page.wait_for_timeout(1500)
+            if state == "signed_in":
+                page.wait_for_timeout(2500)
+    except Exception as exc:  # noqa: BLE001
+        message = str(exc)
+        state = "session_locked" if "user data directory is already in use" in message.lower() else "error"
+        record(run_id, f"⚠ LinkedIn browser flow failed: {message}", "warning")
+    finally:
+        if context is not None:
+            try:
+                context.close()
+            except Exception:  # noqa: BLE001
+                pass
     ok = state == "signed_in"
     end_run(run_id, "success" if ok else "failed",
-            "✅ LinkedIn session saved" if ok else "⚠ No session detected — login window closed early")
-    return {"authenticated": ok, "state": state, "checkpoint": state == "checkpoint"}
+            "✅ LinkedIn session saved" if ok else f"⚠ LinkedIn login ended in state: {state}")
+    return _li_diagnostics(state, "visible_browser")
 
 
 class LinkedInCookiePayload(BaseModel):
@@ -1001,9 +1510,10 @@ def linkedin_cookie(payload: LinkedInCookiePayload, _auth: None = Depends(requir
     run_id = start_run("linkedin", LINKEDIN_LOGIN_URL, "LinkedIn cookie authentication")
     record(run_id, "🍪 Injecting LinkedIn session cookie...", "info")
     state = "signed_out"
-    with sync_playwright() as p:
-        context = _li_launch(p, headless=True)
-        try:
+    context = None
+    try:
+        with _linkedin_lock, sync_playwright() as p:
+            context = _li_launch(p, headless=True)
             context.add_cookies([
                 {
                     "name": "li_at",
@@ -1017,16 +1527,23 @@ def linkedin_cookie(payload: LinkedInCookiePayload, _auth: None = Depends(requir
             ])
             page = context.new_page()
             state = _li_login_state(page)
-        except Exception as e:
-            record(run_id, f"⚠ Error verifying cookie: {e}", "warning")
-            state = "signed_out"
-        finally:
             context.close()
+            context = None
+    except Exception as exc:  # noqa: BLE001
+        message = str(exc)
+        record(run_id, f"⚠ Error verifying cookie: {message}", "warning")
+        state = "session_locked" if "user data directory is already in use" in message.lower() else "error"
+    finally:
+        if context is not None:
+            try:
+                context.close()
+            except Exception:  # noqa: BLE001
+                pass
 
     ok = state == "signed_in"
     end_run(run_id, "success" if ok else "failed",
             "✅ LinkedIn session authenticated via cookie" if ok else "⚠ Cookie authentication failed or expired")
-    return {"authenticated": ok, "state": state, "checkpoint": state == "checkpoint"}
+    return _li_diagnostics(state, "session_cookie")
 
 
 @app.get("/linkedin/session")
@@ -1038,16 +1555,24 @@ def linkedin_session(_auth: None = Depends(require_token)):
 def _li_session_status() -> dict[str, Any]:
     from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as p:
-        context = _li_launch(p, headless=True)
-        try:
-            page = context.new_page()
-            state = _li_login_state(page)
-            return {"authenticated": state == "signed_in", "state": state}
-        except Exception:  # noqa: BLE001
-            return {"authenticated": False, "state": "signed_out"}
-        finally:
-            context.close()
+    if not _linkedin_lock.acquire(timeout=1):
+        return _li_diagnostics("login_in_progress", "session_check")
+    try:
+        with sync_playwright() as p:
+            context = None
+            try:
+                context = _li_launch(p, headless=True)
+                page = context.new_page()
+                state = _li_login_state(page)
+                return _li_diagnostics(state, "session_check")
+            except Exception as exc:  # noqa: BLE001
+                state = "session_locked" if "user data directory is already in use" in str(exc).lower() else "error"
+                return _li_diagnostics(state, "session_check")
+            finally:
+                if context is not None:
+                    context.close()
+    finally:
+        _linkedin_lock.release()
 
 
 @app.post("/linkedin/logout")
@@ -1055,12 +1580,13 @@ def linkedin_logout(_auth: None = Depends(require_token)):
     """Clear the persisted LinkedIn session (cookies, local storage, etc.)."""
     run_id = start_run("linkedin", LINKEDIN_LOGIN_URL, "LinkedIn sign-out")
     try:
-        if SESSION_DIR.is_dir():
-            for child in SESSION_DIR.iterdir():
-                if child.is_dir():
-                    shutil.rmtree(child, ignore_errors=True)
-                else:
-                    child.unlink(missing_ok=True)
+        with _linkedin_lock:
+            if SESSION_DIR.is_dir():
+                for child in SESSION_DIR.iterdir():
+                    if child.is_dir():
+                        shutil.rmtree(child, ignore_errors=True)
+                    else:
+                        child.unlink(missing_ok=True)
         record(run_id, "🚪 LinkedIn session cleared", "info")
         end_run(run_id, "success", "🚪 LinkedIn session cleared")
         return {"authenticated": False, "state": "signed_out"}
@@ -1145,7 +1671,7 @@ def linkedin_profile(req: ScrapeRequest, _auth: None = Depends(require_token)):
         handle = "https://" + handle
 
     run_id = start_run("linkedin", handle, "Profile scrape")
-    with sync_playwright() as p:
+    with _linkedin_lock, sync_playwright() as p:
         context = _li_launch(p, headless=True)
         try:
             page = context.new_page()
@@ -1180,7 +1706,7 @@ def linkedin_import(req: ScrapeRequest, _auth: None = Depends(require_token)):
         handle = "https://" + handle
 
     run_id = start_run("linkedin", handle, "Profile import")
-    with sync_playwright() as p:
+    with _linkedin_lock, sync_playwright() as p:
         context = _li_launch(p, headless=True)
         try:
             page = context.new_page()
@@ -1214,7 +1740,7 @@ def linkedin_jobs_search(req: ScrapeRequest, _auth: None = Depends(require_token
         raise RuntimeError("Provide a linkedin.com/jobs/search/?keywords=…&location=… URL")
 
     run_id = start_run("linkedin", url, "Jobs search")
-    with sync_playwright() as p:
+    with _linkedin_lock, sync_playwright() as p:
         context = _li_launch(p, headless=True)
         try:
             page = context.new_page()

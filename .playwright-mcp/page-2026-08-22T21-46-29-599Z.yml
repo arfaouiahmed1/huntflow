@@ -1,0 +1,168 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - banner [ref=f1e3]:
+      - generic [ref=f1e4]:
+        - link [ref=f1e5] [cursor=pointer]:
+          - /url: /
+          - paragraph [ref=f1e9]: HUNTFLOW
+        - generic [ref=f1e10]:
+          - button "Notification History" [ref=f1e12]
+          - navigation [ref=f1e16]:
+            - link "Command Deck" [ref=f1e17] [cursor=pointer]:
+              - /url: /
+            - link "Applications" [ref=f1e23] [cursor=pointer]:
+              - /url: /tracker
+            - link "Resume & CV Studio" [ref=f1e26] [cursor=pointer]:
+              - /url: /resume
+            - link "Job Finder" [ref=f1e31] [cursor=pointer]:
+              - /url: /jobs
+            - link "Auto-Apply Agent" [ref=f1e39] [cursor=pointer]:
+              - /url: /agent
+            - link "Assistant" [ref=f1e43] [cursor=pointer]:
+              - /url: /assistant
+            - link "Profile & Evidence" [ref=f1e47] [cursor=pointer]:
+              - /url: /vault
+            - link "Network" [ref=f1e51] [cursor=pointer]:
+              - /url: /network
+            - link "Outreach" [ref=f1e57] [cursor=pointer]:
+              - /url: /outreach
+            - link "Interviews" [ref=f1e61] [cursor=pointer]:
+              - /url: /interviews
+            - link "Settings" [ref=f1e66] [cursor=pointer]:
+              - /url: /settings
+    - main [ref=f1e70]:
+      - generic [ref=f1e73]:
+        - generic [ref=f1e74]:
+          - generic [ref=f1e75]:
+            - heading "Profile & Evidence Vault" [level=1] [ref=f1e76]
+            - paragraph [ref=f1e80]: Keep reusable career facts, source documents, and retrieval evidence in one private workspace.
+          - generic [ref=f1e81]:
+            - button "Applicant Profile" [ref=f1e82]
+            - button "Evidence Vault (2)" [ref=f1e86]
+        - generic [ref=f1e90]:
+          - button [ref=f1e91]:
+            - generic [ref=f1e96]:
+              - paragraph [ref=f1e97]: Profile Coach
+              - paragraph [ref=f1e101]: Interviews you about your background, then gives concrete guidelines to strengthen the profile — grounded in your vault and pipeline.
+          - generic [ref=f1e104]:
+            - generic [ref=f1e105]: Ask me to review your summary, skills, or experience — I'll check them against your target role and the documents in your vault, then hand back a prioritized improvement list.
+            - generic [ref=f1e107]:
+              - button "How can I improve my summary?" [ref=f1e108]
+              - button "What skills should I learn next?" [ref=f1e109]
+              - button "Review my experience section" [ref=f1e110]
+              - button "Is my profile ready to apply?" [ref=f1e111]
+            - generic [ref=f1e112]:
+              - generic [ref=f1e113]:
+                - textbox "Ask about your summary, skills, experience…" [ref=f1e114]
+                - button "Send" [disabled] [ref=f1e115]
+              - paragraph [ref=f1e119]: Uses the same orchestrator as the Assistant — it can search your vault, snapshot your pipeline, and remember what it learns.
+        - generic [ref=f1e121]:
+          - generic [ref=f1e122]:
+            - generic [ref=f1e123]:
+              - heading "Personal & Contact Payload" [level=2] [ref=f1e124]
+              - paragraph [ref=f1e128]: Used by Auto-Apply Agent to automatically populate live application form fields.
+            - generic [ref=f1e129]:
+              - generic [ref=f1e130]: Synced with SQLite
+              - button "Save Profile Info" [ref=f1e134]
+          - generic [ref=f1e139]:
+            - generic [ref=f1e140]:
+              - generic [ref=f1e141]: Full Name *
+              - textbox [ref=f1e142]: Ahmed Arfaoui
+            - generic [ref=f1e143]:
+              - generic [ref=f1e144]: Email Address *
+              - textbox [ref=f1e145]: ahmedarfaoui2000@gmail.com
+            - generic [ref=f1e146]:
+              - generic [ref=f1e147]: Phone Number
+              - textbox [ref=f1e148]: +216 58 732 642
+          - generic [ref=f1e149]:
+            - generic [ref=f1e150]:
+              - generic [ref=f1e151]: Street Address
+              - textbox "e.g. Avenue Habib Bourguiba" [ref=f1e152]: Avenue Habib Bourguiba
+            - generic [ref=f1e153]:
+              - generic [ref=f1e154]: City
+              - textbox "e.g. Tunis" [ref=f1e155]: Tunis
+            - generic [ref=f1e156]:
+              - generic [ref=f1e157]: Country
+              - textbox "e.g. Tunisia" [ref=f1e158]: Tunisia
+          - generic [ref=f1e159]:
+            - generic [ref=f1e160]:
+              - generic [ref=f1e161]: LinkedIn Profile
+              - textbox "https://linkedin.com/in/..." [ref=f1e162]: https://linkedin.com/in/ahmed-arfaoui
+            - generic [ref=f1e163]:
+              - generic [ref=f1e164]: GitHub Profile
+              - textbox "https://github.com/..." [ref=f1e165]: https://github.com/ahmedarfaoui
+            - generic [ref=f1e166]:
+              - generic [ref=f1e167]: Portfolio / Personal Site
+              - textbox "https://yourname.dev" [ref=f1e168]: https://ahmedarfaoui.dev
+          - generic [ref=f1e169]:
+            - heading "Work Eligibility & Application Preferences" [level=3] [ref=f1e170]
+            - generic [ref=f1e174]:
+              - generic [ref=f1e175]:
+                - generic [ref=f1e176]: Work Permit Status
+                - button "Authorized to work (No sponsorship needed)" [ref=f1e178]
+              - generic [ref=f1e183]:
+                - generic [ref=f1e184]: Desired Salary Expectation
+                - textbox "e.g. $90,000 - $120,000 USD" [ref=f1e185]: $85,000 - $110,000 USD
+              - generic [ref=f1e186]:
+                - generic [ref=f1e187]: Notice Period
+                - textbox "e.g. Immediate / 2 Weeks" [ref=f1e188]: Immediate
+            - generic [ref=f1e189]:
+              - generic [ref=f1e190]:
+                - generic [ref=f1e191]: Preferred Work Mode
+                - button "Hybrid" [ref=f1e193]
+              - generic [ref=f1e198]:
+                - generic [ref=f1e199]: Willingness to Relocate
+                - button "Yes" [ref=f1e201]
+              - generic [ref=f1e206]:
+                - generic [ref=f1e207]: Years of Experience
+                - spinbutton [ref=f1e208]: "2"
+          - generic [ref=f1e209]:
+            - heading "Demographics & Logistics" [level=3] [ref=f1e210]
+            - generic [ref=f1e214]:
+              - generic [ref=f1e215]:
+                - generic [ref=f1e216]: Date of Birth
+                - generic [ref=f1e217]: Pick a date…
+              - generic [ref=f1e223]:
+                - generic [ref=f1e224]: Nationality
+                - textbox "e.g. Tunisian" [ref=f1e225]
+              - generic [ref=f1e226]:
+                - generic [ref=f1e227]: Visa Status
+                - textbox "e.g. H1B, F1 OPT" [ref=f1e228]
+            - generic [ref=f1e229]:
+              - generic [ref=f1e230]:
+                - generic [ref=f1e231]: Gender
+                - textbox "e.g. Male, Female, Non-binary" [ref=f1e232]
+              - generic [ref=f1e233]:
+                - generic [ref=f1e234]: Veteran Status
+                - textbox "e.g. Non-veteran" [ref=f1e235]
+              - generic [ref=f1e236]:
+                - generic [ref=f1e237]: Disability Status
+                - textbox "e.g. None, Prefer not to say" [ref=f1e238]
+            - generic [ref=f1e239]:
+              - generic [ref=f1e240]:
+                - generic [ref=f1e241]: Clearance Level
+                - textbox "e.g. Top Secret, Secret, None" [ref=f1e242]
+              - generic [ref=f1e243]:
+                - generic [ref=f1e244]: Driver's License
+                - textbox "e.g. Class C, None" [ref=f1e245]
+              - generic [ref=f1e246]:
+                - generic [ref=f1e247]: Languages Spoken
+                - textbox "e.g. English (Native), Spanish (B2)" [ref=f1e248]
+              - generic [ref=f1e249]:
+                - generic [ref=f1e250]: Marital Status
+                - textbox "e.g. Single, Married" [ref=f1e251]
+            - generic [ref=f1e252]:
+              - generic [ref=f1e253]:
+                - generic [ref=f1e254]: Salary Expectations
+                - textbox "e.g. $100k - $120k" [ref=f1e255]
+              - generic [ref=f1e256]:
+                - generic [ref=f1e257]: Availability
+                - textbox "e.g. Immediate, 2 weeks notice" [ref=f1e258]
+              - generic [ref=f1e259]:
+                - generic [ref=f1e260]: References
+                - textbox "e.g. Available upon request..." [ref=f1e261]
+          - generic [ref=f1e262]:
+            - generic [ref=f1e263]: Synced with SQLite
+            - button "Save Profile Info" [ref=f1e267]
+  - button "Open Next.js Dev Tools" [ref=f1e277] [cursor=pointer]
+  - alert [ref=f1e281]

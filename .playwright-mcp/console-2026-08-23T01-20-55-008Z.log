@@ -1,0 +1,320 @@
+[    9674ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[    9833ms] [LOG] [HMR] connected @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   10005ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   13913ms] [LOG] [Fast Refresh] done in 4035ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   15298ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   17366ms] [LOG] [Fast Refresh] done in 2182ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   17380ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[   17387ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[   17465ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   17473ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   17879ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   24175ms] [LOG] [Fast Refresh] done in 6401ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   24181ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   24294ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   25201ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   25385ms] [LOG] [Fast Refresh] done in 295ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   26217ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   26246ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[   26351ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   26430ms] [LOG] [Fast Refresh] done in 184ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   27339ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   27481ms] [LOG] [Fast Refresh] done in 249ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   28380ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   28525ms] [LOG] [Fast Refresh] done in 253ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   29299ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   29484ms] [LOG] [Fast Refresh] done in 291ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   29987ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   30105ms] [LOG] [Fast Refresh] done in 224ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   31101ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   31164ms] [LOG] [Fast Refresh] done in 171ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   31252ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   32715ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   33796ms] [LOG] [Fast Refresh] done in 1188ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   35760ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   37520ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   37777ms] [LOG] [Fast Refresh] done in 2119ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   39181ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   39309ms] [LOG] [Fast Refresh] done in 238ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   40192ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   40256ms] [LOG] [Fast Refresh] done in 172ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   41190ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[   41386ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   42157ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   42720ms] [LOG] [Fast Refresh] done in 668ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   43550ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   43627ms] [LOG] [Fast Refresh] done in 185ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   45798ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   46206ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   46269ms] [LOG] [Fast Refresh] done in 575ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   47386ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   47710ms] [LOG] [Fast Refresh] done in 431ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   49826ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   50029ms] [LOG] [Fast Refresh] done in 310ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   50859ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   51397ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   51429ms] [LOG] [Fast Refresh] done in 674ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   52254ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   52331ms] [LOG] [Fast Refresh] done in 185ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   53597ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   55249ms] [LOG] [Fast Refresh] done in 1761ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   56349ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[   56441ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   56996ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   57276ms] [LOG] [Fast Refresh] done in 387ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   58185ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   58966ms] [LOG] [Fast Refresh] done in 889ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   61139ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   61331ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   62380ms] [LOG] [Fast Refresh] done in 1347ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   66388ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   66403ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   66440ms] [LOG] [Fast Refresh] done in 159ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   66741ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   67149ms] [LOG] [Fast Refresh] done in 510ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   67562ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   68228ms] [LOG] [Fast Refresh] done in 770ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   68780ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   69087ms] [LOG] [Fast Refresh] done in 411ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   70247ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   70527ms] [LOG] [Fast Refresh] done in 390ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   71271ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[   71278ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   71322ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   71825ms] [LOG] [Fast Refresh] done in 603ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   72603ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   72810ms] [LOG] [Fast Refresh] done in 312ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   73503ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   75447ms] [LOG] [Fast Refresh] done in 2050ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   76207ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   76870ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   77403ms] [LOG] [Fast Refresh] done in 633ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   78362ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   78475ms] [LOG] [Fast Refresh] done in 217ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   79944ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   80115ms] [LOG] [Fast Refresh] done in 277ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   81098ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   81210ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   81259ms] [LOG] [Fast Refresh] done in 268ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   82139ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   82230ms] [LOG] [Fast Refresh] done in 197ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   83042ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   83166ms] [LOG] [Fast Refresh] done in 231ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   84363ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   84454ms] [LOG] [Fast Refresh] done in 199ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   85713ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   85836ms] [LOG] [Fast Refresh] done in 229ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   86230ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[   86233ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   86778ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   86856ms] [LOG] [Fast Refresh] done in 185ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   87794ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[   91665ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[   96193ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  101216ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  101251ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  101365ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:3015/api/dev-tools:0
+[  101391ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:3015/api/dev-tools?asset=react-scan:0
+[  103628ms] [LOG] [Fast Refresh] done in 15943ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  104384ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  104477ms] [LOG] [Fast Refresh] done in 200ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  105401ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  105558ms] [LOG] [Fast Refresh] done in 263ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  106195ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  107450ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  107591ms] [LOG] [Fast Refresh] done in 248ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  108647ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  108835ms] [LOG] [Fast Refresh] done in 292ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  109704ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  110260ms] [LOG] [Fast Refresh] done in 660ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  110944ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  111024ms] [LOG] [Fast Refresh] done in 186ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  111274ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  112278ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  112340ms] [LOG] [Fast Refresh] done in 167ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  113382ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  113461ms] [LOG] [Fast Refresh] done in 188ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  114404ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  114518ms] [LOG] [Fast Refresh] done in 223ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  115822ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  116010ms] [LOG] [Fast Refresh] done in 290ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  116217ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  116218ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  116824ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  116918ms] [LOG] [Fast Refresh] done in 202ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  117964ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  118073ms] [LOG] [Fast Refresh] done in 217ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  118965ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  119122ms] [LOG] [Fast Refresh] done in 265ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  120350ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  120428ms] [LOG] [Fast Refresh] done in 184ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  121304ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  121627ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  121739ms] [LOG] [Fast Refresh] done in 216ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  123402ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  123661ms] [LOG] [Fast Refresh] done in 362ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  124718ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  125390ms] [LOG] [Fast Refresh] done in 781ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  126037ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  126161ms] [LOG] [Fast Refresh] done in 231ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  126192ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  127737ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  127830ms] [LOG] [Fast Refresh] done in 204ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  128742ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  128803ms] [LOG] [Fast Refresh] done in 170ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  129945ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  130162ms] [LOG] [Fast Refresh] done in 323ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  131197ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  131236ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  131592ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  132209ms] [LOG] [Fast Refresh] done in 723ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  134499ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  134577ms] [LOG] [Fast Refresh] done in 188ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  135891ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  136217ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  136515ms] [LOG] [Fast Refresh] done in 724ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  137479ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  138101ms] [LOG] [Fast Refresh] done in 730ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  139662ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  140362ms] [LOG] [Fast Refresh] done in 810ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  141336ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  143363ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  143632ms] [LOG] [Fast Refresh] done in 372ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  144632ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  144890ms] [LOG] [Fast Refresh] done in 368ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  145546ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  145841ms] [LOG] [Fast Refresh] done in 398ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  146456ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  146541ms] [LOG] [Fast Refresh] done in 199ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  146744ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  147105ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  151525ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  152949ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  153706ms] [LOG] [Fast Refresh] done in 866ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  156390ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  156593ms] [LOG] [Fast Refresh] done in 309ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  156597ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  156969ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  159178ms] [LOG] [Fast Refresh] done in 2312ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  160424ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  160591ms] [LOG] [Fast Refresh] done in 277ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  161372ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  161403ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  162125ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  162340ms] [LOG] [Fast Refresh] done in 318ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  162601ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  162785ms] [LOG] [Fast Refresh] done in 290ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  163567ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  163702ms] [LOG] [Fast Refresh] done in 244ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  164050ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  164286ms] [LOG] [Fast Refresh] done in 339ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  165420ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  165684ms] [LOG] [Fast Refresh] done in 367ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  166205ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  167404ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  167553ms] [LOG] [Fast Refresh] done in 254ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  169104ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  169229ms] [LOG] [Fast Refresh] done in 234ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  171376ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  173463ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  173788ms] [LOG] [Fast Refresh] done in 435ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  176611ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  176724ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  176814ms] [LOG] [Fast Refresh] done in 207ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  176819ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  181205ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  186388ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  188952ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  189138ms] [LOG] [Fast Refresh] done in 293ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  190007ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  190269ms] [LOG] [Fast Refresh] done in 368ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  191225ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  191320ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  193534ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  194717ms] [LOG] [Fast Refresh] done in 1292ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  196326ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  201892ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  206371ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  206375ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  211358ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  216292ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  221199ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  222547ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  225378ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  226207ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  227113ms] [LOG] [Fast Refresh] done in 1842ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  231204ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  233583ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  235080ms] [LOG] [Fast Refresh] done in 1605ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  236204ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  236207ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  241233ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  246204ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  251343ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  251378ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  256199ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  261204ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  266464ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  266472ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  271217ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  276185ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  276540ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  276545ms] [LOG] [Fast Refresh] done in 108ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  281194ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  281226ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  286368ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  286536ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  286536ms] [LOG] [Fast Refresh] done in 257ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  291203ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  296224ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  296229ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  301456ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  303380ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  304152ms] [LOG] [Fast Refresh] done in 878ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  305761ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  306456ms] [LOG] [Fast Refresh] done in 802ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  306464ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  312213ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  314604ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  316194ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  321470ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  326636ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  326647ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  332150ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  336672ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  338434ms] [LOG] [Fast Refresh] done in 1938ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  338434ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  341574ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  342143ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  348985ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  353332ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  353679ms] [LOG] [Fast Refresh] done in 448ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  353720ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  354824ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  357491ms] [LOG] [Fast Refresh] done in 2768ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  357493ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  357744ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  359145ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  359990ms] [LOG] [Fast Refresh] done in 1096ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  361656ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  361699ms] [LOG] [Fast Refresh] done in 158ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  361730ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  362476ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  362979ms] [LOG] [Fast Refresh] done in 604ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  366676ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  366866ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  367100ms] [LOG] [Fast Refresh] done in 530ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  371628ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  373258ms] [LOG] [Fast Refresh] done in 1743ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  373263ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  373327ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  376842ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  377362ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  377529ms] [LOG] [Fast Refresh] done in 270ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  377807ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  378968ms] [LOG] [Fast Refresh] done in 1266ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  383035ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  383101ms] [LOG] [Fast Refresh] done in 176ms @ http://127.0.0.1:3015/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:776
+[  383104ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0
+[  389454ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/health:0
+[  389804ms] [ERROR] Failed to load resource: the server responded with a status of 503 (Service Unavailable) @ http://127.0.0.1:3015/api/agent/activity?since=0:0

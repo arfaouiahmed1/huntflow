@@ -204,7 +204,9 @@ export function matchFallback(job: JobApplication, profile: UserProfile): Skills
   ];
 
   const recommendations = [
-    `Lead with ${matchingSkills[0] ?? profile.skills[0]} in the resume summary and top 2 bullet points.`,
+    matchingSkills[0] || profile.skills[0]
+      ? `Lead with ${matchingSkills[0] ?? profile.skills[0]} in the resume summary and top 2 bullet points.`
+      : "Add verified profile skills before tailoring the application.",
     missingSkills.length
       ? `Address missing terms in the cover letter: ${missingSkills.slice(0, 3).join(", ")}.`
       : "Keyword coverage is strong — focus on storytelling and metrics in interviews.",
@@ -217,12 +219,14 @@ export function matchFallback(job: JobApplication, profile: UserProfile): Skills
   return {
     matchScore: score,
     matchingSkills: matchingSkills.length ? matchingSkills : profile.skills.slice(0, 3),
-    missingSkills: missingSkills.length ? missingSkills : ["Cloud deployment (AWS/GCP)", "CI/CD pipelines"],
+    missingSkills,
     strengths,
     recommendations,
     keyTermFrequency: terms.length ? terms : extractJdTerms(job.jobDescription, profile.skills).slice(0, 1),
     fit,
     dealbreakers: dealbreakers.length ? dealbreakers : undefined,
+    source: "heuristic_fallback",
+    analyzedAt: new Date().toISOString(),
   };
 }
 

@@ -1,0 +1,29 @@
+Task 1 baseline notes — post-review-ux-job-finder-cleanup
+==========================================================
+
+Captured at repo root: C:\Users\ahmed\Desktop\Personal Projects\Job Finder
+git-status.txt: verbatim `git status --porcelain=v1` stdout (179 lines), captured via raw cmd redirect (no encoding round-trip).
+
+Next.js bundled docs copied into next-docs\ (structure mirrors node_modules\next\dist docs):
+- node_modules/next/dist/docs/01-app/01-getting-started/03-layouts-and-pages.md            -> next-docs\01-app\01-getting-started\03-layouts-and-pages.md           (expected path existed; NO drift)
+- node_modules/next/dist/docs/01-app/01-getting-started/05-server-and-client-components.md -> next-docs\01-app\01-getting-started\05-server-and-client-components.md (expected path existed; NO drift)
+- node_modules/next/dist/docs/01-app/02-guides/lazy-loading.md                             -> next-docs\01-app\02-guides\lazy-loading.md                            (expected path existed; NO drift)
+- glob **/*use-client* matched exactly one file:
+  node_modules/next/dist/docs/01-app/03-api-reference/01-directives/use-client.md          -> next-docs\01-app\03-api-reference\01-directives\use-client.md
+
+Absent targets recorded as "absent" in baseline-manifest.json (proves they are newly created by this plan):
+- DESIGN.md
+- scripts/validate-design-system.mjs
+- src/lib/sourceTaxonomy.ts
+- src/lib/__tests__/sourceTaxonomy.test.ts
+
+versions.json notes:
+- node v24.19.0, npm 11.17.0
+- package.json: name=job-finder-app, version=0.1.0, packageManager=null (field not present in package.json; recorded verbatim as null)
+
+Reproducibility proof: see baseline-repeat.log — two consecutive manifest runs compared per-path: identical=42 changed=0 keySetDifferences=0.
+
+QA failure-detection proof: see baseline-repeat.log section "QA FAILURE-DETECTION PROOF".
+A temporary fixture .omo\evidence\...\task-01-baseline\qa-fixture.tmp was created ('alpha'), modified ('beta'),
+the scoped hash comparison reported CHANGED for exactly qa-fixture.tmp, then the fixture was deleted
+(existsAfterDeletion=False). No product file was touched at any point.

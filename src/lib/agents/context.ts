@@ -5,9 +5,11 @@ import {
   Reminder,
   UserProfile,
 } from "@/types";
-import { recentMemory } from "@/lib/agents/memory";
+import { relevantMemory } from "@/lib/agents/memory";
 import { usageRepo } from "@/lib/db";
 import { truncateToTokens, estimateTokens } from "@/lib/llm/tokens";
+import { localEmbed } from "@/lib/vault/embeddings";
+import { searchVault } from "@/lib/vault";
 
 export interface SharedContextInput {
   profile: UserProfile;
@@ -17,6 +19,10 @@ export interface SharedContextInput {
   reminders?: Reminder[];
   memoryLimit?: number;
   maxTokens?: number;
+  runId?: string;
+  vaultHits?: { content: string; docId?: string; docName?: string; chunkIndex?: number; model?: string; score?: number; text?: string }[];
+  embeddingModel?: string;
+  queryEmbedding?: number[];
 }
 
 export interface SharedContextResult {
@@ -36,19 +42,12 @@ function fmt(date: string | undefined): string {
   return date.slice(0, 10);
 }
 
-/**
- * Builds the token-budgeted shared context that every agent receives:
- * who the user is, what the pipeline looks like right now, what the
- * agents remembered before, and what is coming up. Truncates the tail
- * (job list details) first, then the memory feed.
- */
-export function buildSharedContext(input: SharedContextInput): SharedContextResult {
+export async function buildSharedContext(input: SharedContextInput): Promise<SharedContextResult> {
   const maxTokens = input.maxTokens ?? 8000;
   const jobs = input.jobs;
   const emails = input.emails ?? [];
   const interviews = input.interviews ?? [];
   const reminders = input.reminders ?? [];
-  const memory = recentMemory({ limit: input.memoryLimit ?? 40 });
 
   const statusCounts = new Map<string, number>();
   for (const j of jobs) statusCounts.set(j.status, (statusCounts.get(j.status) ?? 0) + 1);
@@ -57,6 +56,26 @@ export function buildSharedContext(input: SharedContextInput): SharedContextResu
     .join(", ");
 
   const open = jobs.filter((j) => ["wishlist", "applied", "interviewing"].includes(j.status));
+  const memoryQuery = [
+    input.profile.targetTitle,
+    ...(input.profile.skills ?? []),
+    ...open.slice(0, 20).flatMap((job) => [job.title, job.company]),
+  ].filter(Boolean).join(" ");
+
+  let qEmbedding: number[] | undefined = input.queryEmbedding;
+  const modelForMemory: string | undefined = input.embeddingModel;
+  if (!qEmbedding && modelForMemory === "local" && memoryQuery) {
+    qEmbedding = localEmbed(memoryQuery);
+  }
+
+  const memory = relevantMemory({
+    query: memoryQuery,
+    jobIds: open.map((job) => job.id),
+    limit: input.memoryLimit ?? 40,
+    runId: input.runId,
+    model: modelForMemory,
+    queryEmbedding: qEmbedding,
+  });
   const pendingFollowUps = jobs.filter(
     (j) => j.followUpDue && j.followUpDue < new Date().toISOString().slice(0, 10) && !["offer", "rejected"].includes(j.status)
   );
@@ -91,9 +110,45 @@ export function buildSharedContext(input: SharedContextInput): SharedContextResu
 
   parts.push(`## REMEMBERED`);
   if (memory.length) {
-    parts.push(memory.map((m) => `- [${m.kind}${m.importance > 1 ? " ★" : ""}] ${m.content} (${fmt(m.createdAt)})`).join("\n"));
+    parts.push(memory.map((m) => `- [${m.kind}${m.importance > 1 ? " ★" : ""} · ${m.source}] ${m.content} (${fmt(m.createdAt)})`).join("\n"));
   } else {
     parts.push("Nothing remembered yet.");
+  }
+
+  // Proactive vault RAG: top 3 hits per memoryQuery via searchVault (docName#chunkIndex model), fallback to caller-supplied vaultHits
+  let effectiveVaultHits = input.vaultHits;
+  if ((!effectiveVaultHits || effectiveVaultHits.length === 0) && memoryQuery.trim()) {
+    try {
+      const hits = await searchVault(memoryQuery, 3);
+      if (hits.length) {
+        effectiveVaultHits = hits.map((h) => ({
+          content: h.text,
+          docId: h.docId,
+          docName: h.docName,
+          chunkIndex: h.chunkIndex,
+          model: h.model,
+          score: h.score,
+        }));
+      }
+    } catch {
+      // best-effort, no Redis — ignore vault errors
+    }
+  }
+
+  if (effectiveVaultHits && effectiveVaultHits.length) {
+    parts.push(`## VAULT EVIDENCE`);
+    parts.push(
+      effectiveVaultHits
+        .slice(0, 3)
+        .map((h) => {
+          const content = (h.content ?? (h as { text?: string }).text ?? "").slice(0, 400);
+          const docLabel = h.docName ? `${h.docName}#${h.chunkIndex ?? 0}` : (h.docId ?? "");
+          const modelSuffix = h.model ? ` ${h.model}` : "";
+          const suffix = docLabel ? ` [${docLabel}${modelSuffix}]` : "";
+          return `- ${content}${suffix}`;
+        })
+        .join("\n")
+    );
   }
 
   parts.push(`## USAGE`);

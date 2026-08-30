@@ -10,6 +10,7 @@ import {
 import { LLMProvider } from "@/lib/llm/providers";
 import { isMasked, redactSettings } from "@/lib/masking";
 import { toErrorMessage, readBody } from "@/lib/errors";
+import { invalidateLLMRouterCache } from "@/lib/llm/router";
 
 const REPOS: Record<string, { upsert: (entity: unknown) => unknown; list: () => unknown[] }> = {
   jobs: jobsRepo as never,
@@ -138,6 +139,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ col
       for (const [key, value] of Object.entries(kv)) {
         if (key === "llm_providers") {
           settingsRepo.set(key, restoreProviderKeys(String(value)));
+          invalidateLLMRouterCache();
+        } else if (key === "llm_agent_routes") {
+          settingsRepo.set(key, String(value));
+          invalidateLLMRouterCache();
         } else if (key === "mail_settings") {
           settingsRepo.set(key, restoreMailSecrets(String(value)));
         } else if (key === "cloudinary_settings") {

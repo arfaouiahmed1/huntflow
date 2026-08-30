@@ -4,6 +4,8 @@ import {
   LLMSettings,
   llmSettingsFrom,
   toLLMProvider,
+  type AgentModelRoute,
+  prioritizeProviderChain,
 } from "./providers";
 import { LLMError, callProvider, extractJson, LLMResult } from "./client";
 import { settingsRepo, usageRepo } from "@/lib/db";
@@ -40,6 +42,48 @@ function sleep(ms: number) {
 
 let _cachedChain: LLMProvider[] | null = null;
 let _cachedChainAt = 0;
+let _cachedAgentRoutes: AgentModelRoute[] | null = null;
+let _cachedAgentRoutesAt = 0;
+
+/** Reset process-local settings caches after the Settings API persists a change. */
+export function invalidateLLMRouterCache() {
+  _cachedChain = null;
+  _cachedChainAt = 0;
+  _cachedAgentRoutes = null;
+  _cachedAgentRoutesAt = 0;
+}
+
+function storedProvider(provider: LLMProvider): LLMProvider {
+  return {
+    ...provider,
+    // Old backups predate key slots. Preserve them by treating the entry id as
+    // the provider id until the user edits the provider row.
+    providerId: provider.providerId || provider.id,
+  };
+}
+
+/** Persisted per-agent overrides from the settings table. */
+export function loadAgentRoutesFromDb(): AgentModelRoute[] {
+  const now = Date.now();
+  if (_cachedAgentRoutes && now - _cachedAgentRoutesAt < 10_000) return _cachedAgentRoutes;
+  try {
+    const raw = settingsRepo.get("llm_agent_routes");
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    _cachedAgentRoutes = parsed.filter(
+      (route): route is AgentModelRoute =>
+        route &&
+        typeof route === "object" &&
+        typeof route.agent === "string" &&
+        typeof route.providerSlotId === "string" &&
+        typeof route.model === "string",
+    );
+    _cachedAgentRoutesAt = now;
+    return _cachedAgentRoutes;
+  } catch {
+    return [];
+  }
+}
 
 /** Persisted provider chain from the settings table (source of truth). */
 export function loadChainFromDb(): LLMProvider[] | null {
@@ -50,7 +94,9 @@ export function loadChainFromDb(): LLMProvider[] | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as LLMProvider[];
     if (!Array.isArray(parsed)) return null;
-    _cachedChain = parsed.filter((p) => p && typeof p === "object" && p.enabled !== false);
+    _cachedChain = parsed
+      .filter((p) => p && typeof p === "object" && p.enabled !== false)
+      .map((p) => storedProvider(p));
     _cachedChainAt = now;
     return _cachedChain;
   } catch {
@@ -85,6 +131,10 @@ export function resolveChain(llmSettings?: LLMSettings | null): LLMProvider[] {
     { id: "openai", keyVar: "OPENAI_API_KEY", modelVar: "OPENAI_MODEL" },
     { id: "groq", keyVar: "GROQ_API_KEY", modelVar: "GROQ_MODEL" },
     { id: "deepseek", keyVar: "DEEPSEEK_API_KEY", modelVar: "DEEPSEEK_MODEL" },
+    { id: "cerebras", keyVar: "CEREBRAS_API_KEY", modelVar: "CEREBRAS_MODEL" },
+    { id: "fireworks", keyVar: "FIREWORKS_API_KEY", modelVar: "FIREWORKS_MODEL" },
+    { id: "perplexity", keyVar: "PERPLEXITY_API_KEY", modelVar: "PERPLEXITY_MODEL" },
+    { id: "nvidia", keyVar: "NVIDIA_API_KEY", modelVar: "NVIDIA_MODEL" },
   ];
   for (const e of envMap) {
     if (seen.has(e.id)) continue;
@@ -117,13 +167,23 @@ export function resolveChain(llmSettings?: LLMSettings | null): LLMProvider[] {
   return chain;
 }
 
+/**
+ * Resolve an ordered chain for one workflow. The selected slot/model is first;
+ * every remaining enabled provider remains available for the existing 429/5xx
+ * rotation loop in callLLM.
+ */
+export function resolveChainForAgent(agent: string, llmSettings?: LLMSettings | null): LLMProvider[] {
+  const route = loadAgentRoutesFromDb().find((candidate) => candidate.agent === agent);
+  return prioritizeProviderChain(resolveChain(llmSettings), route);
+}
+
 /** Find the first provider capable of the request that isn't cooling down. */
 function eligible(chain: LLMProvider[], needsJson: boolean): LLMProvider[] {
   const now = Date.now();
   return chain.filter((p) => {
     if (!p.enabled) return false;
-    const cfg = getProvider(p.id);
-    if (needsJson && cfg.capabilities && !cfg.capabilities.includes("json") && p.id !== "custom") {
+    const cfg = getProvider(p.providerId || p.id);
+    if (needsJson && cfg.capabilities && !cfg.capabilities.includes("json") && (p.providerId || p.id) !== "custom") {
       return false;
     }
     if (!p.apiKey && cfg.needsKey) return false;
@@ -153,11 +213,17 @@ export async function callLLM(req: LLMRouterRequest, chain: LLMProvider[]): Prom
   const started = Date.now();
   let lastError: unknown = null;
 
-  const providers = eligible(chain, json);
+  const providers = eligible(
+    prioritizeProviderChain(
+      chain,
+      loadAgentRoutesFromDb().find((candidate) => candidate.agent === agent),
+    ),
+    json,
+  );
 
   for (const provider of providers) {
     const settings = llmSettingsFrom(provider);
-    const cfg = getProvider(provider.id);
+    const cfg = getProvider(provider.providerId || provider.id);
     const sys = json ? `${system}${JSON_HINT}` : system;
 
     for (let attempt = 0; attempt < PER_PROVIDER_ATTEMPTS; attempt++) {

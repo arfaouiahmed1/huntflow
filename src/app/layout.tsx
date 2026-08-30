@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Manrope, JetBrains_Mono, STIX_Two_Text } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/context/AppContext";
+import { AppearanceProvider } from "@/context/AppearanceContext";
 import { ToasterProvider } from "@/components/ui/Toaster";
 import { DevDiagnostics } from "@/components/dev/DevDiagnostics";
 
@@ -49,7 +50,9 @@ export default function RootLayout({
           <DevDiagnostics />
         ) : null}
         <ToasterProvider>
-          <AppProvider>{children}</AppProvider>
+          <AppearanceProvider>
+            <AppProvider>{children}</AppProvider>
+          </AppearanceProvider>
         </ToasterProvider>
       </body>
     </html>

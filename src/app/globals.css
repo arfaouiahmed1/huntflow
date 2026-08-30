@@ -25,7 +25,8 @@
   --font-mono: var(--font-jetbrains);
 }
 
-:root {
+:root,
+[data-theme="dark"] {
   --ink: #0a0e13;
   --ink-soft: #10161e;
   --ink-card: #131a23;
@@ -45,6 +46,28 @@
   --glow: 0 0 24px color-mix(in srgb, var(--chartreuse) 30%, transparent);
   --glow-strong: 0 0 40px color-mix(in srgb, var(--chartreuse) 45%, transparent);
   --shadow-float: 0 10px 32px color-mix(in srgb, #000 35%, transparent);
+}
+
+[data-theme="light"] {
+  --ink: #f5f8f4;
+  --ink-soft: #edf2ec;
+  --ink-card: #ffffff;
+  --ink-deep: #e1e9e0;
+  --ink-console: #eef3ed;
+  --ink-leaf: #e7f1e4;
+  --paper: #152119;
+  --paper-dim: #536158;
+  --chartreuse: #4f7e00;
+  --chartreuse-bright: #3d6500;
+  --amber: #9c5900;
+  --coral: #b94932;
+  --sky: #006ea8;
+  --violet: #7253b5;
+  --linkedin: #0a66c2;
+  --line: rgba(21, 33, 25, 0.14);
+  --glow: 0 0 24px color-mix(in srgb, var(--chartreuse) 20%, transparent);
+  --glow-strong: 0 0 40px color-mix(in srgb, var(--chartreuse) 30%, transparent);
+  --shadow-float: 0 10px 32px color-mix(in srgb, #152119 14%, transparent);
 }
 
 html,

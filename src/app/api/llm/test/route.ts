@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
       }
       const target = apiKey
         ? toLLMProvider({
-            providerId: requestedId,
+            providerId: body.provider?.providerId || requestedId,
             apiKey,
             model: body.model || body.provider?.model || "",
             baseURL: body.provider?.baseURL,

@@ -19,8 +19,11 @@ import {
   Archive,
   Radar,
   FileSignature,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAppearance } from "@/context/AppearanceContext";
 import NotificationCenter from "./NotificationCenter";
 
 const nav = [
@@ -37,7 +40,7 @@ const nav = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-function AgentStatus() {
+function AgentStatus({ collapsed = false }: { collapsed?: boolean }) {
   const [online, setOnline] = useState<boolean | null>(null);
   const router = useRouter();
 
@@ -70,7 +73,7 @@ function AgentStatus() {
     online === null ? "checking" : online ? "online" : "offline";
 
   return (
-    <div className="m-3 rounded-xl border border-line bg-white/[0.02] p-4">
+    <div className={cn("m-3 rounded-xl border border-line bg-white/[0.02]", collapsed ? "p-2.5" : "p-4")}>
       <div className="flex items-center gap-2">
         <span
           className={cn(
@@ -80,11 +83,11 @@ function AgentStatus() {
             state === "checking" && "bg-dim"
           )}
         />
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">
+        <p className={cn("text-[11px] font-semibold uppercase tracking-[0.18em] text-dim", collapsed && "sr-only")}>
           {state === "online" ? "Agent Online" : state === "offline" ? "Agent Offline" : "Checking Agent…"}
         </p>
       </div>
-      <p className="mt-2 flex items-center gap-1.5 text-xs leading-relaxed text-dim">
+      <p className={cn("mt-2 flex items-center gap-1.5 text-xs leading-relaxed text-dim", collapsed && "sr-only")}>
         {state === "online" ? (
           <>
             <Activity className="h-3 w-3 text-chartreuse" /> Scrapling connected — actions stay supervised.
@@ -103,18 +106,25 @@ function AgentStatus() {
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { appearance, toggleSidebar } = useAppearance();
+  const sidebarCollapsed = appearance.sidebarCollapsed;
 
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[236px] flex-col border-r border-line bg-ink-soft/80 backdrop-blur-xl lg:flex">
-        <div className="flex items-center justify-between px-5 pt-7 pb-8">
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-line bg-ink-soft/80 backdrop-blur-xl transition-[width] duration-200 lg:flex",
+          sidebarCollapsed ? "w-[76px]" : "w-[236px]",
+        )}
+      >
+        <div className={cn("flex items-center justify-between", sidebarCollapsed ? "px-3 pb-5 pt-5" : "px-5 pb-8 pt-7")}>
           <div className="flex items-center gap-3">
             <div className="relative grid h-10 w-10 place-items-center rounded-xl border border-[var(--chartreuse)]/40 bg-chartreuse/10">
               <Crosshair className="h-5 w-5 text-chartreuse" />
               <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 animate-pulse-dot rounded-full bg-chartreuse" />
             </div>
-            <div>
+            <div className={sidebarCollapsed ? "sr-only" : undefined}>
               <p className="font-display text-sm font-semibold tracking-wide">
                 HUNT<span className="laser-text">FLOW</span>
               </p>
@@ -123,19 +133,31 @@ export default function Sidebar() {
               </p>
             </div>
           </div>
-          <NotificationCenter />
+          <div className={cn("flex items-center gap-1", sidebarCollapsed && "flex-col gap-2")}>
+            <NotificationCenter />
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+              aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+              className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--line)] text-dim transition-colors hover:border-[var(--chartreuse)]/40 hover:text-[var(--paper)]"
+            >
+              {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         <nav className="flex flex-1 flex-col gap-1.5 px-3 overflow-y-auto">
           {nav.map(({ href, label, icon: Icon }) => {
             const active = pathname === href;
             return (
-              <Link key={href} href={href}>
+              <Link key={href} href={href} aria-label={label} title={label}>
                 <motion.div
-                  whileHover={{ x: 3 }}
+                  whileHover={sidebarCollapsed ? undefined : { x: 3 }}
                   transition={{ type: "spring", stiffness: 400, damping: 26 }}
                   className={cn(
-                    "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors",
+                    "group relative flex items-center rounded-xl py-2.5 text-sm font-medium transition-colors",
+                    sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3.5",
                     active
                       ? "bg-chartreuse/10 text-chartreuse"
                       : "text-dim hover:bg-white/[0.04] hover:text-paper"
@@ -149,7 +171,7 @@ export default function Sidebar() {
                     />
                   )}
                   <Icon className={cn("h-4 w-4 shrink-0 transition-colors", active ? "text-chartreuse" : "text-dim group-hover:text-paper")} />
-                  <span className="truncate">{label}</span>
+                  <span className={sidebarCollapsed ? "sr-only" : "truncate"}>{label}</span>
                 </motion.div>
               </Link>
             );
@@ -157,7 +179,7 @@ export default function Sidebar() {
         </nav>
 
         <div className="mt-auto border-t border-line/60">
-          <AgentStatus />
+          <AgentStatus collapsed={sidebarCollapsed} />
         </div>
       </aside>
 

@@ -34,8 +34,10 @@ import { initialProfile, initialJobs } from '../lib/initialData';
 import {
   LLMSettings,
   LLMProvider,
+  AgentModelRoute,
   DEFAULT_LLM_SETTINGS,
   PROVIDER_STORAGE_KEY,
+  AGENT_ROUTING_STORAGE_KEY,
   llmSettingsFrom,
 } from '../lib/llm/providers';
 import { toErrorMessage } from '../lib/errors';
@@ -117,6 +119,8 @@ interface AppContextType {
   setLLMSettings: (s: LLMSettings) => void;
   providers: LLMProvider[];
   updateProviders: (chain: LLMProvider[]) => void;
+  agentModelRoutes: AgentModelRoute[];
+  updateAgentModelRoutes: (routes: AgentModelRoute[]) => void;
   dataReady: boolean;
   contacts: Contact[];
   emails: EmailMessage[];
@@ -278,6 +282,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [llmSettings, setLLMSettings] = useState<LLMSettings>(DEFAULT_LLM_SETTINGS);
   const [providers, setProviders] = useState<LLMProvider[]>([]);
+  const [agentModelRoutes, setAgentModelRoutes] = useState<AgentModelRoute[]>([]);
   const [dataReady, setDataReady] = useState(false);
 
   /* ------------------------- DB collections ------------------------- */
@@ -444,6 +449,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         if (data.settings.cloudinary_settings) {
           try { setCloudinarySettings({ ...EMPTY_CLOUDINARY_SETTINGS, ...JSON.parse(data.settings.cloudinary_settings) }); } catch { /* corrupt */ }
         }
+        if (data.settings.llm_agent_routes) {
+          try {
+            const parsed = JSON.parse(data.settings.llm_agent_routes) as AgentModelRoute[];
+            if (Array.isArray(parsed)) setAgentModelRoutes(parsed);
+          } catch { /* corrupt per-agent model routes */ }
+        }
         if (data.settings.llm_providers) {
           try {
             const parsed = JSON.parse(data.settings.llm_providers) as LLMProvider[];
@@ -520,6 +531,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       ? null
       : readStorage<GlobalInsights | null>('huntflow_insights', null);
     const offlineLLMSettings = readStorage(PROVIDER_STORAGE_KEY, DEFAULT_LLM_SETTINGS);
+    const offlineAgentModelRoutes = storageWasReset
+      ? []
+      : readStorage<AgentModelRoute[]>(AGENT_ROUTING_STORAGE_KEY, []);
 
     const hydrate = async () => {
       await Promise.resolve();
@@ -528,6 +542,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setProfile(offlineProfile);
       setInsights(offlineInsights);
       setLLMSettings(offlineLLMSettings);
+      setAgentModelRoutes(offlineAgentModelRoutes);
 
       try {
         const res = await fetch('/api/data', { cache: 'no-store' });
@@ -582,6 +597,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   }, [llmSettings, dataReady]);
 
   useEffect(() => {
+    if (dataReady) localStorage.setItem(AGENT_ROUTING_STORAGE_KEY, JSON.stringify(agentModelRoutes));
+  }, [agentModelRoutes, dataReady]);
+
+  useEffect(() => {
     if (!dataReady) return;
     if (insights) localStorage.setItem('huntflow_insights', JSON.stringify(insights));
     else localStorage.removeItem('huntflow_insights');
@@ -612,6 +631,25 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       });
     },
     [llmSettings, persistSettingsWithRollback]
+  );
+
+  const updateAgentModelRoutes = useCallback(
+    (routes: AgentModelRoute[]) => {
+      setAgentModelRoutes((previous) => {
+        localStorage.setItem(AGENT_ROUTING_STORAGE_KEY, JSON.stringify(routes));
+        void persistSettingsWithRollback(
+          'llm_agent_routes',
+          JSON.stringify(routes),
+          () => {
+            setAgentModelRoutes(previous);
+            localStorage.setItem(AGENT_ROUTING_STORAGE_KEY, JSON.stringify(previous));
+          },
+          'update per-agent model routing'
+        );
+        return routes;
+      });
+    },
+    [persistSettingsWithRollback]
   );
 
   const saveMailSettings = useCallback(
@@ -1507,6 +1545,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setLLMSettings,
       providers,
       updateProviders,
+      agentModelRoutes,
+      updateAgentModelRoutes,
       dataReady,
       contacts,
       emails,
@@ -1562,6 +1602,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       loadingInsights,
       llmSettings,
       providers,
+      agentModelRoutes,
       dataReady,
       contacts,
       emails,
@@ -1572,6 +1613,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       cloudinarySettings,
       setLLMSettings,
       updateProviders,
+      updateAgentModelRoutes,
       refreshStats,
       refreshData,
       addApplication,

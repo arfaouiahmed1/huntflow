@@ -25,11 +25,19 @@ import {
   Camera,
   Image as ImageIcon,
   Layers,
+  Route,
+  Sparkles,
+  Sun,
+  Moon,
+  Monitor,
+  PanelLeftClose,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
+import { useAppearance } from "@/context/AppearanceContext";
 import { Button } from "@/components/ui/Button";
+import Checkbox from "@/components/ui/Checkbox";
 import { useToast } from "@/components/ui/Toaster";
-import { LLM_PROVIDERS, LLMProvider } from "@/lib/llm/providers";
+import { LLM_PROVIDERS, LLMProvider, AgentModelRoute, nextProviderSlotId } from "@/lib/llm/providers";
 import { MailSettings, CloudinarySettings } from "@/types";
 import { cn } from "@/lib/utils";
 import { CloudinarySettingsSchema } from "@/lib/validation";
@@ -37,10 +45,27 @@ import { isMasked } from "@/lib/masking";
 import { toErrorMessage } from "@/lib/errors";
 import type { LinkedInLoginResult } from "@/context/AppContext";
 
+const ROUTABLE_WORKFLOWS = [
+  { id: "match_analysis", label: "Match analysis", hint: "Fit score and evidence gaps" },
+  { id: "resume", label: "Resume copilot", hint: "Studio chat and drafting" },
+  { id: "resume_patch", label: "Resume patch", hint: "Targeted LaTeX edits" },
+  { id: "pitch", label: "Apply pitch", hint: "Auto-apply opening messages" },
+  { id: "vault_assist", label: "Vault assistant", hint: "Evidence-grounded answers" },
+  { id: "interviewPrep", label: "Interview prep", hint: "Practice questions and plans" },
+  { id: "salaryIntel", label: "Salary intelligence", hint: "Compensation research" },
+  { id: "outreachEmail", label: "Outreach writer", hint: "Network and recruiter email" },
+  { id: "regionalNorms", label: "Regional norms", hint: "Country-specific application guidance" },
+  { id: "resumeCVTailor", label: "CV tailoring", hint: "Experience and CV alignment" },
+  { id: "letterTailor", label: "Letter tailoring", hint: "Cover and motivation letters" },
+  { id: "atsAudit", label: "ATS audit", hint: "Keyword and formatting review" },
+] as const;
+
 export default function SettingsPage() {
   const {
     providers,
     updateProviders,
+    agentModelRoutes,
+    updateAgentModelRoutes,
     checkLinkedInSession,
     openLinkedInLogin,
     logoutLinkedIn,
@@ -50,6 +75,7 @@ export default function SettingsPage() {
     saveCloudinarySettings,
     refreshData,
   } = useApp();
+  const { appearance, resolvedTheme, setMode, setSidebarCollapsed } = useAppearance();
   const { success, error, warn } = useToast();
   const [liStatus, setLiStatus] = useState<"checking" | "signed-in" | "signed-out">("checking");
   const [liDetails, setLiDetails] = useState<LinkedInLoginResult | null>(null);
@@ -92,6 +118,9 @@ export default function SettingsPage() {
   const [copiedRedirect, setCopiedRedirect] = useState(false);
   const [addId, setAddId] = useState("");
   const [testResults, setTestResults] = useState<Record<string, ProviderTestStatus>>({});
+  const [modelCatalogs, setModelCatalogs] = useState<Record<string, string[]>>({});
+  const [importingModels, setImportingModels] = useState<Record<string, boolean>>({});
+  const [modelImportErrors, setModelImportErrors] = useState<Record<string, string>>({});
   const [backupBusy, setBackupBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -145,6 +174,52 @@ export default function SettingsPage() {
       setTestResults((r) => ({ ...r, [p.id]: { ok: false, error: errMsg } }));
       error(`Test failed — ${errMsg}`);
     }
+  };
+
+  const importModels = async (provider: LLMProvider) => {
+    setImportingModels((current) => ({ ...current, [provider.id]: true }));
+    setModelImportErrors((current) => ({ ...current, [provider.id]: "" }));
+    try {
+      const res = await fetch("/api/llm/models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          providerSlotId: provider.id,
+          providerId: provider.providerId,
+          apiKey: provider.apiKey,
+          baseURL: provider.baseURL,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { models?: string[]; error?: string };
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      const models = Array.isArray(data.models) ? data.models : [];
+      setModelCatalogs((current) => ({ ...current, [provider.id]: models }));
+      success(models.length ? `Imported ${models.length} ${provider.label} model${models.length === 1 ? "" : "s"}.` : "No models were returned by this provider.");
+    } catch (err) {
+      const message = toErrorMessage(err) || "Could not import this provider's models.";
+      setModelImportErrors((current) => ({ ...current, [provider.id]: message }));
+      error(message);
+    } finally {
+      setImportingModels((current) => ({ ...current, [provider.id]: false }));
+    }
+  };
+
+  const upsertAgentModelRoute = (agent: string, patch: Partial<AgentModelRoute>) => {
+    const current = agentModelRoutes.find((route) => route.agent === agent);
+    const next = {
+      agent,
+      providerSlotId: patch.providerSlotId ?? current?.providerSlotId ?? chain.find((provider) => provider.enabled)?.id ?? "",
+      model: patch.model ?? current?.model ?? "",
+    };
+    if (!next.providerSlotId) return;
+    updateAgentModelRoutes([
+      ...agentModelRoutes.filter((route) => route.agent !== agent),
+      next,
+    ]);
+  };
+
+  const clearAgentModelRoute = (agent: string) => {
+    updateAgentModelRoutes(agentModelRoutes.filter((route) => route.agent !== agent));
   };
 
   const refreshLiStatus = async () => {
@@ -492,7 +567,7 @@ export default function SettingsPage() {
   const liNeedsAttention = ["checkpoint", "login_in_progress", "session_locked"].includes(liDetails?.state || "");
 
   return (
-    <div className="max-w-3xl space-y-8">
+    <div className="max-w-7xl space-y-8">
       <div>
         <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.3em] text-[var(--chartreuse)]">
           /settings
@@ -503,6 +578,71 @@ export default function SettingsPage() {
         </p>
       </div>
 
+      <section className="grid gap-5 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-center">
+        <div>
+          <h2 className="font-display text-sm font-semibold text-[var(--paper)]">Appearance & navigation</h2>
+          <p className="mt-1 text-xs leading-relaxed text-dim">
+            Choose the workspace theme and keep the desktop navigation as roomy or compact as you prefer.
+          </p>
+        </div>
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2" role="group" aria-label="Appearance mode">
+            <button
+              type="button"
+              onClick={() => setMode("light")}
+              aria-pressed={appearance.mode === "light"}
+              className={cn(
+                "flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border text-[11px] font-semibold transition-colors",
+                appearance.mode === "light"
+                  ? "border-[var(--chartreuse)]/50 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
+                  : "border-[var(--line)] bg-white/[0.02] text-dim hover:text-[var(--paper)]",
+              )}
+            >
+              <Sun className="h-4 w-4" /> Light
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("dark")}
+              aria-pressed={appearance.mode === "dark"}
+              className={cn(
+                "flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border text-[11px] font-semibold transition-colors",
+                appearance.mode === "dark"
+                  ? "border-[var(--chartreuse)]/50 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
+                  : "border-[var(--line)] bg-white/[0.02] text-dim hover:text-[var(--paper)]",
+              )}
+            >
+              <Moon className="h-4 w-4" /> Dark
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("system")}
+              aria-pressed={appearance.mode === "system"}
+              className={cn(
+                "flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border text-[11px] font-semibold transition-colors",
+                appearance.mode === "system"
+                  ? "border-[var(--chartreuse)]/50 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
+                  : "border-[var(--line)] bg-white/[0.02] text-dim hover:text-[var(--paper)]",
+              )}
+            >
+              <Monitor className="h-4 w-4" /> System
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-white/[0.02] px-3 py-2.5">
+            <Checkbox
+              checked={appearance.sidebarCollapsed}
+              onChange={setSidebarCollapsed}
+              label="Compact desktop navigation"
+              description="You can also toggle it from the sidebar."
+              aria-label="Compact desktop navigation"
+            />
+            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--line)] px-2 py-1 text-[10px] font-semibold text-dim">
+              <PanelLeftClose className="h-3 w-3" /> {appearance.mode === "system" ? `System · ${resolvedTheme}` : `${appearance.mode} mode`}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
       {/* LLM Engine */}
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
         <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
@@ -533,6 +673,10 @@ export default function SettingsPage() {
               onRemove={() => updateProviders(chain.filter((c) => c.id !== p.id))}
               onToggle={() => updateProviders(replaceProvider(p.id, { enabled: !p.enabled }))}
               onTest={() => runTest(p)}
+              models={modelCatalogs[p.id]}
+              importingModels={Boolean(importingModels[p.id])}
+              modelImportError={modelImportErrors[p.id]}
+              onImportModels={() => importModels(p)}
             />
           ))}
         </div>
@@ -544,15 +688,17 @@ export default function SettingsPage() {
             onChange={(id) => {
               if (!id) return;
               const cfg = LLM_PROVIDERS.find((c) => c.id === id);
-              if (cfg && !chain.some((c) => c.id === id)) {
+              if (cfg) {
+                const slotId = nextProviderSlotId(chain, cfg.id);
+                const hasAnotherKey = chain.some((provider) => provider.providerId === cfg.id);
                 updateProviders([
                   ...chain,
                   {
-                    id: cfg.id,
-                    label: cfg.label,
+                    id: slotId,
+                    label: hasAnotherKey ? `${cfg.label} · key ${slotId.replace(`${cfg.id}-`, "")}` : cfg.label,
                     providerId: cfg.id,
                     kind: cfg.kind ?? "openai",
-                    apiKey: '',
+                    apiKey: "",
                     model: cfg.defaultModel,
                     baseURL: cfg.baseURL,
                     temperature: 0.7,
@@ -565,7 +711,11 @@ export default function SettingsPage() {
             }}
             options={[
               { value: "", label: "Add a provider…" },
-              ...LLM_PROVIDERS.filter((c) => !chain.some((p) => p.id === c.id)).map((c) => ({ value: c.id, label: c.label })),
+              ...LLM_PROVIDERS.map((c) => ({
+                value: c.id,
+                label: chain.some((provider) => provider.providerId === c.id) ? `${c.label} · add another key` : c.label,
+                hint: c.hint,
+              })),
             ]}
             placeholder="Add a provider…"
             ariaLabel="Add a provider"
@@ -575,6 +725,100 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
+              <Route className="h-4 w-4 text-[var(--sky)]" /> Per-agent model routing
+            </h2>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-dim">
+              Give each workflow a preferred provider key and model. The saved provider chain remains its automatic
+              fallback path for rate limits, timeouts, and upstream outages.
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 px-2.5 py-1 text-[10px] font-semibold text-[var(--chartreuse)]">
+            <Sparkles className="h-3 w-3" /> {agentModelRoutes.length} explicit route{agentModelRoutes.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        {chain.some((provider) => provider.enabled) ? (
+          <div className="mt-5 grid gap-3 xl:grid-cols-2">
+            {ROUTABLE_WORKFLOWS.map((workflow) => {
+              const route = agentModelRoutes.find((item) => item.agent === workflow.id);
+              const provider = chain.find((item) => item.id === route?.providerSlotId && item.enabled);
+              const models = provider
+                ? [...new Set([provider.model, ...(modelCatalogs[provider.id] ?? [])])].filter(Boolean)
+                : [];
+              return (
+                <div key={workflow.id} className="rounded-xl border border-[var(--line)] bg-white/[0.02] p-3.5">
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[var(--sky)]/10 text-[var(--sky)]">
+                      <Cpu className="h-3.5 w-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-semibold text-[var(--paper)]">{workflow.label}</p>
+                        {route ? <span className="rounded-full border border-[var(--sky)]/30 bg-[var(--sky)]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[var(--sky)]">override</span> : <span className="text-[9px] uppercase tracking-[0.12em] text-dim">chain default</span>}
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-dim">{workflow.hint}</p>
+                    </div>
+                    {route && (
+                      <button type="button" onClick={() => clearAgentModelRoute(workflow.id)} className="text-[10px] font-semibold text-dim transition-colors hover:text-[var(--coral)]">
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <Select
+                      value={route?.providerSlotId ?? ""}
+                      onChange={(providerSlotId) => {
+                        if (!providerSlotId) {
+                          clearAgentModelRoute(workflow.id);
+                          return;
+                        }
+                        const selected = chain.find((item) => item.id === providerSlotId);
+                        upsertAgentModelRoute(workflow.id, { providerSlotId, model: selected?.model ?? "" });
+                      }}
+                      options={[
+                        { value: "", label: "Use chain default" },
+                        ...chain.filter((item) => item.enabled).map((item) => ({ value: item.id, label: item.label, hint: item.model })),
+                      ]}
+                      placeholder="Use chain default"
+                      ariaLabel={`${workflow.label} provider`}
+                    />
+                    {route && models.length ? (
+                      <Select
+                        value={route.model}
+                        onChange={(model) => upsertAgentModelRoute(workflow.id, { model })}
+                        options={models.map((model) => ({ value: model, label: model }))}
+                        placeholder="Choose model"
+                        ariaLabel={`${workflow.label} model`}
+                      />
+                    ) : route ? (
+                      <input
+                        className={cn(miniField, "w-full")}
+                        value={route.model}
+                        placeholder="model id"
+                        aria-label={`${workflow.label} model`}
+                        onChange={(event) => upsertAgentModelRoute(workflow.id, { model: event.target.value })}
+                      />
+                    ) : (
+                      <div className="flex items-center rounded-lg border border-dashed border-[var(--line)] px-2.5 text-[10px] text-dim">Provider default</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-xl border border-dashed border-[var(--line)] p-4 text-center text-xs text-dim">
+            Add and enable a provider above before assigning models to workflows.
+          </div>
+        )}
+      </section>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
       {/* LinkedIn */}
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
         <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
@@ -732,7 +976,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-[var(--line)] bg-[#0d0f14]/50 p-4">
+        <div className="mt-4 flex flex-col justify-between gap-4 rounded-xl border border-[var(--line)] bg-[var(--ink-deep)]/50 p-4 sm:flex-row sm:items-center">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Layers className="h-4 w-4 text-[var(--chartreuse)]" />
@@ -769,6 +1013,7 @@ export default function SettingsPage() {
           </Button>
         </div>
       </section>
+      </div>
 
       {/* Email */}
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
@@ -1115,6 +1360,10 @@ function ProviderRow({
   onRemove,
   onToggle,
   onTest,
+  models,
+  importingModels,
+  modelImportError,
+  onImportModels,
 }: {
   provider: LLMProvider;
   index: number;
@@ -1125,6 +1374,10 @@ function ProviderRow({
   onRemove: () => void;
   onToggle: () => void;
   onTest: () => void;
+  models?: string[];
+  importingModels: boolean;
+  modelImportError?: string;
+  onImportModels: () => void;
 }) {
   return (
     <div
@@ -1168,13 +1421,36 @@ function ProviderRow({
       </div>
 
       <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_1.4fr_1.6fr_auto]">
-        <input
-          className={miniField}
-          value={p.model}
-          placeholder="model id"
-          title="Model"
-          onChange={(e) => onPatch({ model: e.target.value })}
-        />
+        <div className="min-w-0">
+          {models?.length ? (
+            <Select
+              value={p.model}
+              onChange={(model) => onPatch({ model })}
+              options={[...new Set([p.model, ...models])].filter(Boolean).map((model) => ({ value: model, label: model }))}
+              placeholder="Choose a model"
+              ariaLabel={`${p.label} model`}
+              className="w-full"
+            />
+          ) : (
+            <input
+              className={cn(miniField, "w-full")}
+              value={p.model}
+              placeholder="model id"
+              title="Model"
+              onChange={(e) => onPatch({ model: e.target.value })}
+            />
+          )}
+          <button
+            type="button"
+            onClick={onImportModels}
+            disabled={importingModels}
+            className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--sky)] transition-colors hover:text-[var(--paper)] disabled:opacity-50"
+          >
+            {importingModels ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+            {importingModels ? "Importing models…" : models?.length ? `${models.length} imported · refresh` : "Import provider models"}
+          </button>
+          {modelImportError && <p className="mt-1 truncate text-[10px] text-[var(--coral)]">{modelImportError}</p>}
+        </div>
         <input
           className={miniField}
           type="password"

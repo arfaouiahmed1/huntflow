@@ -1,136 +1,79 @@
-import { NextResponse } from "next/server";
-import { settingsRepo, emailsRepo, jobsRepo } from "@/lib/db";
-import { MailSettings, EmailMessage } from "@/types";
-import { toErrorMessage } from "@/lib/errors";
-import { resolveMailAuth } from "@/lib/gmailAuth";
+import { NextRequest, NextResponse } from "next/server";
+import { classifyRecruiterEmail } from "@/lib/mail/imapClassifier";
+import { scanGhostingRadar } from "@/lib/mail/ghostingRadar";
+import { syncImapInbox } from "@/lib/mail/imapSync";
+import { jobsRepo, emailsRepo } from "@/lib/db";
 
-function loadMailSettings(): MailSettings {
-  const raw = settingsRepo.get("mail_settings");
-  const parsed = raw ? (JSON.parse(raw) as Partial<MailSettings>) : {};
-  return {
-    imapHost: parsed.imapHost ?? "",
-    imapPort: parsed.imapPort ?? 993,
-    imapUser: parsed.imapUser ?? "",
-    imapPass: parsed.imapPass ?? "",
-    smtpHost: parsed.smtpHost ?? "",
-    smtpPort: parsed.smtpPort ?? 587,
-    smtpUser: parsed.smtpUser ?? "",
-    smtpPass: parsed.smtpPass ?? "",
-    fromName: parsed.fromName ?? "",
-    fromEmail: parsed.fromEmail ?? "",
-  };
-}
-
-function domainOf(email: string): string {
-  const m = email.match(/@([^@\s>]+)/);
-  return m ? m[1].toLowerCase().replace(/^www\./, "") : "";
-}
-
-/**
- * Sync the inbox: fetch recent unseen messages, match them to tracked
- * applications/contacts by domain, and store them as reply records.
- */
-export async function POST() {
-  const settings = loadMailSettings();
-  // Gmail OAuth (XOAUTH2) takes precedence — access token is already fresh from
-  // resolveMailAuth(); app-password IMAP is the fallback.
-  const gmail = await resolveMailAuth();
-  const hasImap = Boolean(gmail?.imap || (settings.imapHost && settings.imapUser && settings.imapPass));
-  if (!hasImap) {
-    return NextResponse.json({ error: "IMAP is not configured — check Settings → Email." }, { status: 400 });
-  }
+export async function GET() {
   try {
-    const { ImapFlow } = await import("imapflow");
-    const client = gmail?.imap
-      ? new ImapFlow({
-          host: gmail.imap.host,
-          port: gmail.imap.port,
-          secure: gmail.imap.secure,
-          auth: gmail.imap.auth,
-          logger: false,
-        })
-      : new ImapFlow({
-          host: settings.imapHost,
-          port: settings.imapPort,
-          secure: settings.imapPort === 993,
-          auth: { user: settings.imapUser, pass: settings.imapPass },
-          logger: false,
-        });
-
-    await client.connect();
-    const lock = await client.getMailboxLock("INBOX");
     const jobs = jobsRepo.list();
-    const domains = new Map<string, string[]>();
-    for (const j of jobs) {
-      const key = j.company.toLowerCase().replace(/[^a-z]/g, "");
-      domains.set(key, [...(domains.get(key) ?? []), j.id]);
-    }
+    const emails = emailsRepo.list();
+    const ghostingReport = scanGhostingRadar(jobs, 14, "Candidate", emails);
 
-    let synced = 0;
-    const newMessages: EmailMessage[] = [];
+    return NextResponse.json({
+      success: true,
+      ghostingReport,
+      totalSavedEmails: emails.length,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { success: false, error: err instanceof Error ? err.message : "Sync status failed" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    let body: {
+      mode?: "imap" | "classify_single";
+      limit?: number;
+      autoUpdateJobStatus?: boolean;
+      subject?: string;
+      body?: string;
+      sender?: string;
+    } = {};
+
+    // Safely parse optional request body (callers like outreach/page.tsx and AppContext.tsx POST with empty body)
     try {
-      const unseen = await client.search({ seen: false, deleted: false }, { uid: true });
-      const sample = (Array.isArray(unseen) ? unseen : []).slice(-30);
-      for (const uid of sample) {
-        const msg = await client.fetchOne(uid, {
-          envelope: true,
-          source: true,
-          uid: true,
-        });
-        if (!msg || !msg.envelope) continue;
-        const from = msg.envelope.from?.[0];
-        const subject = msg.envelope.subject ?? "(no subject)";
-        const text = msg.source
-          ? Buffer.from(msg.source).toString("utf8", 0, Math.min(msg.source.length, 60000))
-          : "";
-        const fromEmail = from?.address ?? "";
-        const fromDomain = domainOf(fromEmail);
-
-        let matchedJobId: string | undefined;
-        for (const [key, ids] of domains) {
-          const k = fromDomain.replace(/[^a-z]/g, "");
-          if (k === key || k.endsWith(key) || key.endsWith(k)) {
-            matchedJobId = ids[0];
-            break;
-          }
-        }
-
-        const body = text.slice(0, 2000);
-        const reply: EmailMessage = {
-          id: `imap:${uid}`,
-          contactId: undefined,
-          jobId: matchedJobId,
-          direction: "received",
-          subject,
-          body,
-          sentAt: new Date().toISOString(),
-          threadId: `imap-${uid}`,
-          status: "replied",
-          read: false,
-        };
-        emailsRepo.upsert(reply);
-        newMessages.push(reply);
-        await client.messageFlagsAdd(uid, ["\\Seen"], { uid: true });
-
-        if (matchedJobId) {
-          const job = jobs.find((j) => j.id === matchedJobId);
-          if (job && job.status === "applied" && !(job.notes ?? "").includes(subject)) {
-            jobsRepo.upsert({
-              ...job,
-              status: "interviewing",
-              notes: `📥 Reply received: "${subject}" (${new Date().toLocaleDateString()})` + (job.notes ? `\n${job.notes}` : ""),
-            });
-          }
-        }
-        synced++;
+      const text = await req.text();
+      if (text && text.trim().length > 0) {
+        body = JSON.parse(text);
       }
-    } finally {
-      await lock.release();
-      await client.logout();
+    } catch {
+      body = {};
     }
 
-    return NextResponse.json({ ok: true, synced, messages: newMessages });
-  } catch (e) {
-    return NextResponse.json({ error: toErrorMessage(e) }, { status: 500 });
+    // If caller requests a single classification check
+    if (body.mode === "classify_single" || (body.subject && body.body)) {
+      if (!body.subject || !body.body) {
+        return NextResponse.json(
+          { success: false, error: "Missing required email fields (subject, body)" },
+          { status: 400 }
+        );
+      }
+      const classification = classifyRecruiterEmail(body.subject, body.body, body.sender);
+      return NextResponse.json({
+        success: true,
+        mode: "classify_single",
+        classification,
+      });
+    }
+
+    // Default mode: Real server-side IMAP sync via imapflow
+    const syncResult = await syncImapInbox({
+      limit: body.limit || 20,
+      autoUpdateJobStatus: body.autoUpdateJobStatus ?? true,
+    });
+
+    return NextResponse.json({
+      mode: "imap_sync",
+      ...syncResult,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { success: false, error: err instanceof Error ? err.message : "IMAP sync failed" },
+      { status: 500 }
+    );
   }
 }

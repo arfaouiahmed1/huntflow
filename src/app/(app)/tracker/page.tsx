@@ -22,8 +22,14 @@ import {
   Lightbulb,
   FileSearch,
   Quote,
+  Radio,
+  Mail,
+  Copy,
+  Check,
+  X,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
+import { scanGhostingRadar, GhostedApplication } from "@/lib/mail/ghostingRadar";
 import { ApplicationStatus, LinkedInJob, EmployerReview, JobApplication, SkillsGapAnalysis } from "@/types";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/Toaster";
@@ -80,6 +86,13 @@ export default function TrackerPage() {
   const [reviewJob, setReviewJob] = useState<JobApplication | null>(null);
   const [reviewData, setReviewData] = useState<EmployerReview | null>(null);
 
+  const [selectedGhostedApp, setSelectedGhostedApp] = useState<GhostedApplication | null>(null);
+  const [ghostFollowupCopied, setGhostFollowupCopied] = useState(false);
+
+  const ghostedApplications = useMemo(
+    () => scanGhostingRadar(applications, 14, profile.name || "Candidate"),
+    [applications, profile.name]
+  );
   const MAX_ITERATIONS = 3;
   const [explainJobId, setExplainJobId] = useState<string | null>(null);
   const [explainLoading, setExplainLoading] = useState(false);
@@ -452,6 +465,56 @@ export default function TrackerPage() {
         </div>
         )}
       </section>
+      {/* 14-Day Ghosting Radar Alert Banner */}
+      {ghostedApplications.length > 0 && (
+        <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="grid h-8 w-8 place-items-center rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-400">
+                <Radio className="h-4 w-4 animate-pulse" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-[var(--paper)] flex items-center gap-2">
+                  14-Day Ghosting Radar
+                  <span className="rounded-full bg-amber-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-400">
+                    {ghostedApplications.length} Detected
+                  </span>
+                </h3>
+                <p className="text-[11px] text-dim">
+                  Applications pending recruiter response for &gt;14 days. Generate tailored follow-up inquiries.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 pt-1">
+            {ghostedApplications.map((g) => (
+              <div
+                key={g.jobId}
+                className="rounded-xl border border-[var(--line)] bg-[#12141a] p-3 space-y-2 flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-xs text-[var(--paper)] truncate">{g.company}</span>
+                    <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[9px] font-bold text-amber-400">
+                      {g.daysElapsed} days ago
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-dim truncate">{g.jobTitle}</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedGhostedApp(g)}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold text-amber-300 hover:bg-amber-500/20 transition-all cursor-pointer"
+                >
+                  <Mail className="h-3 w-3" /> Draft Day 14 Follow-Up
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* LinkedIn Jobs */}
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70">
@@ -1034,6 +1097,86 @@ export default function TrackerPage() {
         onClose={() => setReviewModalOpen(false)}
         onTailor={(j) => openJob(j.id)}
       />
+      {/* Ghosting Follow-Up Modal */}
+      {selectedGhostedApp && (
+        <div
+          onClick={() => setSelectedGhostedApp(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-h-[90vh] w-full max-w-xl overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink-card)] p-5 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <div className="flex items-center gap-2">
+                <span className="grid h-7 w-7 place-items-center rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-400">
+                  <Mail className="h-4 w-4" />
+                </span>
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--paper)]">
+                    Day 14 Polite Follow-Up Template
+                  </h3>
+                  <p className="text-[11px] text-dim">
+                    {selectedGhostedApp.company} · {selectedGhostedApp.jobTitle} ({selectedGhostedApp.daysElapsed} days since application)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedGhostedApp(null)}
+                className="rounded-lg p-1 text-dim hover:text-[var(--paper)] hover:bg-white/10 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-dim">Subject Line</label>
+                <div className="mt-1 rounded-xl border border-[var(--line)] bg-black/40 p-2.5 font-mono text-[11px] text-[var(--paper)]">
+                  {selectedGhostedApp.suggestedFollowUp.subject}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-dim">Email Body</label>
+                <div className="mt-1 rounded-xl border border-[var(--line)] bg-black/40 p-3 text-white/90 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
+                  {selectedGhostedApp.suggestedFollowUp.body}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-[var(--line)] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  const text = `${selectedGhostedApp.suggestedFollowUp.subject}\n\n${selectedGhostedApp.suggestedFollowUp.body}`;
+                  await navigator.clipboard.writeText(text);
+                  setGhostFollowupCopied(true);
+                  setTimeout(() => setGhostFollowupCopied(false), 2000);
+                  success("Copied follow-up email to clipboard!");
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--line)] bg-white/[0.04] px-4 py-2 text-xs font-semibold text-[var(--paper)] hover:bg-white/[0.08] transition-colors cursor-pointer"
+              >
+                {ghostFollowupCopied ? <Check className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> : <Copy className="h-3.5 w-3.5" />}
+                <span>{ghostFollowupCopied ? "Copied" : "Copy to Clipboard"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const mailto = `mailto:?subject=${encodeURIComponent(selectedGhostedApp.suggestedFollowUp.subject)}&body=${encodeURIComponent(selectedGhostedApp.suggestedFollowUp.body)}`;
+                  window.open(mailto, "_blank");
+                  setSelectedGhostedApp(null);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--chartreuse)] px-4 py-2 text-xs font-bold text-neutral-950 shadow-md transition-colors hover:bg-chartreuse-bright cursor-pointer"
+              >
+                <Mail className="h-3.5 w-3.5" />
+                <span>Open in Email Client</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </>
       )}
     </div>

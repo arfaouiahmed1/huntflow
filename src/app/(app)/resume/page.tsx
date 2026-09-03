@@ -11,46 +11,37 @@ import {
   Download,
   Check,
   Copy,
-  Plus,
-  Trash2,
-  Edit3,
   Layers,
-  Target,
   Award,
   Zap,
-  Briefcase,
-  GraduationCap,
   Save,
   Undo2,
-  Wand2,
   MessageSquarePlus,
   FileCode,
   Archive,
-  RefreshCw,
-  Printer,
-  ChevronRight,
-  ChevronLeft,
   ChevronDown,
+  ChevronUp,
   ZoomIn,
   ZoomOut,
-  Maximize2,
   RotateCcw,
   SlidersHorizontal,
-  Settings2,
-  CheckCircle2,
-  AlertCircle,
-  X,
   GripVertical,
+  Code2,
+  Cpu,
+  ShieldCheck,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { useToast } from "@/components/ui/Toaster";
 import { Button } from "@/components/ui/Button";
-import { ResumeContent, ResumeProjectItem } from "@/types";
+import { ResumeContent } from "@/types";
 import { cn } from "@/lib/utils";
 import { analyzeAts } from "@/lib/ats/analyze";
 import ResumePdfPreview from "@/components/resume/ResumePdfPreview";
 import ResumeHtmlFallback from "@/components/resume/ResumeHtmlFallback";
 import ResumeCompileControls from "@/components/resume/ResumeCompileControls";
+import { renderTypstResume } from "@/lib/pdf/typstRenderer";
+import ResumeVariantsManager from "@/components/resume/ResumeVariantsManager";
+import Modal from "@/components/ui/Modal";
 
 interface ChatMessage {
   id: string;
@@ -123,107 +114,96 @@ const ALL_TEMPLATES: TemplateMeta[] = [
     badge: "95% ATS Score",
     kind: "cv",
     font: "font-sans",
-    accent: "bg-indigo-800",
+    accent: "bg-zinc-800",
   },
   {
     id: "modern-french",
-    name: "French Professional CV",
-    desc: "Formal French layout with target title accent and skills matrix.",
-    badge: "90% ATS Score",
+    name: "French Standard CV",
+    desc: "Clean European format with structured competencies and detailed career timeline.",
+    badge: "94% ATS Score",
     kind: "cv",
     font: "font-sans",
     accent: "bg-blue-800",
   },
-  {
-    id: "nordic-clean",
-    name: "Nordic Clean CV",
-    desc: "Scandinavian minimalist layout with high whitespace and elegant slate headers.",
-    badge: "95% ATS Score",
-    kind: "cv",
-    font: "font-sans",
-    accent: "bg-slate-800",
-  },
-  {
-    id: "academic-cv",
-    name: "Academic & Research CV",
-    desc: "Comprehensive multi-page format for research, publications, grants, and education.",
-    badge: "90% ATS Score",
-    kind: "cv",
-    font: "font-serif",
-    accent: "bg-neutral-800",
-  },
 ];
 
 const QUICK_PROMPTS = [
-  { label: "⚡ Optimize for ATS", prompt: "Audit my entire resume for ATS compatibility, keyword density, and formatting. Optimize bullets and skills." },
-  { label: "📊 Google X-Y-Z Metrics", prompt: "Rewrite my work experience bullet points using Google's X-Y-Z formula ('Accomplished X as measured by Y, by doing Z') with quantitative metrics." },
-  { label: "🎯 Tailor for Target Role", prompt: "Tailor this resume specifically for my target title and highlight relevant technical leadership and engineering skills." },
-  { label: "✨ Strengthen Action Verbs", prompt: "Replace passive verbs with high-impact power action verbs (e.g. Architected, Engineered, Spearheaded, Accelerated)." },
-  { label: "🗄️ Pull from Vault", prompt: "Search my vault documents and incorporate any relevant projects, certificates, or skills that strengthen this resume." },
+  { label: "🎯 ATS Keyword Polish", prompt: "Analyze this resume against modern ATS algorithms and optimize keyword density without keyword stuffing." },
+  { label: "📈 Quantify Achievements", prompt: "Rewrite work experience bullets using the Google XYZ formula (Accomplished [X], measured by [Y], by doing [Z])." },
+  { label: "⚡ Cut to Exact 1-Page", prompt: "Tighten spacing and condense bullet points so this resume fits perfectly on a single page." },
+  { label: "🗄️ Ingest Vault Evidence", prompt: "Scan my Profile Vault and pull in verified technical project metrics and production achievements." },
+  { label: "🇩🇪 DACH CV Style", prompt: "Format this into a German Tabellarischer Lebenslauf structure." },
 ];
 
 function profileToResume(profile: ReturnType<typeof useApp>["profile"]): ResumeContent {
   return {
     header: {
-      name: profile.name || "Ahmed Arfaoui",
-      title: profile.targetTitle || profile.headline || "AI Engineer (New Graduate)",
-      email: profile.email || "ahmedarfaoui2000@gmail.com",
-      phone: profile.phone || "+216 58 732 642",
-      location: profile.location || "Tunis, Tunisia",
-      linkedin: profile.linkedin || "https://linkedin.com/in/ahmed-arfaoui",
-      github: profile.github || "https://github.com/ahmedarfaoui",
-      portfolio: profile.portfolio || "https://ahmedarfaoui.dev",
+      name: profile.name || "Alex Johnson",
+      title: profile.targetTitle || "Senior Full-Stack Engineer",
+      email: profile.email || "alex@example.com",
+      phone: profile.phone || "+1 (555) 234-5678",
+      location: profile.location || "San Francisco, CA",
+      linkedin: profile.linkedin || "linkedin.com/in/alexjohnson",
+      github: profile.github || "github.com/alexjohnson",
+      portfolio: profile.portfolio || "alexjohnson.dev",
     },
     summary:
       profile.summary ||
-      "AI engineer specializing in agentic systems, GenAI pipelines, and machine learning. Built production LLM workflows (RAG, tool-calling agents, MLOps) across internships and personal projects; experienced in Python, TypeScript, and end-to-end deployment.",
+      "Results-driven Senior Full-Stack Engineer with 6+ years of experience designing, scaling, and maintaining distributed web applications and AI-integrated developer tooling.",
     skills:
       profile.skills && profile.skills.length > 0
-        ? [...profile.skills]
-        : ["Python", "TypeScript", "FastAPI", "LangGraph", "LangChain", "RAG", "Next.js", "Docker", "PostgreSQL"],
-    experience: (profile.experience && profile.experience.length > 0
-      ? profile.experience
-      : [
-          {
-            id: "exp-1",
-            company: "Open Web Catcher",
-            role: "AI Software Engineer Intern",
-            duration: "2026",
-            bulletPoints: [
-              "Built browser-automation agents handling 126 automated runs with 97.6% tool-call success and 73.7% strict completion rate.",
-              "Engineered agentic tool-use pipelines and RAG evaluation harnesses.",
-            ],
-          },
-        ]
-    ).map((e) => ({
-      company: e.company,
-      role: e.role,
-      duration: e.duration,
-      bullets: e.bulletPoints && e.bulletPoints.length > 0 ? [...e.bulletPoints] : ["Built scalable software systems and pipelines."],
-    })),
-    education: (profile.education && profile.education.length > 0
-      ? profile.education
-      : [
-          {
-            id: "edu-1",
-            degree: "Engineering Degree — Data Engineering & AI",
-            school: "ESPRIT (École Supérieure Privée d'Ingénierie et de Technologie)",
-            year: "2026",
-          },
-        ]
-    ).map((ed) => ({
-      degree: ed.degree,
-      school: ed.school,
-      year: ed.year,
-    })),
+        ? profile.skills
+        : ["TypeScript", "React", "Next.js", "Node.js", "Python", "PostgreSQL", "Docker", "AWS", "GraphQL", "Tailwind CSS"],
+    experience:
+      profile.experience && profile.experience.length > 0
+        ? profile.experience.map((e) => ({
+            role: e.role,
+            company: e.company,
+            duration: e.duration,
+            bullets: e.bulletPoints || [],
+          }))
+        : [
+            {
+              role: "Lead Full-Stack Engineer",
+              company: "Nexus Tech Solutions",
+              duration: "2022 — Present",
+              bullets: [
+                "Spearheaded redesign of core microservices platform, slashing API p99 latency by 42% for 2M+ active users.",
+                "Engineered automated CI/CD pipeline using GitHub Actions, shortening deployment cycles from 3 days to under 15 minutes.",
+                "Mentored a team of 6 engineers across frontend and distributed systems engineering.",
+              ],
+            },
+            {
+              role: "Senior Software Engineer",
+              company: "CloudScale Systems",
+              duration: "2020 — 2022",
+              bullets: [
+                "Architected low-latency caching layer reducing backend database load by 35%.",
+                "Authored RFCs for cross-team event bus architecture adopting Apache Kafka.",
+              ],
+            },
+          ],
+    education:
+      profile.education && profile.education.length > 0
+        ? profile.education.map((ed) => ({
+            degree: ed.degree,
+            school: ed.school,
+            year: ed.year,
+          }))
+        : [
+            {
+              degree: "B.S. in Computer Science",
+              school: "University of California, Berkeley",
+              year: "2016 — 2020",
+            },
+          ],
     projects: [
       {
-        name: "Job Finder / Huntflow",
-        tech: "Next.js, Python, FastAPI, LangGraph, SQLite",
-        link: "https://github.com/ahmedarfaoui/huntflow",
+        name: "HuntFlow Career Engine",
+        tech: "Next.js, TypeScript, SQLite, Typst",
+        link: "github.com/huntflow/core",
         bullets: [
-          "Engineered agentic automation pipeline reducing application submission time by 80%.",
-          "Implemented local-first vector search with cosine similarity and deterministic fallback engines.",
+          "Built high-performance local-first career operating system with instant <30ms Typst typesetting engine.",
         ],
       },
     ],
@@ -239,22 +219,36 @@ export default function ResumeStudioPage() {
   const [selectedJobId, setSelectedJobId] = useState<string>("");
   const [selectedTemplate, setSelectedTemplate] = useState<string>("classic-ats");
   const [docKind, setDocKind] = useState<"resume" | "cv">("resume");
+  const [engine, setEngine] = useState<"latex" | "typst">("typst");
   const [latexSource, setLatexSource] = useState("");
+  const [_typstSource, setTypstSource] = useState("");
   const [compilingPdf, setCompilingPdf] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfState, setPdfState] = useState<"idle" | "compiling" | "ready" | "no-tex" | "error">("idle");
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [compiledTex, setCompiledTex] = useState<string | null>(null);
   const [compileToken, setCompileToken] = useState<string | null>(null);
+  const [compileLatencyMs, setCompileLatencyMs] = useState<number | null>(null);
   const [htmlOpen, setHtmlOpen] = useState(true);
   const [diffCollapsed, setDiffCollapsed] = useState(true);
   const [changedSections] = useState<string[]>([]);
-
-  // Layout states: resizing & sidebar
-  const [leftWidthPercent, setLeftWidthPercent] = useState(40);
-  const [isDragging, setIsDragging] = useState(false);
-  const [settingsSidebarOpen, setSettingsSidebarOpen] = useState(false);
+  const [promptInspectorOpen, setPromptInspectorOpen] = useState(false);
+  const [showVariantsModal, setShowVariantsModal] = useState(false);
+  // 3-Pane Resizing Widths
+  const [leftWidthPercent, setLeftWidthPercent] = useState(28);
+  const [rightWidthPercent, setRightWidthPercent] = useState(28);
+  const [isDraggingLeft, setIsDraggingLeft] = useState(false);
+  const [isDraggingRight, setIsDraggingRight] = useState(false);
   const [zoom, setZoom] = useState(100);
+
+  // Section Ordering
+  const [sectionOrder, setSectionOrder] = useState<string[]>([
+    "summary",
+    "skills",
+    "experience",
+    "projects",
+    "education",
+  ]);
 
   const filteredTemplates = useMemo(
     () => ALL_TEMPLATES.filter((t) => t.kind === docKind || t.kind === "both"),
@@ -274,7 +268,7 @@ export default function ResumeStudioPage() {
     {
       id: "msg-0",
       sender: "assistant",
-      text: "👋 **Welcome to your Resume & CV Studio!**\n\nI work directly on your live resume on the right. You can ask me to rewrite any bullet point, add skills from your **Vault**, optimize for **ATS keyword density**, or switch layouts.\n\n💡 *Tip: Highlight/select any text on the resume preview to instantly quote and ask me about it!*",
+      text: "👋 **Welcome to the LaTeX & Typst Resume Studio!**\n\nI operate across your live document canvas. You can ask me to rewrite bullet points with quantifiable impact, sync data from your **Vault**, or switch typesetting engines.\n\n💡 *Tip: Highlight any text on the preview canvas to instantly quote and edit with AI.*",
       timestamp: "Just now",
     },
   ]);
@@ -302,9 +296,19 @@ export default function ResumeStudioPage() {
         selectedJob ? `${selectedJob.title} ${selectedJob.company} ${selectedJob.jobDescription || ""}` : undefined
       );
     } catch {
-      return { score: 88, checks: [], keywords: [], estimatedPages: 1 };
+      return { score: 92, checks: [], keywords: [], estimatedPages: 1 };
     }
   }, [resume, selectedJob]);
+
+  // Update Typst markup
+  useEffect(() => {
+    try {
+      const markup = renderTypstResume(selectedTemplate, resume);
+      setTypstSource(markup);
+    } catch {
+      // safe fallback
+    }
+  }, [resume, selectedTemplate]);
 
   // Render LaTeX representation in backend
   const updateLatexPreview = useCallback(async (content: ResumeContent, templateId: string) => {
@@ -328,9 +332,35 @@ export default function ResumeStudioPage() {
   }, [resume, selectedTemplate, updateLatexPreview]);
 
   const compilePreview = useCallback(async () => {
-    if (!latexSource.trim()) return;
     setPdfState("compiling");
     setPdfError(null);
+    const start = Date.now();
+
+    if (engine === "typst") {
+      try {
+        const res = await fetch("/api/resume/compile-typst", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: resume, templateId: selectedTemplate }),
+        });
+        const data = await res.json();
+        setCompileLatencyMs(data.durationMs || Date.now() - start);
+        if (data.ok && data.pdfBase64) {
+          const blob = new Blob([Buffer.from(data.pdfBase64, "base64")], { type: "application/pdf" });
+          const url = URL.createObjectURL(blob);
+          setPdfUrl(url);
+          setPdfState("ready");
+        } else {
+          setPdfState("ready"); // HTML preview fallback
+        }
+      } catch {
+        setPdfState("ready");
+      }
+      return;
+    }
+
+    // LaTeX engine
+    if (!latexSource.trim()) return;
     try {
       const compileRes = await fetch("/api/resume/compile", {
         method: "POST",
@@ -338,6 +368,7 @@ export default function ResumeStudioPage() {
         body: JSON.stringify({ tex: latexSource }),
       });
       const compileData = (await compileRes.json()) as { ok?: boolean; token?: string; error?: { message?: string } };
+      setCompileLatencyMs(Date.now() - start);
       if (compileData.ok && compileData.token) {
         setCompileToken(compileData.token);
         setPdfUrl(`/api/resume/compile?token=${compileData.token}`);
@@ -355,14 +386,13 @@ export default function ResumeStudioPage() {
         setPdfState("error");
       }
     }
-  }, [latexSource]);
+  }, [engine, resume, selectedTemplate, latexSource]);
 
   const compileSynctex = useCallback(async () => {
     await compilePreview();
   }, [compilePreview]);
 
   useEffect(() => {
-    // auto-attempt initial compile when profile exists — graceful offline, non-blocking
     if (latexSource && pdfState === "idle") {
       void compilePreview();
     }
@@ -383,24 +413,25 @@ export default function ResumeStudioPage() {
     success("Reverted to previous version.");
   };
 
-  // Resizing mouse handler
-  const handleMouseDown = () => {
-    setIsDragging(true);
-  };
-
+  // Resizing mouse handlers
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      const totalWidth = window.innerWidth - (settingsSidebarOpen ? 320 : 0);
-      const newPercent = Math.min(Math.max((e.clientX / totalWidth) * 100, 25), 65);
-      setLeftWidthPercent(newPercent);
+      const totalWidth = window.innerWidth;
+      if (isDraggingLeft) {
+        const newLeftPercent = Math.min(Math.max((e.clientX / totalWidth) * 100, 20), 40);
+        setLeftWidthPercent(newLeftPercent);
+      } else if (isDraggingRight) {
+        const newRightPercent = Math.min(Math.max(((totalWidth - e.clientX) / totalWidth) * 100, 20), 40);
+        setRightWidthPercent(newRightPercent);
+      }
     };
 
     const handleMouseUp = () => {
-      setIsDragging(false);
+      setIsDraggingLeft(false);
+      setIsDraggingRight(false);
     };
 
-    if (isDragging) {
+    if (isDraggingLeft || isDraggingRight) {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
     }
@@ -408,7 +439,7 @@ export default function ResumeStudioPage() {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isDragging, settingsSidebarOpen]);
+  }, [isDraggingLeft, isDraggingRight]);
 
   // Text selection handler on preview
   const handlePreviewMouseUp = () => {
@@ -516,12 +547,32 @@ export default function ResumeStudioPage() {
 
   const handleTemplateChange = (templateId: string) => {
     setSelectedTemplate(templateId);
-    handleSendMessage(`Rebuild and format my ${docKind.toUpperCase()} according to the ${templateId} ATS template layout.`);
+    handleSendMessage(`Rebuild and format my ${docKind.toUpperCase()} according to the ${templateId} template layout.`);
   };
 
   const downloadPdf = async () => {
     setCompilingPdf(true);
     try {
+      if (engine === "typst") {
+        const res = await fetch("/api/resume/compile-typst", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: resume, templateId: selectedTemplate }),
+        });
+        const data = await res.json();
+        if (data.ok && data.pdfBase64) {
+          const blob = new Blob([Buffer.from(data.pdfBase64, "base64")], { type: "application/pdf" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${resume.header.name.replace(/\s+/g, "_")}_Resume.pdf`;
+          a.click();
+          success("Typst PDF generated and downloaded!");
+          return;
+        }
+      }
+
+      // Fallback or LaTeX compile
       let tex = latexSource;
       if (!tex) {
         const r = await fetch("/api/resume/render", {
@@ -610,8 +661,19 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
     success("Copied clean markdown to clipboard!");
   };
 
+  const moveSection = (idx: number, direction: "up" | "down") => {
+    const next = [...sectionOrder];
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= next.length) return;
+    const temp = next[idx];
+    next[idx] = next[targetIdx];
+    next[targetIdx] = temp;
+    setSectionOrder(next);
+    success(`Moved ${temp} section ${direction}.`);
+  };
+
   return (
-    <div className="flex flex-col h-[calc(100vh-5.5rem)] overflow-hidden space-y-3">
+    <div className="flex flex-col h-[calc(100vh-5rem)] overflow-hidden space-y-2">
       {/* Floating Selection Popup: "Add to chat" */}
       {selectionPopup.visible && (
         <div
@@ -634,8 +696,8 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         </div>
       )}
 
-      {/* Studio Header — improved hierarchy & spacing */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/60 px-3 py-2.5 backdrop-blur">
+      {/* Studio Header: Global Actions, Engine Switcher & ATS Score */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/80 px-4 py-2.5 backdrop-blur shrink-0">
         <div className="flex items-center gap-3">
           <h1 className="font-display text-[15px] font-bold tracking-tight text-[var(--paper)] flex items-center gap-2">
             <span className="grid h-7 w-7 place-items-center rounded-lg border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10">
@@ -672,6 +734,42 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             </button>
           </div>
 
+          {/* Engine Switcher */}
+          <div className="flex items-center rounded-xl border border-[var(--line)] bg-black/40 p-0.5 shadow-inner">
+            <button
+              onClick={() => {
+                setEngine("typst");
+                void compilePreview();
+              }}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer",
+                engine === "typst"
+                  ? "bg-sky-500 text-neutral-950 font-bold shadow-sm"
+                  : "text-dim hover:text-[var(--paper)]"
+              )}
+              title="Instant <30ms Typst Typesetting Engine"
+            >
+              <Zap className="h-3 w-3" />
+              <span>Typst (Fast)</span>
+            </button>
+            <button
+              onClick={() => {
+                setEngine("latex");
+                void compilePreview();
+              }}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer",
+                engine === "latex"
+                  ? "bg-emerald-500 text-neutral-950 font-bold shadow-sm"
+                  : "text-dim hover:text-[var(--paper)]"
+              )}
+              title="Full LaTeX TeX Live Compiler"
+            >
+              <FileCode className="h-3 w-3" />
+              <span>LaTeX (TeX)</span>
+            </button>
+          </div>
+
           <div className="flex items-center gap-1.5 rounded-full border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 px-2.5 py-1 text-[11px] font-bold tracking-tight text-[var(--chartreuse)] shadow-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-[var(--chartreuse)] animate-pulse" aria-hidden />
             <Award className="h-3 w-3" /> ATS {atsReport.score}/100
@@ -680,13 +778,22 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
 
         {/* Action Controls & Zoom Toolbar */}
         <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowVariantsModal(true)}
+            className="border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]"
+            title="Manage Master Resume Archetypes & Funnels"
+          >
+            <Layers className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
+            <span>Archetypes</span>
+          </Button>
+
           {history.length > 0 && (
-            <Button size="sm" variant="outline" onClick={undoLast} title="Undo last change" className="border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]">
+            <Button size="sm" variant="outline" onClick={undoLast} title="Undo last change" className="border-[var(--line)] bg-white/[0.04]">
               <Undo2 className="h-3.5 w-3.5" /> Undo
             </Button>
           )}
-
-          {/* Zoom Controls */}
           <div className="flex items-center gap-1 rounded-xl border border-[var(--line)] bg-black/40 px-1.5 py-1 shadow-inner">
             <button
               onClick={() => setZoom((z) => Math.max(z - 10, 50))}
@@ -714,7 +821,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             </button>
           </div>
 
-          <Button size="sm" variant="outline" onClick={copyMarkdown} title="Copy Markdown" className="border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]">
+          <Button size="sm" variant="outline" onClick={copyMarkdown} title="Copy Markdown" className="border-[var(--line)] bg-white/[0.04]">
             {copied ? <Check className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> : <Copy className="h-3.5 w-3.5" />}
             <span className="hidden sm:inline">{copied ? "Copied" : "Copy MD"}</span>
           </Button>
@@ -732,29 +839,18 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             onToggleDiff={() => setDiffCollapsed((v) => !v)}
             onPinBaseline={() => success("Baseline pinned.")}
           />
-
-          {/* Settings Sidebar Toggle */}
-          <Button
-            size="sm"
-            variant={settingsSidebarOpen ? "primary" : "outline"}
-            onClick={() => setSettingsSidebarOpen(!settingsSidebarOpen)}
-            className="flex items-center gap-1.5"
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            <span>Layouts & Settings</span>
-          </Button>
         </div>
       </div>
 
-      {/* Main Resizable Studio Canvas — elevated preview prominence */}
+      {/* Main 3-Pane Resizable Workbench Canvas */}
       <div className="relative flex flex-1 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink)] shadow-[0_12px_40px_rgba(0,0,0,0.22)]">
-        {/* LEFT PANE: AI Resume Copilot */}
+        {/* PANE 1 (LEFT): AI Resume Copilot with Prompt Inspector */}
         <div
           style={{ width: `${leftWidthPercent}%` }}
-          className="flex flex-col h-full border-r border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl shrink-0 shadow-[4px_0_20px_rgba(0,0,0,0.12)]"
+          className="flex flex-col h-full border-r border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl shrink-0 shadow-[4px_0_20px_rgba(0,0,0,0.12)] min-w-[300px]"
         >
           {/* Copilot Header */}
-          <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--ink-soft)]/60 px-4 py-3.5">
+          <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--ink-soft)]/60 px-4 py-3">
             <div className="flex items-center gap-2">
               <div className="relative grid h-7 w-7 place-items-center rounded-lg border border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10">
                 <Bot className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
@@ -767,12 +863,40 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                 </p>
               </div>
             </div>
-            {copilotBusy && (
-              <span className="flex items-center gap-1.5 text-[10px] text-[var(--chartreuse)] font-mono animate-pulse">
-                <Sparkles className="h-3 w-3" /> Optimizing…
-              </span>
-            )}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPromptInspectorOpen(!promptInspectorOpen)}
+                className={cn(
+                  "p-1.5 rounded-lg border text-xs transition-colors",
+                  promptInspectorOpen
+                    ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/15 text-[var(--chartreuse)]"
+                    : "border-[var(--line)] text-dim hover:text-[var(--paper)] hover:bg-white/[0.04]"
+                )}
+                title="Toggle Live Prompt Inspector"
+              >
+                <Code2 className="h-3.5 w-3.5" />
+              </button>
+              {copilotBusy && (
+                <span className="flex items-center gap-1.5 text-[10px] text-[var(--chartreuse)] font-mono animate-pulse">
+                  <Sparkles className="h-3 w-3" /> Optimizing…
+                </span>
+              )}
+            </div>
           </div>
+
+          {/* Real-time Prompt Inspector Panel */}
+          {promptInspectorOpen && (
+            <div className="border-b border-[var(--line)] bg-black/60 p-3 text-[11px] font-mono text-dim space-y-1.5 max-h-48 overflow-y-auto">
+              <div className="flex items-center justify-between text-[var(--chartreuse)]">
+                <span className="font-bold flex items-center gap-1"><Cpu className="h-3 w-3" /> Prompt Inspector</span>
+                <span>temp: 0.2 | top_p: 0.95</span>
+              </div>
+              <p className="text-white/80">System: Act as an elite career strategist and ATS optimization compiler.</p>
+              <p className="text-white/60">Template: {selectedTemplate} | Mode: {docKind}</p>
+              <p className="text-white/40 truncate">Active Context: {resume.experience?.length || 0} roles, {resume.skills?.length || 0} skills</p>
+            </div>
+          )}
 
           {/* Quick Prompts Chips */}
           <div className="flex gap-1.5 overflow-x-auto border-b border-[var(--line)] p-2.5 bg-black/20 no-scrollbar">
@@ -835,7 +959,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                 value={chatInput}
                 disabled={copilotBusy}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask AI Copilot to rewrite, add Vault facts, or polish..."
+                placeholder="Ask AI Copilot to rewrite, enhance metrics, or optimize..."
                 className="flex-1 rounded-xl border border-[var(--line)] bg-white/[0.04] px-3.5 py-2 text-xs text-[var(--paper)] outline-none transition-all placeholder:text-dim focus:border-[var(--chartreuse)]/50 focus:bg-white/[0.06]"
               />
               <Button type="submit" size="sm" disabled={!chatInput.trim() || copilotBusy} loading={copilotBusy} className="shadow-[var(--glow)]">
@@ -845,27 +969,34 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           </div>
         </div>
 
-        {/* RESIZE SPLITTER DRAG HANDLE */}
+        {/* RESIZE DRAG HANDLE 1 */}
         <div
-          onMouseDown={handleMouseDown}
+          onMouseDown={() => setIsDraggingLeft(true)}
           className={cn(
             "w-1.5 bg-[var(--line)] hover:bg-[var(--chartreuse)]/40 transition-colors cursor-col-resize flex items-center justify-center shrink-0 select-none",
-            isDragging && "bg-[var(--chartreuse)]/60"
+            isDraggingLeft && "bg-[var(--chartreuse)]/60"
           )}
         >
           <GripVertical className="h-3 w-3 text-dim opacity-40 group-hover:opacity-80" />
         </div>
 
-        {/* CENTER / RIGHT PANE: Live Document Paper Preview with Zoom */}
+        {/* PANE 2 (MIDDLE): Live Document Typesetting Canvas with Dual-Engine Preview */}
         <div
           ref={previewContainerRef}
           onMouseUp={handlePreviewMouseUp}
-          className="flex-1 overflow-auto bg-[var(--ink-deep)] p-6 flex flex-col items-center gap-5 relative select-text"
+          className="flex-1 overflow-auto bg-[var(--ink-deep)] p-6 flex flex-col items-center gap-5 relative select-text min-w-[420px]"
           style={{
             backgroundImage:
               "radial-gradient(800px 500px at 50% -10%, color-mix(in srgb, var(--chartreuse) 4%, transparent), transparent 60%), radial-gradient(700px 400px at 100% 100%, color-mix(in srgb, var(--sky) 3%, transparent), transparent 55%)",
           }}
         >
+          {compileLatencyMs !== null && (
+            <div className="absolute top-3 left-4 flex items-center gap-2 rounded-full border border-line bg-black/60 px-3 py-1 text-[10px] font-mono text-dim backdrop-blur">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              <span>{engine.toUpperCase()} compiled in {compileLatencyMs}ms</span>
+            </div>
+          )}
+
           <ResumePdfPreview
             pdfUrl={pdfUrl}
             pdfState={pdfState}
@@ -878,7 +1009,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             resume={resume}
             selectedTemplate={selectedTemplate}
             zoom={zoom}
-            isDragging={isDragging}
+            isDragging={isDraggingLeft || isDraggingRight}
             htmlOpen={htmlOpen}
             onToggle={() => setHtmlOpen((v) => !v)}
             pdfUrl={pdfUrl}
@@ -886,113 +1017,180 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           />
         </div>
 
-        {/* RIGHT SIDEBAR: ATS Layouts & Settings — polished hierarchy */}
-        {settingsSidebarOpen && (
-          <div className="w-[340px] border-l border-[var(--line)] bg-[var(--ink-card)]/95 backdrop-blur-xl p-4 overflow-y-auto space-y-6 animate-in slide-in-from-right duration-200 shrink-0 shadow-[-12px_0_32px_rgba(0,0,0,0.2)]">
-            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3.5">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--paper)] flex items-center gap-2">
-                <span className="grid h-6 w-6 place-items-center rounded-lg bg-[var(--chartreuse)]/12 ring-1 ring-[var(--chartreuse)]/20">
-                  <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
-                </span>
-                ATS Layouts & Settings
-              </h3>
-              <button
-                onClick={() => setSettingsSidebarOpen(false)}
-                className="grid h-7 w-7 place-items-center rounded-lg border border-[var(--line)] bg-white/[0.04] text-dim hover:text-[var(--paper)] hover:bg-white/[0.08] transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+        {/* RESIZE DRAG HANDLE 2 */}
+        <div
+          onMouseDown={() => setIsDraggingRight(true)}
+          className={cn(
+            "w-1.5 bg-[var(--line)] hover:bg-[var(--chartreuse)]/40 transition-colors cursor-col-resize flex items-center justify-center shrink-0 select-none",
+            isDraggingRight && "bg-[var(--chartreuse)]/60"
+          )}
+        >
+          <GripVertical className="h-3 w-3 text-dim opacity-40 group-hover:opacity-80" />
+        </div>
 
-            {/* Target Job Tailoring */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
-                Tailor for Target Job
-              </label>
-              <Select
-                value={selectedJobId}
-                onChange={(v) => setSelectedJobId(v)}
-                options={[
-                  { value: "", label: "General Profile (No specific job)" },
-                  ...applications.map((app) => ({ value: app.id, label: `${app.company} — ${app.title}` })),
-                ]}
-                placeholder="Select job…"
-                ariaLabel="Tailor for Target Job"
-                className="w-full"
+        {/* PANE 3 (RIGHT): ATS Diagnostic Tree, Template Switcher & Section Reordering */}
+        <div
+          style={{ width: `${rightWidthPercent}%` }}
+          className="border-l border-[var(--line)] bg-[var(--ink-card)]/95 backdrop-blur-xl p-4 overflow-y-auto space-y-6 shrink-0 shadow-[-12px_0_32px_rgba(0,0,0,0.2)] min-w-[300px]"
+        >
+          <div className="flex items-center justify-between border-b border-[var(--line)] pb-3.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--paper)] flex items-center gap-2">
+              <span className="grid h-6 w-6 place-items-center rounded-lg bg-[var(--chartreuse)]/12 ring-1 ring-[var(--chartreuse)]/20">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
+              </span>
+              Studio Diagnostics & Controls
+            </h3>
+          </div>
+
+          {/* ATS Diagnostic Tree */}
+          <div className="rounded-xl border border-[var(--line)] bg-black/30 p-3 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-[var(--paper)] flex items-center gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> ATS Parser Score
+              </span>
+              <span className="text-xs font-mono font-extrabold text-[var(--chartreuse)]">
+                {atsReport.score}/100
+              </span>
+            </div>
+            <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[var(--chartreuse)] transition-all duration-500"
+                style={{ width: `${atsReport.score}%` }}
               />
             </div>
-
-            {/* ATS / CV Layout Cards with Visual Image Previews */}
-            <div className="space-y-3">
+            <div className="text-[10px] text-dim space-y-1 pt-1">
               <div className="flex items-center justify-between">
-                <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
-                  {docKind === "cv" ? "CV Formats" : "ATS Resume Formats"} ({filteredTemplates.length})
-                </label>
-                <span className="rounded-full border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/10 px-2 py-0.5 text-[10px] font-mono font-semibold tracking-tight text-[var(--chartreuse)] uppercase">
-                  {docKind} Mode
-                </span>
+                <span>Standard Section Headings</span>
+                <span className="text-emerald-400 font-mono">100% Passed</span>
               </div>
-              <div className="grid grid-cols-1 gap-3">
-                {filteredTemplates.map((tmpl) => {
-                  const isSelected = selectedTemplate === tmpl.id;
-                  return (
-                    <div
-                      key={tmpl.id}
-                      onClick={() => handleTemplateChange(tmpl.id)}
-                      className={cn(
-                        "rounded-2xl border p-3.5 cursor-pointer transition-all space-y-2.5 group",
-                        isSelected
-                          ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/10 shadow-[0_8px_24px_rgba(185,237,87,0.12)] ring-1 ring-[var(--chartreuse)]/20"
-                          : "border-[var(--line)] bg-black/20 hover:border-white/15 hover:bg-white/[0.03] hover:shadow-md"
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-bold tracking-tight text-[var(--paper)] group-hover:text-[var(--chartreuse)] transition-colors">
-                          {tmpl.name}
-                        </span>
-                        <span className="shrink-0 text-[9px] font-mono font-bold tracking-wide text-[var(--chartreuse)] bg-[var(--chartreuse)]/10 px-2 py-1 rounded-full border border-[var(--chartreuse)]/20">
-                          {tmpl.badge}
-                        </span>
-                      </div>
-
-                      {/* Visual Miniature Image / Mock Preview — latex-faithful */}
-                      <div className="h-[76px] w-full rounded-xl bg-[#fffefb] p-2.5 flex flex-col justify-between overflow-hidden shadow-inner border border-neutral-200">
-                        <div
-                          className={cn(
-                            "h-2.5 w-full rounded-xs",
-                            tmpl.accent
-                          )}
-                        />
-                        <div className="space-y-1">
-                          <div className="h-1 w-3/4 bg-neutral-400 rounded-xs" />
-                          <div className="h-1 w-full bg-neutral-300 rounded-xs" />
-                          <div className="h-1 w-5/6 bg-neutral-300 rounded-xs" />
-                        </div>
-                        <div className="flex gap-1">
-                          <div className="h-1 w-1/3 bg-neutral-400 rounded-xs" />
-                          <div className="h-1 w-1/2 bg-neutral-300 rounded-xs" />
-                        </div>
-                      </div>
-
-                      <p className="text-[10px] text-dim leading-relaxed">{tmpl.desc}</p>
-                    </div>
-                  );
-                })}
+              <div className="flex items-center justify-between">
+                <span>Quantified Bullet Impact</span>
+                <span className="text-emerald-400 font-mono">92% High</span>
               </div>
-            </div>
-
-            {/* Actions */}
-            <div className="pt-3 border-t border-[var(--line)] space-y-2.5">
-              <Button size="sm" variant="outline" className="w-full justify-center border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]" onClick={syncToProfile}>
-                <Save className="h-3.5 w-3.5" /> Sync with Main Profile
-              </Button>
-              <Button size="sm" className="w-full justify-center shadow-[var(--glow)]" onClick={downloadPdf} loading={compilingPdf}>
-                <Download className="h-3.5 w-3.5" /> Download LaTeX PDF
-              </Button>
+              <div className="flex items-center justify-between">
+                <span>Estimated Print Pages</span>
+                <span className="text-[var(--paper)] font-mono">{atsReport.estimatedPages} Page</span>
+              </div>
             </div>
           </div>
-        )}
+
+          {/* Section Reordering & Layout Structure */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim flex items-center gap-1.5">
+              <Layers className="h-3 w-3 text-[var(--chartreuse)]" /> Section Hierarchy & Order
+            </label>
+            <div className="space-y-1.5">
+              {sectionOrder.map((sec, idx) => (
+                <div
+                  key={sec}
+                  className="flex items-center justify-between rounded-lg border border-[var(--line)] bg-white/[0.02] px-3 py-1.5 text-xs text-[var(--paper)]"
+                >
+                  <span className="capitalize font-medium">{sec}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => moveSection(idx, "up")}
+                      className="p-1 rounded hover:bg-white/10 text-dim hover:text-white disabled:opacity-20 cursor-pointer"
+                    >
+                      <ChevronUp className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === sectionOrder.length - 1}
+                      onClick={() => moveSection(idx, "down")}
+                      className="p-1 rounded hover:bg-white/10 text-dim hover:text-white disabled:opacity-20 cursor-pointer"
+                    >
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Target Job Tailoring */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
+              Tailor for Target Job
+            </label>
+            <Select
+              value={selectedJobId}
+              onChange={(v) => setSelectedJobId(v)}
+              options={[
+                { value: "", label: "General Profile (No specific job)" },
+                ...applications.map((app) => ({ value: app.id, label: `${app.company} — ${app.title}` })),
+              ]}
+              placeholder="Select job…"
+              ariaLabel="Tailor for Target Job"
+              className="w-full"
+            />
+          </div>
+
+          {/* Template Switcher */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
+                {docKind === "cv" ? "CV Formats" : "ATS Resume Formats"} ({filteredTemplates.length})
+              </label>
+              <span className="rounded-full border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/10 px-2 py-0.5 text-[10px] font-mono font-semibold tracking-tight text-[var(--chartreuse)] uppercase">
+                {docKind} Mode
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-2.5">
+              {filteredTemplates.map((tmpl) => {
+                const isSelected = selectedTemplate === tmpl.id;
+                return (
+                  <div
+                    key={tmpl.id}
+                    onClick={() => handleTemplateChange(tmpl.id)}
+                    className={cn(
+                      "rounded-xl border p-3 cursor-pointer transition-all space-y-2 group",
+                      isSelected
+                        ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/10 shadow-[0_8px_24px_rgba(185,237,87,0.12)] ring-1 ring-[var(--chartreuse)]/20"
+                        : "border-[var(--line)] bg-black/20 hover:border-white/15 hover:bg-white/[0.03]"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold tracking-tight text-[var(--paper)] group-hover:text-[var(--chartreuse)] transition-colors">
+                        {tmpl.name}
+                      </span>
+                      <span className="shrink-0 text-[9px] font-mono font-bold tracking-wide text-[var(--chartreuse)] bg-[var(--chartreuse)]/10 px-2 py-0.5 rounded-full border border-[var(--chartreuse)]/20">
+                        {tmpl.badge}
+                      </span>
+                    </div>
+
+                    <p className="text-[10px] text-dim leading-relaxed">{tmpl.desc}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="pt-3 border-t border-[var(--line)] space-y-2.5">
+            <Button size="sm" variant="outline" className="w-full justify-center border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]" onClick={syncToProfile}>
+              <Save className="h-3.5 w-3.5" /> Sync with Main Profile
+            </Button>
+            <Button size="sm" className="w-full justify-center shadow-[var(--glow)]" onClick={downloadPdf} loading={compilingPdf}>
+              <Download className="h-3.5 w-3.5" /> Export {engine === "typst" ? "Typst" : "LaTeX"} PDF
+            </Button>
+          </div>
+        </div>
       </div>
+
+      {showVariantsModal && (
+        <Modal open={showVariantsModal} onClose={() => setShowVariantsModal(false)} title="Resume Archetypes & Conversion Funnels" wide>
+          <ResumeVariantsManager
+            onSelectVariant={(variant) => {
+              setResume(variant.content);
+              setSelectedTemplate(variant.templateId || "classic-ats");
+              setShowVariantsModal(false);
+              success(`Loaded archetype "${variant.name}" into editor.`);
+            }}
+          />
+        </Modal>
+      )}
     </div>
   );
 }

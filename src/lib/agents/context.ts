@@ -5,7 +5,7 @@ import {
   Reminder,
   UserProfile,
 } from "@/types";
-import { relevantMemory } from "@/lib/agents/memory";
+import { relevantMemory, formatEpisodicContextForRole } from "@/lib/agents/memory";
 import { usageRepo } from "@/lib/db";
 import { truncateToTokens, estimateTokens } from "@/lib/llm/tokens";
 import { localEmbed } from "@/lib/vault/embeddings";
@@ -113,6 +113,19 @@ export async function buildSharedContext(input: SharedContextInput): Promise<Sha
     parts.push(memory.map((m) => `- [${m.kind}${m.importance > 1 ? " ★" : ""} · ${m.source}] ${m.content} (${fmt(m.createdAt)})`).join("\n"));
   } else {
     parts.push("Nothing remembered yet.");
+  }
+
+  // Episodic Career Memory section
+  const topJob = open[0] || jobs[0];
+  if (topJob) {
+    const episodicSection = formatEpisodicContextForRole({
+      company: topJob.company || "",
+      title: topJob.title || "",
+      jobDescription: topJob.jobDescription || "",
+    });
+    if (episodicSection.trim()) {
+      parts.push(episodicSection);
+    }
   }
 
   // Proactive vault RAG: top 3 hits per memoryQuery via searchVault (docName#chunkIndex model), fallback to caller-supplied vaultHits

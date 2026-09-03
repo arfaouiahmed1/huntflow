@@ -49,7 +49,7 @@ export default function JobDetailOverview({ job }: JobDetailOverviewProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       <section data-testid="job-brief-panel" className="rounded-2xl border border-[var(--line)] bg-black/15 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-dim">

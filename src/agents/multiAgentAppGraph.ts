@@ -17,6 +17,9 @@ import { executeApply } from "@/lib/agents/executeApply";
 import { agentRunHistoryRepo, settingsRepo, jobsRepo, emailsRepo, interviewsRepo, remindersRepo } from "@/lib/db";
 import { rememberUnique } from "@/lib/agents/memory";
 import { buildSharedContext } from "@/lib/agents/context";
+import { sanitizeJobDescription } from "@/lib/validation";
+import { evaluateAdaptiveRouting } from "@/lib/agents/routing";
+import { evaluateAtsCritic } from "@/lib/agents/criticLoop";
 
 export interface MultiAgentInput {
   job: Partial<JobApplication> & { id: string; title: string; company: string; jobDescription: string; url?: string; location?: string };
@@ -77,7 +80,8 @@ export const MultiAgentState = Annotation.Root({
     default: () => "manual_required",
   }),
   fields: Annotation<string[]>({ reducer: (_a, b) => b ?? [], default: () => [] }),
-
+  reflectionPass: Annotation<number>({ reducer: (_a, b) => b ?? _a, default: () => 0 }),
+  criticFeedback: Annotation<string | null>({ reducer: (_a, b) => b, default: () => null }),
   // Telemetry & Checkpoints
   logs: Annotation<AutoApplyLog[]>({
     reducer: (a, b) => [...(a ?? []), ...(b ?? [])],
@@ -195,11 +199,8 @@ async function piiSanitizerNode(state: typeof MultiAgentState.State) {
     .filter((v): v is string => typeof v === "string" && Boolean(v))
     .join(" | ");
 
-  const res = (await executePiiSanitizerTool({ content: sensitiveContent || "" })) as Awaited<ReturnType<typeof executePiiSanitizerTool>>;
-  const llmUsed = (res as { llmUsed?: boolean }).llmUsed;
-  const llmReasoning = (res as { llmReasoning?: string | null }).llmReasoning;
-  const llmFindings = (res as { llmFindings?: string[] }).llmFindings;
-  const meta = (res as { meta?: { ssnHits?: number; dobHits?: number } }).meta;
+  const res = await executePiiSanitizerTool({ content: sensitiveContent });
+  const { llmUsed, llmReasoning, llmFindings, meta } = res;
 
   if (llmUsed && llmReasoning) {
     const safeReasoning = String(llmReasoning)
@@ -247,11 +248,20 @@ async function resumeCVTailorNode(state: typeof MultiAgentState.State) {
   const freshProfile = loadFreshProfile(state.profile);
   const logs: AutoApplyLog[] = [];
   logs.push({ timestamp: ts(), message: "📄 Agent #5 (ResumeCVTailor) tailoring resume — JD + vault + culture + region template...", type: "info" });
-
+  if (state.criticFeedback) {
+    logs.push({
+      timestamp: ts(),
+      message: `🔄 Incorporating critic feedback into tailoring (pass ${state.reflectionPass + 1})...`,
+      type: "info",
+    });
+  }
+  const effectiveJobDescription = state.criticFeedback
+    ? `${state.job.jobDescription}\n\n[CRITIC FEEDBACK pass ${state.reflectionPass}]: ${state.criticFeedback}`
+    : state.job.jobDescription;
   const res = (await executeResumeCVTailorTool({
     jobTitle: state.job.title,
     company: state.job.company,
-    jobDescription: state.job.jobDescription,
+    jobDescription: effectiveJobDescription,
     region: state.targetRegion,
     userSkills: freshProfile.skills || [],
   })) as Awaited<ReturnType<typeof executeResumeCVTailorTool>> & {
@@ -260,11 +270,9 @@ async function resumeCVTailorNode(state: typeof MultiAgentState.State) {
     cultureKeywords?: string[];
     vaultHitsCount?: number;
   };
-
   const llmUsed = res.llmUsed === true;
   const vaultHitsCount = typeof res.vaultHitsCount === "number" ? res.vaultHitsCount : 0;
   const cultureKeywords = Array.isArray(res.cultureKeywords) ? res.cultureKeywords : [];
-
   if (llmUsed) {
     logs.push({
       timestamp: ts(),
@@ -288,7 +296,6 @@ async function resumeCVTailorNode(state: typeof MultiAgentState.State) {
     });
   }
   logs.push({ timestamp: ts(), message: `✨ Matched ${res.matchingSkills.length} skills (${res.missingSkills.length} gaps identified).`, type: "info" });
-
   return {
     profile: freshProfile,
     matchingSkills: res.matchingSkills,
@@ -332,10 +339,13 @@ async function letterTailorNode(state: typeof MultiAgentState.State) {
     logs.push({ timestamp: ts(), message: `⚙️ LLM unavailable — fallback salutation/closing for ${state.targetRegion} (${res.salutation} … ${res.closing})`, type: "warning" });
   }
 
-  const topSkills = state.matchingSkills.slice(0, 3).join(", ");
+  // Guardrail: ensure pitch stays grounded — prefer matchingSkills, fallback to verified profile skills before generic filler
+  const profileSkills = (freshProfile?.skills || []).slice(0, 3).join(", ");
+  const topSkills = state.matchingSkills.length ? state.matchingSkills.slice(0, 3).join(", ") : profileSkills;
   const summary = freshProfile?.summary?.slice(0, 180) || "";
+  const groundedSkillClause = topSkills ? `maps directly to my experience with ${topSkills}` : `aligns with my background as ${freshProfile?.targetTitle || state.job.title}`;
   const pitch = topSkills
-    ? `${res.salutation} The ${state.job.title} role at ${state.job.company} maps directly to my experience with ${topSkills}. ${
+    ? `${res.salutation} The ${state.job.title} role at ${state.job.company} ${groundedSkillClause}. ${
         summary ? summary.trim() + " " : ""
       }I would welcome the chance to talk through how I can help. ${res.closing}`
     : `${res.salutation} ${
@@ -395,7 +405,24 @@ async function salaryIntelNode(state: typeof MultiAgentState.State) {
   const freshProfile = loadFreshProfile(state.profile);
   const logs: AutoApplyLog[] = [];
   logs.push({ timestamp: ts(), message: `💰 Agent #8 (SalaryIntel) estimating market compensation in ${state.targetRegion}...`, type: "info" });
-
+  const routing = evaluateAdaptiveRouting({
+    salary: (state.job as { salary?: string }).salary,
+    jobDescription: state.job.jobDescription,
+    location: (state.job as { location?: string }).location,
+    targetRegion: state.targetRegion,
+  });
+  if (routing.shouldSkipSalaryLlm && routing.extractedSalary) {
+    logs.push({
+      timestamp: ts(),
+      message: `Reasoning: adaptive routing detected explicit salary in posting (${routing.extractedSalary}) — skipped estimation LLM.`,
+      type: "reasoning",
+    });
+    return {
+      profile: freshProfile,
+      salaryEstimate: routing.extractedSalary,
+      logs,
+    };
+  }
   const res = await executeSalaryIntelTool({
     jobTitle: state.job.title,
     company: state.job.company,
@@ -403,13 +430,11 @@ async function salaryIntelNode(state: typeof MultiAgentState.State) {
     region: state.targetRegion,
     jobDescription: state.job.jobDescription,
   });
-
   logs.push({
     timestamp: ts(),
     message: `Reasoning: anchored the range at ${res.estimatedRange} from ${state.targetRegion} market data for ${state.job.title}${(state.job as { location?: string }).location ? ` in ${(state.job as { location?: string }).location}` : ""} — seniority signals in the JD shift the band more than company prestige.`,
     type: "reasoning",
   });
-
   return {
     profile: freshProfile,
     salaryEstimate: res.estimatedRange,
@@ -446,7 +471,6 @@ async function atsAuditNode(state: typeof MultiAgentState.State) {
   const freshProfile = loadFreshProfile(state.profile);
   const logs: AutoApplyLog[] = [];
   logs.push({ timestamp: ts(), message: "📊 Agent #10 (ATSAudit) running deterministic ATS parsing rules...", type: "info" });
-
   const experienceText = (freshProfile.experience ?? [])
     .map((e) => `${e.role} @ ${e.company} (${e.duration})${e.bulletPoints?.length ? "\n" + e.bulletPoints.join("\n") : ""}`)
     .join("\n");
@@ -459,7 +483,6 @@ async function atsAuditNode(state: typeof MultiAgentState.State) {
     jobDescription: state.job.jobDescription,
     atsType: state.atsType,
   });
-
   const compliance = auditRegionalCompliance(sampleResume, state.targetRegion);
   logs.push({ timestamp: ts(), message: `✅ ATS Audit Score: ${res.overallScore}% (Keyword match: ${res.keywordMatchRate}%)`, type: "success" });
   logs.push({
@@ -467,18 +490,36 @@ async function atsAuditNode(state: typeof MultiAgentState.State) {
     message: `Reasoning: score ${res.overallScore}% is driven mostly by keyword match (${res.keywordMatchRate}%) against a ${state.atsType} parser${compliance.warnings.length ? `; ${compliance.warnings.length} regional compliance warning(s) lower trust in the layout, not the content.` : " with no regional compliance warnings."}`,
     type: "reasoning",
   });
+  const critic = evaluateAtsCritic(res.overallScore, res.keywordMatchRate, state.reflectionPass ?? 0, state.missingSkills ?? []);
+  if (critic.shouldReflect) {
+    logs.push({
+      timestamp: ts(),
+      message: `🔄 Self-Correction Reflection Loop triggered (pass ${critic.nextPass}/${2}) — ATS score ${res.overallScore}% below 75 threshold. Re-tailoring with critic feedback.`,
+      type: "warning",
+    });
+    return {
+      profile: freshProfile,
+      atsScore: res.overallScore,
+      complianceWarnings: compliance.warnings,
+      autoApplyStatus: "manual_required" as const,
+      reflectionPass: critic.nextPass,
+      criticFeedback: critic.feedback,
+      logs,
+    };
+  }
   logs.push({ timestamp: ts(), message: "⏸ Human review requested — pausing graph for user approval...", type: "warning" });
   logs.push({
     timestamp: ts(),
     message: "Reasoning: fit evidence informs your review, but submission is irreversible, so the graph always parks at the HITL gate for explicit approval.",
     type: "reasoning",
   });
-
   return {
     profile: freshProfile,
     atsScore: res.overallScore,
     complianceWarnings: compliance.warnings,
     autoApplyStatus: "manual_required" as const,
+    reflectionPass: state.reflectionPass ?? 0,
+    criticFeedback: null,
     logs,
   };
 }
@@ -586,7 +627,7 @@ export function createMultiAgentAppGraph(checkpointer?: SqliteCheckpointSaver) {
     .addEdge(START, "piiSanitizer")
     .addEdge(START, "salaryIntel")
 
-    // Fan-In: wait for all three intelligence nodes before tailoring.
+    // Fan-in: one waiting edge requires all 3 intelligence sources.
     .addEdge(["companyIntel", "regionalNorms", "piiSanitizer"], "resumeCVTailor")
 
     // Fan-Out from resumeCVTailor: generate secondary assets concurrently
@@ -594,14 +635,25 @@ export function createMultiAgentAppGraph(checkpointer?: SqliteCheckpointSaver) {
     .addEdge("resumeCVTailor", "interviewPrep")
     .addEdge("resumeCVTailor", "outreachEmail")
 
-    // Fan-In: wait for every tailored asset and market salary before auditing.
-    .addEdge(["letterTailor", "interviewPrep", "outreachEmail", "salaryIntel"], "atsAudit")
-
-    // Final execution sequence
-    .addEdge("atsAudit", "autoApplyExecution")
+    // Fan-in: one waiting edge requires all tailored assets before auditing.
+    .addEdge(["letterTailor", "interviewPrep", "outreachEmail"], "atsAudit")
+    // Conditional reflection routing (replaces legacy linear .addEdge("atsAudit", "autoApplyExecution"))
+    // .addEdge("atsAudit", "autoApplyExecution")
+    .addConditionalEdges(
+      "atsAudit",
+      (state: typeof MultiAgentState.State) => {
+        if ((state.reflectionPass ?? 0) > 0 && state.criticFeedback && (state.atsScore ?? 0) < 75 && (state.reflectionPass ?? 0) <= 2) {
+          return "resumeCVTailor";
+        }
+        return "autoApplyExecution";
+      },
+      {
+        resumeCVTailor: "resumeCVTailor",
+        autoApplyExecution: "autoApplyExecution",
+      }
+    )
     .addEdge("autoApplyExecution", "orchestratorGate")
     .addEdge("orchestratorGate", END);
-
   return workflow.compile({ checkpointer });
 }
 
@@ -609,17 +661,17 @@ export async function runMultiAgentApp(input: MultiAgentInput) {
   const checkpointer = new SqliteCheckpointSaver();
   const app = createMultiAgentAppGraph(checkpointer);
   const threadId = input.threadId || `thread_${Date.now()}`;
-
+  const sanitized = sanitizeJobDescription(input.job.jobDescription ?? "");
+  const sanitizedJob = { ...input.job, jobDescription: sanitized.cleanText };
   const finalState = await app.invoke(
     {
-      job: input.job,
+      job: sanitizedJob,
       profile: input.profile,
       targetRegion: input.targetRegion || "US",
       submit: input.submit ?? false,
     },
-    { configurable: { thread_id: threadId } }
+    { configurable: { thread_id: threadId }, recursionLimit: 100 }
   );
-
   // Store in SQLite database run history
   agentRunHistoryRepo.log({
     threadId,
@@ -655,9 +707,6 @@ export async function runMultiAgentApp(input: MultiAgentInput) {
   };
 }
 
-/**
- * Stream real-time node transitions, logs, and partial updates over SSE.
- */
 export async function streamMultiAgentApp(
   input: MultiAgentInput,
   onEvent: (event: MultiAgentStreamEvent) => void
@@ -665,23 +714,23 @@ export async function streamMultiAgentApp(
   const checkpointer = new SqliteCheckpointSaver();
   const app = createMultiAgentAppGraph(checkpointer);
   const threadId = input.threadId || `thread_stream_${Date.now()}`;
-
+  const sanitized = sanitizeJobDescription(input.job.jobDescription ?? "");
+  const sanitizedJob = { ...input.job, jobDescription: sanitized.cleanText };
   const stream = await app.stream(
     {
-      job: input.job,
+      job: sanitizedJob,
       profile: input.profile,
       targetRegion: input.targetRegion || "US",
       submit: input.submit ?? false,
     },
     { configurable: { thread_id: threadId }, streamMode: "updates" }
   );
-
   let finalState: Partial<typeof MultiAgentState.State> = {};
   const accumulatedLogs: AutoApplyLog[] = [];
 
   for await (const step of stream) {
     if (!step || typeof step !== "object") continue;
-    const update = step as Record<string, Record<string, unknown>>;
+    const update = step as unknown as Record<string, Record<string, unknown>>;
     for (const [nodeName, partial] of Object.entries(update)) {
       if (nodeName === "__interrupt__") {
         onEvent({
@@ -726,7 +775,7 @@ export async function streamMultiAgentApp(
  */
 export async function resumeMultiAgentApp(
   threadId: string,
-  resumeData: { approved: boolean; submit?: boolean; editedPitch?: string }
+  resumeData: { approved?: boolean; submit?: boolean; editedPitch?: string; customInstruction?: string }
 ) {
   const fallbackProfile = (() => {
     try {
@@ -750,25 +799,39 @@ export async function resumeMultiAgentApp(
       rememberUnique("fact", `resumeMultiAgentApp rebuilt sharedContext for ${threadId} with fresh profile ${fallbackProfile.name} (${ctx.tokens} tokens)`, { source: "hitl-resume", importance: 1 });
     } catch {}
   }
-
   const checkpointer = new SqliteCheckpointSaver();
   const app = createMultiAgentAppGraph(checkpointer);
-
-  const finalState = await app.invoke(
-    new Command({ resume: resumeData }),
-    { configurable: { thread_id: threadId } }
-  );
-
+  const customInstruction =
+    typeof resumeData.customInstruction === "string" && resumeData.customInstruction.trim().length > 0
+      ? resumeData.customInstruction.trim().slice(0, 2000)
+      : null;
+  const extraLogs: AutoApplyLog[] = [];
+  if (customInstruction) {
+    extraLogs.push({
+      timestamp: ts(),
+      message: `🔄 Custom instruction received: ${customInstruction.slice(0, 120)} — attached as critic feedback.`,
+      type: "info",
+    });
+    try {
+      const stateUpdate: Record<string, unknown> = { criticFeedback: customInstruction };
+      // LangGraph updateState is available on compiled graph with checkpointer
+      const maybeUpdateState = (app as unknown as { updateState?: (config: unknown, state: unknown) => Promise<void> }).updateState;
+      if (typeof maybeUpdateState === "function") {
+        await maybeUpdateState.call(app, { configurable: { thread_id: threadId } }, stateUpdate);
+      }
+    } catch {}
+  }
+  const finalState = await app.invoke(new Command({ resume: resumeData }), { configurable: { thread_id: threadId }, recursionLimit: 100 });
   const tailoredPitch = resumeData.editedPitch || finalState.tailoredPitch;
   const mergedSharedContext = (finalState.sharedContext as string) || rebuiltContext;
-
+  const mergedLogs: AutoApplyLog[] = [...extraLogs, ...((finalState.logs as AutoApplyLog[]) ?? [])];
   return {
     threadId,
     status: finalState.autoApplyStatus,
     atsScore: finalState.atsScore,
     tailoredPitch,
     fields: finalState.fields,
-    logs: finalState.logs,
+    logs: mergedLogs,
     sharedContext: mergedSharedContext,
     profile: finalState.profile ?? fallbackProfile,
   };
@@ -846,7 +909,7 @@ export async function runPartialPipeline(input: MultiAgentInput & { stopAfter: s
       targetRegion: input.targetRegion || "US",
       submit: input.submit ?? false,
     },
-    { configurable: { thread_id: threadId } }
+    { configurable: { thread_id: threadId }, recursionLimit: 100 }
   );
 
   // Store in SQLite database run history

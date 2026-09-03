@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -11,6 +11,49 @@ import {
 import { settingsRepo } from "@/lib/db";
 import { testProfile } from "./fixtures";
 import type { UserProfile } from "@/types";
+
+vi.mock("@/lib/agents/tools/multiAgentTools", () => ({
+  executeCompanyIntelTool: vi.fn().mockResolvedValue({
+    success: true,
+    atsType: "generic",
+    cultureKeywords: ["product"],
+    research: { sources: [], news: [], facts: [] },
+  }),
+  executeRegionalNormsTool: vi.fn().mockResolvedValue({
+    rules: { name: "United States", recommendedTemplate: "classic-ats" },
+    meta: { searchPerformed: false, llmUsed: false },
+  }),
+  executePiiSanitizerTool: vi.fn().mockResolvedValue({
+    hasRedactions: false,
+    llmUsed: false,
+    llmFindings: [],
+    meta: { ssnHits: 0, dobHits: 0 },
+  }),
+  executeResumeCVTailorTool: vi.fn().mockResolvedValue({
+    matchingSkills: ["React", "TypeScript"],
+    missingSkills: ["GraphQL"],
+    recommendedTemplate: "classic-ats",
+    llmUsed: false,
+    vaultHitsCount: 0,
+    cultureKeywords: [],
+  }),
+  executeLetterTailorTool: vi.fn().mockResolvedValue({
+    salutation: "Dear Hiring Manager,",
+    closing: "Sincerely,",
+    letterKind: "cover_letter",
+    llmUsed: false,
+    companyResearch: null,
+    meta: { searchPerformed: false, sourcesCount: 0 },
+  }),
+  executeInterviewPrepTool: vi.fn().mockResolvedValue({
+    focusTopics: ["React architecture"],
+    llmUsed: false,
+    meta: { searchPerformed: false, sourcesCount: 0 },
+  }),
+  executeSalaryIntelTool: vi.fn().mockResolvedValue({ estimatedRange: "$100k-$120k" }),
+  executeOutreachEmailTool: vi.fn().mockResolvedValue({ suggestedSubject: "Senior Frontend Engineer" }),
+  executeAtsAuditTool: vi.fn().mockResolvedValue({ overallScore: 82, keywordMatchRate: 80 }),
+}));
 
 const mockJob = {
   id: "job-hardening-11",
@@ -86,8 +129,8 @@ describe("MultiAgent 11-node hardening — fan-in/fan-out + HITL resume freshnes
     expect(src).toContain('.addEdge("resumeCVTailor", "interviewPrep")');
     expect(src).toContain('.addEdge("resumeCVTailor", "outreachEmail")');
 
-    // Fan-in: one waiting edge requires all tailored assets + salary intel.
-    expect(src).toContain('.addEdge(["letterTailor", "interviewPrep", "outreachEmail", "salaryIntel"], "atsAudit")');
+    // Fan-in: one waiting edge requires all tailored assets (salaryIntel runs parallel via separate path).
+    expect(src).toContain('.addEdge(["letterTailor", "interviewPrep", "outreachEmail"], "atsAudit")');
 
     // Final sequence
     expect(src).toContain('.addEdge("atsAudit", "autoApplyExecution")');

@@ -17,7 +17,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           appearance.sidebarCollapsed ? "lg:pl-[76px]" : "lg:pl-[236px]",
         )}
       >
-        <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-8 lg:px-10">
+        <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
           <PageShell>{children}</PageShell>
         </div>
       </main>

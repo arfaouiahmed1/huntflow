@@ -165,10 +165,15 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider: p }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof data.error === 'object' ? JSON.stringify(data.error) : data.error || `HTTP ${res.status}`);
-      setTestResults((r) => ({ ...r, [p.id]: { ok: true, latency: (data as { latencyMs?: number }).latencyMs } }));
-      success(`Connected — ${(data as { model?: string }).model ?? p.label}`);
+      const data: Record<string, unknown> = (await res.json().catch(() => ({} as Record<string, unknown>))) as Record<string, unknown>;
+      if (!res.ok) throw new Error(typeof data.error === "object" ? JSON.stringify(data.error) : (typeof data.error === "string" ? data.error : `HTTP ${res.status}`));
+      const latency = typeof data.latencyMs === "number" ? (data.latencyMs as number) : undefined;
+      const attempts = typeof data.attempts === "number" ? (data.attempts as number) : undefined;
+      setTestResults((r) => ({ ...r, [p.id]: { ok: true, latency, attempts } }));
+      const modelLabel = typeof data.model === "string" ? (data.model as string) : p.label;
+      const latencyStr = latency !== undefined ? `${latency}ms` : "?";
+      const attemptsStr = attempts !== undefined ? ` · ${attempts} attempt${attempts === 1 ? "" : "s"}` : "";
+      success(`Connected — ${modelLabel} · ${latencyStr}${attemptsStr} (PER_PROVIDER_ATTEMPTS=3, 429/408 jitter)`);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : (typeof err === "object" && err !== null ? JSON.stringify(err) : String(err));
       setTestResults((r) => ({ ...r, [p.id]: { ok: false, error: errMsg } }));
@@ -1341,6 +1346,7 @@ interface ProviderTestStatus {
   testing?: boolean;
   ok?: boolean;
   latency?: number;
+  attempts?: number;
   error?: string;
 }
 
@@ -1479,7 +1485,9 @@ function ProviderRow({
             {status?.testing ? (
               "pinging…"
             ) : status?.ok ? (
-              <span className="text-[var(--chartreuse)]">ok · {status.latency ?? "?"}ms</span>
+              <span className="text-[var(--chartreuse)]" title="PER_PROVIDER_ATTEMPTS=3 · 429/408 jitter 1s*2^n">
+                ok · {status.latency ?? "?"}ms{status.attempts !== undefined ? ` · ${status.attempts} attempt${status.attempts === 1 ? "" : "s"}` : ""}
+              </span>
             ) : status?.error ? (
               <span className="text-[var(--coral)]">{status.error}</span>
             ) : (

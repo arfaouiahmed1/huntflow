@@ -1,5 +1,5 @@
 import { memoryRepo } from "@/lib/db";
-import { rememberLong } from "@/lib/agents/memory";
+import { rememberLong, fingerprintEntries, getConsolidationFingerprint, setConsolidationFingerprint, pruneExpired } from "@/lib/agents/memory";
 import { callLLM, resolveChain } from "@/lib/llm/router";
 import { embedTexts } from "@/lib/vault/embeddings";
 
@@ -48,21 +48,31 @@ interface LLMConsolidateResponse {
 export async function consolidateMemory(opts: ConsolidateOptions = {}): Promise<ConsolidateResult> {
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
 
+  // TTL pruning still works — purge expired short-term rows before grouping.
+  // No new tables: uses existing `memory.expires_at` index and `deleteExpired`.
+  try {
+    pruneExpired();
+  } catch {
+    // pruning failure is non-fatal; continue with filtered view
+  }
+  const nowIso = new Date().toISOString();
+
   // Fetch episodic candidates: per-job fact/insight. Use list() then filter
   // so we capture both short TTL rows and any fact/insight that hasn't been
-  // consolidated yet. Scope to jobId when requested.
+  // consolidated yet. Scope to jobId when requested. Expired rows are excluded
+  // (TTL guard) so consolidation never revives stale short-term memories.
   const raw = memoryRepo.list({
     limit: Math.max(limit, 200),
     ...(opts.jobId ? { jobId: opts.jobId } : {}),
   });
 
-  const episodic = raw.filter(
+  const episodicAll = raw.filter(
     (m) => (m.kind === "fact" || m.kind === "insight") && !!m.jobId
   );
+  const episodic = episodicAll.filter((m) => !m.expiresAt || m.expiresAt > nowIso);
 
   // Further filter to requested jobId if supplied (list already filtered, but keep strict)
   const filtered = opts.jobId ? episodic.filter((m) => m.jobId === opts.jobId) : episodic;
-
   // Group by jobId
   const groups = new Map<string, typeof filtered>();
   for (const entry of filtered) {
@@ -106,6 +116,15 @@ export async function consolidateMemory(opts: ConsolidateOptions = {}): Promise<
   for (const [jobId, entries] of cappedGroups) {
     if (entries.length === 0) {
       details.push({ jobId, created: 0, skipped: true, reason: "empty group" });
+      skipped += 1;
+      continue;
+    }
+
+    // Idempotency: if episodic fingerprint unchanged since last successful consolidation, skip LLM entirely.
+    const fingerprint = fingerprintEntries(entries);
+    const prevFp = getConsolidationFingerprint(jobId);
+    if (prevFp === fingerprint) {
+      details.push({ jobId, created: 0, skipped: true, reason: "idempotent (no new episodic)" });
       skipped += 1;
       continue;
     }
@@ -205,8 +224,10 @@ export async function consolidateMemory(opts: ConsolidateOptions = {}): Promise<
         } catch {
           // embedding failure is non-fatal; long memory remains
         }
+        setConsolidationFingerprint(jobId, fingerprint);
       } else {
-        // deduped — not counted as new
+        // deduped — not counted as new; still mark fingerprint so next call is idempotent without LLM
+        setConsolidationFingerprint(jobId, fingerprint);
         details.push({ jobId, created: 0, skipped: true, reason: "deduplicated (normalized)" });
         skipped += 1;
         continue;

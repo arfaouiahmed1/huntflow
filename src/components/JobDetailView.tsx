@@ -3,12 +3,12 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
-import { X, FileText, Layers, Bot, MessagesSquare, MapPin, Link2, Check, Copy, Trash2, LayoutDashboard, ArrowLeft, ExternalLink, ShieldCheck, ChevronRight, CalendarDays, Tag, Building2, Award, ImageIcon, History, DollarSign, AlertTriangle } from "lucide-react";
+import { FileText, Layers, Bot, MessagesSquare, Check, Copy, Trash2, LayoutDashboard, ArrowLeft, ShieldCheck, ChevronRight, CalendarDays, Tag, Award, ImageIcon, History, AlertTriangle } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { JobApplication } from "@/types";
 import { agentScreenshotUrl } from "@/lib/agentScreenshot";
 import StatusSelect from "@/components/ui/StatusSelect";
-import StatusBadge, { statusConfig } from "@/components/ui/StatusBadge";
+import { statusConfig } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toaster";
 import DateField from "@/components/ui/DateField";
@@ -18,7 +18,7 @@ import LazyReveal from "@/components/detail/LazyReveal";
 import JobDetailHeader from "@/components/detail/JobDetailHeader";
 import JobDetailOverview from "@/components/detail/JobDetailOverview";
 import JobDetailSkillsPanel from "@/components/detail/JobDetailSkillsPanel";
-
+import AgentOutputsDashboard from "@/components/agent/AgentOutputsDashboard";
 const MatchAnalysis = dynamic(() => import("@/components/match/MatchAnalysis"), { ssr: false, loading: () => <SectionPlaceholder label="Loading match analysis…" /> });
 const DocumentsPanel = dynamic(() => import("@/components/documents/DocumentsPanel"), { ssr: false, loading: () => <SectionPlaceholder label="Loading documents…" /> });
 const FlashcardsPanel = dynamic(() => import("@/components/flashcards/FlashcardsPanel"), { ssr: false, loading: () => <SectionPlaceholder label="Loading STAR cards…" /> });
@@ -54,7 +54,7 @@ function inferredAts(url: string | undefined): string | null {
 }
 function KeyFact({ label, children, tone = "default" }: { label: string; children: React.ReactNode; tone?: "default" | "accent" }) {
   return (
-    <div className={cn("rounded-xl border p-3", tone === "accent" ? "border-[var(--amber)]/15 bg-[var(--amber)]/[0.025]" : "border-white/5 bg-white/[0.02]")}>
+    <div className={cn("rounded-xl border p-3", tone === "accent" ? "border-[var(--amber)]/15 bg-[var(--amber)]/[0.025]" : "border-[var(--line)] bg-[var(--ink-card)]/[0.4]")}>
       <p className={cn("text-[10px] font-bold uppercase tracking-[0.14em]", tone === "accent" ? "text-[var(--amber)]" : "text-dim")}>{label}</p>
       <div className="mt-1 text-xs font-semibold text-[var(--paper)]">{children}</div>
     </div>
@@ -91,27 +91,28 @@ export default function JobDetailView({ job, mode = "page", initialTab = "overvi
     switch (tab) {
       case "overview":
         return (
-          <div className="space-y-4">
+          <div className="space-y-8">
             <section aria-label="Match and skills">
-              <LazyReveal minHeight={260}><MatchAnalysis job={job} /></LazyReveal>
+              <LazyReveal minHeight={280}><MatchAnalysis job={job} /></LazyReveal>
             </section>
-            <LazyReveal minHeight={220}><JobDetailOverview job={job} /></LazyReveal>
-            <LazyReveal minHeight={160}><JobDetailSkillsPanel skillsGap={job.skillsGap} /></LazyReveal>
+            <LazyReveal minHeight={260}><JobDetailOverview job={job} /></LazyReveal>
+            <LazyReveal minHeight={220}><JobDetailSkillsPanel skillsGap={job.skillsGap} /></LazyReveal>
+            <LazyReveal minHeight={320}><AgentOutputsDashboard job={job} /></LazyReveal>
           </div>
         );
       case "docs":
-        return <LazyReveal minHeight={220}><DocumentsPanel job={job} /></LazyReveal>;
+        return <LazyReveal minHeight={260}><DocumentsPanel job={job} /></LazyReveal>;
       case "flashcards":
-        return <LazyReveal minHeight={220}><FlashcardsPanel job={job} /></LazyReveal>;
+        return <LazyReveal minHeight={260}><FlashcardsPanel job={job} /></LazyReveal>;
       case "questions":
-        return <LazyReveal minHeight={220}><IntelligenceQuestionsPanel job={job} /></LazyReveal>;
+        return <LazyReveal minHeight={280}><IntelligenceQuestionsPanel job={job} /></LazyReveal>;
       case "agent":
-        return <LazyReveal minHeight={260}><JobDetailAgentRun job={job} /></LazyReveal>;
+        return <LazyReveal minHeight={360}><JobDetailAgentRun job={job} /></LazyReveal>;
       default:
         return (
-          <div className="space-y-4">
-            <LazyReveal minHeight={260}><MatchAnalysis job={job} /></LazyReveal>
-            <LazyReveal minHeight={220}><JobDetailOverview job={job} /></LazyReveal>
+          <div className="space-y-8">
+            <LazyReveal minHeight={280}><MatchAnalysis job={job} /></LazyReveal>
+            <LazyReveal minHeight={260}><JobDetailOverview job={job} /></LazyReveal>
           </div>
         );
     }
@@ -154,7 +155,7 @@ export default function JobDetailView({ job, mode = "page", initialTab = "overvi
             const verdictTone = verdict === "interview_likely" ? "border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]" : verdict === "possible_callback" ? "border-[var(--amber)]/30 bg-[var(--amber)]/10 text-[var(--amber)]" : verdict === "likely_reject" ? "border-[var(--coral)]/30 bg-[var(--coral)]/10 text-[var(--coral)]" : "border-[var(--line)] bg-white/[0.03] text-dim";
             const fit = job.fitCategory;
             return (
-              <div className="rounded-2xl border border-[var(--line)] bg-black/10 p-4">
+              <div className="rounded-2xl border border-[var(--line)] bg-[var(--ink-deep)]/[0.05] p-4">
                 <p className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-dim"><ShieldCheck className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> Enriched intelligence</p>
                 <div className="flex flex-wrap gap-1.5">
                   {verdict ? (
@@ -171,7 +172,7 @@ export default function JobDetailView({ job, mode = "page", initialTab = "overvi
                 </div>
                 <div className="mt-3">
                   {screenshot ? (
-                    <div data-testid="screenshot-proof" className="overflow-hidden rounded-xl border border-[var(--line)] bg-black/20">
+                    <div data-testid="screenshot-proof" className="overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--ink-deep)]/[0.06]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={screenshot} alt="Listing proof" className="max-h-40 w-full object-cover object-top" />
                       <div className="flex items-center justify-between border-t border-[var(--line)] px-3 py-1.5">
@@ -281,21 +282,21 @@ export default function JobDetailView({ job, mode = "page", initialTab = "overvi
         <KeyFact label="Channel">{applicationChannel || "Not recorded"}</KeyFact>
         <KeyFact label="Target keywords" tone="accent">{atsKeywords.length > 0 ? <span className="flex flex-wrap gap-1">{atsKeywords.slice(0, 6).map((keyword) => <span key={keyword} className="rounded-md border border-[var(--sky)]/20 bg-[var(--sky)]/[0.07] px-1.5 py-0.5 text-[10px] font-medium text-[var(--sky)]">{keyword}</span>)}{atsKeywords.length > 6 && <span className="rounded-md border border-[var(--line)] bg-white/[0.025] px-1.5 py-0.5 text-[10px] text-dim">+{atsKeywords.length - 6}</span>}</span> : <span className="font-normal text-dim">None extracted</span>}</KeyFact>
       </section>
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="min-w-0 space-y-4">
-          <div className="flex flex-wrap gap-1.5 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/60 p-2">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-6">
+          <div className="flex flex-wrap gap-2 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/60 p-2.5">
             {JOB_DETAIL_TABS.map(({ id, label, icon: Icon }) => {
               const active = tab === id;
               return (
-                <button key={id} type="button" aria-pressed={active} onClick={() => handleTabSelect(id)} className={cn("inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold", active ? "bg-[var(--chartreuse)]/10 text-[var(--chartreuse)] ring-1 ring-[var(--chartreuse)]/25" : "text-dim hover:bg-white/5 hover:text-[var(--paper)]")}>
+                <button key={id} type="button" aria-pressed={active} onClick={() => handleTabSelect(id)} className={cn("inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-semibold", active ? "bg-[var(--chartreuse)]/10 text-[var(--chartreuse)] ring-1 ring-[var(--chartreuse)]/25" : "text-dim hover:bg-white/5 hover:text-[var(--paper)]")}>
                   <Icon className="h-3.5 w-3.5" /> {label}
                 </button>
               );
             })}
           </div>
-          <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/60 p-4 sm:p-6"><div key={tab} className="min-w-0">{renderSubpanel()}</div></section>
+          <section className="rounded-[1.75rem] border border-[var(--line)] bg-[var(--ink-card)]/60 p-6 sm:p-8 shadow-[0_8px_40px_rgba(0,0,0,0.12)]"><div key={tab} className="min-w-0">{renderSubpanel()}</div></section>
         </div>
-        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+        <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
           <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/60 p-5">
             <div className="mb-4 flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[var(--sky)]" /><h2 className="font-display text-sm font-semibold text-[var(--paper)]">Application control</h2></div>
             <div className="space-y-4">
@@ -318,7 +319,7 @@ export default function JobDetailView({ job, mode = "page", initialTab = "overvi
             <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--chartreuse)]" /><div><h2 className="font-display text-sm font-semibold text-[var(--paper)]">Supervised application</h2><p className="mt-1 text-xs leading-relaxed text-dim">The agent shows its reasoning, steps, clicks, screenshots, and outcome. Submission requires your explicit confirmation.</p></div></div>
             <Button variant="outline" className="mt-4 w-full" onClick={() => handleTabSelect("agent")}><Bot className="h-4 w-4" /> Review application agent</Button>
           </section>
-          <section className="rounded-2xl border border-[var(--line)] bg-black/10 p-4">
+          <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-deep)]/[0.05] p-4">
             {confirmRemove ? (
               <div><p className="text-xs text-dim">Remove this role and its workspace data?</p><div className="mt-3 flex gap-2"><Button variant="danger" size="sm" onClick={handleDeleteApplication}>Yes, remove</Button><Button variant="ghost" size="sm" onClick={() => setConfirmRemove(false)}>Keep role</Button></div></div>
             ) : (

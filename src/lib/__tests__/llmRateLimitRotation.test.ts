@@ -50,7 +50,7 @@ describe("LLM rate-limit rotation", () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockImplementation(async () => {
       const attempt = fetchMock.mock.calls.length;
-      if (attempt <= 2) {
+      if (attempt <= 3) {
         return new Response(JSON.stringify({ error: { message: "rate limited" } }), {
           status: 429,
           headers: { "Content-Type": "application/json" },
@@ -69,9 +69,10 @@ describe("LLM rate-limit rotation", () => {
     await vi.runAllTimersAsync();
     const result = await resultPromise;
 
-    expect(result).toMatchObject({ providerId: "groq-reserve", model: "llama-3.3-70b-versatile", attempts: 2 });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(result).toMatchObject({ providerId: "groq-reserve", model: "llama-3.3-70b-versatile", attempts: 3 });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
+      "https://api.openai.com/v1/chat/completions",
       "https://api.openai.com/v1/chat/completions",
       "https://api.openai.com/v1/chat/completions",
       "https://api.groq.com/openai/v1/chat/completions",

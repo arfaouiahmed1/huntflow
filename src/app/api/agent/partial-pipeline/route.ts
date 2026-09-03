@@ -86,7 +86,7 @@ export async function POST(req: Request) {
     }
     console.error("Partial pipeline execution error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to execute partial pipeline" },
+      { success: false, error: `Failed to execute partial pipeline: ${msg}` },
       { status: 500 }
     );
   }

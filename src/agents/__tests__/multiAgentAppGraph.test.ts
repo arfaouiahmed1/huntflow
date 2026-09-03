@@ -1,6 +1,61 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { runMultiAgentApp, streamMultiAgentApp, resumeMultiAgentApp } from "../multiAgentAppGraph";
 import { UserProfile } from "@/types";
+
+vi.mock("@/lib/agents/tools/multiAgentTools", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/agents/tools/multiAgentTools")>(
+    "@/lib/agents/tools/multiAgentTools",
+  );
+  return {
+    ...actual,
+    executeCompanyIntelTool: vi.fn().mockResolvedValue({
+      success: true,
+      atsType: "generic",
+      cultureKeywords: ["product"],
+      research: { sources: [], news: [], facts: [] },
+    }),
+    executeRegionalNormsTool: vi.fn().mockImplementation(async ({ region }: { region: string }) => ({
+      rules: {
+        name: region === "DE" ? "Germany" : region === "FR" ? "France" : "United States",
+        recommendedTemplate: region === "DE" ? "tabular-german" : region === "FR" ? "modern-french" : "classic-ats",
+      },
+      meta: { searchPerformed: false, llmUsed: false },
+    })),
+    executePiiSanitizerTool: vi.fn().mockResolvedValue({
+      hasRedactions: false,
+      llmUsed: false,
+      llmFindings: [],
+      meta: { ssnHits: 0, dobHits: 0 },
+    }),
+    executeResumeCVTailorTool: vi.fn().mockImplementation(async ({ region }: { region: string }) => ({
+      matchingSkills: ["React", "TypeScript"],
+      missingSkills: ["GraphQL"],
+      recommendedTemplate: region === "DE" ? "tabular-german" : region === "FR" ? "modern-french" : "classic-ats",
+      llmUsed: false,
+      vaultHitsCount: 0,
+      cultureKeywords: [],
+    })),
+    executeLetterTailorTool: vi.fn().mockResolvedValue({
+      salutation: "Dear Hiring Manager,",
+      closing: "Sincerely,",
+      letterKind: "cover_letter",
+      llmUsed: false,
+      companyResearch: null,
+      meta: { searchPerformed: false, sourcesCount: 0 },
+    }),
+    executeInterviewPrepTool: vi.fn().mockResolvedValue({
+      focusTopics: ["React architecture"],
+      llmUsed: false,
+      meta: { searchPerformed: false, sourcesCount: 0 },
+    }),
+    executeOutreachEmailTool: vi.fn().mockResolvedValue({ suggestedSubject: "Lead Frontend Developer" }),
+    executeAtsAuditTool: vi.fn().mockResolvedValue({ overallScore: 82, keywordMatchRate: 80 }),
+  };
+});
+
+vi.mock("@/lib/agents/executeApply", () => ({
+  executeApply: vi.fn().mockResolvedValue({ status: "manual_required", fields: [], logs: [] }),
+}));
 
 const mockProfile: UserProfile = {
   name: "Jane Dev",

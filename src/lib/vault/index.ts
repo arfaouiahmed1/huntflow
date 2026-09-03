@@ -3,8 +3,10 @@ import { vaultRepo, VaultDoc, VaultChunk } from "@/lib/db";
 import { extractText, normalizeText } from "./extract";
 import { chunkText } from "./chunk";
 import { embedTexts, cosine } from "./embeddings";
-import { rankBm25, tokenizeForSearch } from "./bm25";
+import { rankBm25 } from "./bm25";
 import { resolveChain, callLLMJSON } from "@/lib/llm/router";
+import { rerankVaultChunks } from "./rerank";
+import type { ChunkProvenance } from "./rerank";
 
 const RRF_K = 60;
 
@@ -61,6 +63,8 @@ export interface VaultSearchHit {
   lexicalRank?: number;
   matchedTerms: string[];
   strategy: "hybrid" | "vector" | "lexical";
+  provenance: ChunkProvenance;
+  rerankScore: number;
 }
 
 export async function ingestDocument(input: {
@@ -215,48 +219,75 @@ export async function searchVault(query: string, k = 4, threshold = 0.12): Promi
   }
   if (!fused.size) return [];
 
-  // Lightweight local rerank: term overlap boost before slicing k (no external model, no Pinecone)
-  const expandedTerms = new Set(expandedQueries.flatMap((q) => tokenizeForSearch(q)));
-  const rerankedEntries = [...fused.entries()].map(([chunkId, fusedScore]) => {
-    const chunk = chunkById.get(chunkId);
-    const chunkTerms = new Set(tokenizeForSearch(chunk?.content ?? ""));
-    let overlap = 0;
-    for (const t of expandedTerms) if (chunkTerms.has(t)) overlap++;
-    const overlapRatio = expandedTerms.size ? overlap / expandedTerms.size : 0;
-    // boost = 12% max from overlap ratio + small absolute bonus per matched term (keeps BM25 signal influential)
-    const boosted = fusedScore * (1 + 0.12 * overlapRatio) + overlap * 0.005;
-    return { chunkId, fusedScore, boosted, overlap };
-  });
-  rerankedEntries.sort((a, b) => b.boosted - a.boosted);
-
-  const sliced = rerankedEntries.slice(0, k);
-  const maximumBoosted = Math.max(...sliced.map((e) => e.boosted), 1);
+  // Hybrid reranker — integrate rerankVaultChunks after RRF / fusion stage before returning final results
   const docs = new Map(vaultRepo.listDocs().map((doc) => [doc.id, doc.filename]));
 
-  return sliced.flatMap(({ chunkId, boosted }) => {
+  type VaultCandidate = {
+    id: string;
+    docId: string;
+    docName: string;
+    chunkIndex: number;
+    text: string;
+    score: number;
+    chunkId: number;
+    model: string;
+    semanticScore: number;
+    lexicalScore: number;
+    semanticRank?: number;
+    lexicalRank?: number;
+    matchedTerms: string[];
+    strategy: "hybrid" | "vector" | "lexical";
+  };
+
+  const candidates: VaultCandidate[] = [];
+  for (const [chunkId, fusedScore] of fused.entries()) {
     const chunk = chunkById.get(chunkId);
-    if (!chunk) return [];
+    if (!chunk) continue;
     const lexicalSignal = lexicalById.get(chunkId);
     const semanticSignal = semanticById.get(chunkId);
-    const strategy = lexicalSignal && semanticSignal ? "hybrid" : semanticSignal ? "vector" : "lexical";
-    return [
-      {
-        docId: chunk.docId,
-        docName: docs.get(chunk.docId) ?? chunk.docId,
-        chunkId: chunk.id,
-        chunkIndex: chunk.idx,
-        text: chunk.content.slice(0, 800),
-        score: boosted / maximumBoosted,
-        model: chunk.embedModel,
-        semanticScore: semanticSignal?.score ?? 0,
-        lexicalScore: lexicalSignal?.score ?? 0,
-        semanticRank: semanticSignal?.rank,
-        lexicalRank: lexicalSignal?.rank,
-        matchedTerms: lexicalSignal?.matchedTerms ?? [],
-        strategy,
-      } satisfies VaultSearchHit,
-    ];
-  });
+    const strategy: VaultCandidate["strategy"] =
+      lexicalSignal && semanticSignal ? "hybrid" : semanticSignal ? "vector" : "lexical";
+    candidates.push({
+      id: String(chunkId),
+      docId: chunk.docId,
+      docName: docs.get(chunk.docId) ?? chunk.docId,
+      chunkIndex: chunk.idx,
+      text: chunk.content,
+      score: fusedScore,
+      chunkId: chunk.id,
+      model: chunk.embedModel,
+      semanticScore: semanticSignal?.score ?? 0,
+      lexicalScore: lexicalSignal?.score ?? 0,
+      semanticRank: semanticSignal?.rank,
+      lexicalRank: lexicalSignal?.rank,
+      matchedTerms: lexicalSignal?.matchedTerms ?? [],
+      strategy,
+    });
+  }
+
+  if (!candidates.length) return [];
+
+  const reranked = rerankVaultChunks(trimmed, candidates, k);
+
+  const maxRerank = Math.max(...reranked.map((r) => r.rerankScore), 1);
+
+  return reranked.map((r) => ({
+    docId: r.docId,
+    docName: r.docName,
+    chunkId: r.chunkId,
+    chunkIndex: r.chunkIndex,
+    text: r.text.slice(0, 800),
+    score: maxRerank > 0 ? r.rerankScore / maxRerank : 0,
+    model: r.model,
+    semanticScore: r.semanticScore,
+    lexicalScore: r.lexicalScore,
+    semanticRank: r.semanticRank,
+    lexicalRank: r.lexicalRank,
+    matchedTerms: r.matchedTerms,
+    strategy: r.strategy,
+    provenance: r.provenance,
+    rerankScore: r.rerankScore,
+  } satisfies VaultSearchHit));
 }
 
 export function vaultStats() {

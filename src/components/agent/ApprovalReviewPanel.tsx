@@ -2,10 +2,11 @@
 
 import { type ReactNode } from "react";
 import { motion } from "framer-motion";
-import { Edit3, ExternalLink, Send, ShieldAlert } from "lucide-react";
+import { ExternalLink, Send, ShieldAlert } from "lucide-react";
 import { getApprovalDecision } from "@/lib/agents/approvalDecision";
 import { Button } from "@/components/ui/Button";
 import Checkbox from "@/components/ui/Checkbox";
+import PitchDiffEditor from "@/components/agent/PitchDiffEditor";
 
 interface ApprovalReviewPanelProps {
   header: string;
@@ -25,6 +26,9 @@ interface ApprovalReviewPanelProps {
   onSkip: () => void;
   pitchActions?: ReactNode;
   textareaRows?: number;
+  jobDescription?: string;
+  customInstruction?: string;
+  onCustomInstructionChange?: (instruction: string) => void;
 }
 
 export default function ApprovalReviewPanel({
@@ -45,7 +49,11 @@ export default function ApprovalReviewPanel({
   onSkip,
   pitchActions,
   textareaRows = 3,
+  jobDescription,
+  customInstruction,
+  onCustomInstructionChange,
 }: ApprovalReviewPanelProps) {
+  void textareaRows;
   const decision = getApprovalDecision({
     hasReviewThread,
     submitAcknowledged,
@@ -71,14 +79,12 @@ export default function ApprovalReviewPanel({
       </div>
 
       <div className="space-y-2">
-        <label className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-dim">
-          <Edit3 className="h-3 w-3 text-[var(--chartreuse)]" /> Tailored cover letter / pitch
-        </label>
-        <textarea
-          rows={textareaRows}
-          value={reviewPitch}
-          onChange={(event) => onReviewPitchChange(event.target.value)}
-          className="w-full resize-none rounded-lg border border-[var(--line)] bg-black/40 p-2.5 text-xs leading-relaxed text-[var(--paper)] outline-none focus:border-[var(--chartreuse)]"
+        <PitchDiffEditor
+          currentPitch={reviewPitch}
+          onChange={onReviewPitchChange}
+          jobDescription={jobDescription}
+          customInstruction={customInstruction}
+          onCustomInstructionChange={onCustomInstructionChange}
         />
         {pitchActions && <div className="flex flex-wrap gap-1.5 pt-1">{pitchActions}</div>}
       </div>

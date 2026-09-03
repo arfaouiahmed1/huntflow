@@ -1,247 +1,189 @@
 "use client";
 
-import { CircleCheck, CircleX, Play, ServerCog } from "lucide-react";
+import React, { useState } from "react";
+import { Play, Activity, BookmarkPlus, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import Select from "@/components/ui/Select";
-import {
-  applySourceFilters,
-  DEFAULT_FILTER_SELECTION,
-  getExperienceOptions,
-  getMarketOptions,
-  getSourceTypeOptions,
-  getWorkModeOptions,
-  parseSourceCatalog,
-  type MarketSelection,
-  type SourceFilterSelection,
-  type SourceTypeSelection,
-  type TaxonomySource,
-} from "@/lib/sourceTaxonomy";
-
-export type CrawlerSourceForControls = {
-  id: string;
-  name: string;
-  category: string;
-  type: "static" | "stealth" | "posts";
-  url: string;
-  sourceType?: string;
-  markets?: string[];
-  experience?: string;
-  workMode?: string;
-  enabledByDefault: boolean;
-  note?: string;
-};
+import CrawlerChannelBar, { type ChannelKey } from "./CrawlerChannelBar";
+import CrawlerFacetedFilters from "./CrawlerFacetedFilters";
+import SourceHealthDrawer from "./SourceHealthDrawer";
+import type { CrawlerFacetFilters, CrawlerSourcePublic } from "@/lib/crawler/contracts";
+import { applySourceFilters, parseSourceCatalog, type SourceFilterSelection, type TaxonomySource } from "@/lib/sourceTaxonomy";
 
 interface Props {
   keyword: string;
   onKeywordChange: (v: string) => void;
+  channel?: ChannelKey;
+  onChannelChange?: (ch: ChannelKey) => void;
+  facets?: CrawlerFacetFilters;
+  onFacetsChange?: (f: CrawlerFacetFilters) => void;
+  onClearFacets?: () => void;
   crawlLimit: number;
   onCrawlLimitChange: (v: number) => void;
-  selection: SourceFilterSelection;
-  onSelectionChange: (next: SourceFilterSelection) => void;
-  sources: CrawlerSourceForControls[];
-  selectedIds: Set<string>;
-  onToggleSource: (id: string) => void;
+  sources: CrawlerSourcePublic[];
+  onToggleSource?: (id: string, enabled: boolean) => Promise<void>;
   onStart: () => void;
+  onSaveSearch?: () => void;
   crawling: boolean;
   checked: boolean;
   offline: boolean;
+  onOpenCompanyDiscovery?: () => void;
+  // Backward compatibility props
+  selection?: unknown;
+  onSelectionChange?: (sel: unknown) => void;
+  selectedIds?: Set<string>;
+  onDirectAtsCrawl?: (companies?: string[]) => void;
+  onWithoutWhiteboardsCrawl?: () => void;
 }
 
-function toTaxonomySources(raw: CrawlerSourceForControls[]): readonly TaxonomySource[] {
-  // Use parseSourceCatalog as boundary so malformed entries don't crash filter
+function toTaxonomySources(raw: unknown[]): readonly TaxonomySource[] {
   const parsed = parseSourceCatalog({ sources: raw });
   if (parsed.sources.length > 0) return parsed.sources;
-  // Fallback: map raw directly when parse fails but fields are present
-  return raw
+  return (raw as Record<string, unknown>[])
     .filter((s) => s.id && s.name)
     .map((s) => ({
-      id: s.id,
-      name: s.name,
+      id: String(s.id),
+      name: String(s.name),
       sourceType: (s.sourceType as TaxonomySource["sourceType"]) ?? "general",
       markets: (s.markets as TaxonomySource["markets"]) ?? ["global"],
       experience: (s.experience as TaxonomySource["experience"]) ?? "all",
       workMode: (s.workMode as TaxonomySource["workMode"]) ?? "all",
-      enabledByDefault: s.enabledByDefault,
+      enabledByDefault: Boolean(s.enabledByDefault ?? true),
     }));
 }
 
-export function useFilteredSources(sources: CrawlerSourceForControls[], selection: SourceFilterSelection) {
+export function useFilteredSources<T extends { id: string }>(sources: T[], selection?: unknown): T[] {
+  if (!selection || typeof selection !== "object") return sources;
   const catalog = toTaxonomySources(sources);
-  const filtered = applySourceFilters(catalog, selection);
+  const filtered = applySourceFilters(catalog, selection as SourceFilterSelection);
   const filteredIds = new Set(filtered.map((s) => s.id));
-  const visible = sources.filter((s) => filteredIds.has(s.id));
-  // When catalog empty (offline/no sources yet), show raw sources unfiltered
-  if (catalog.length === 0 && sources.length > 0) return sources;
-  return visible;
+  return sources.filter((s) => filteredIds.has(s.id));
 }
 
 export default function CrawlerDiscoveryControls({
   keyword,
   onKeywordChange,
+  channel = "all",
+  onChannelChange,
+  facets = {},
+  onFacetsChange,
+  onClearFacets,
   crawlLimit,
   onCrawlLimitChange,
-  selection,
-  onSelectionChange,
   sources,
-  selectedIds,
   onToggleSource,
   onStart,
+  onSaveSearch,
   crawling,
-  checked,
-  offline,
+  checked: _checked,
+  offline: _offline,
+  onOpenCompanyDiscovery,
 }: Props) {
-  const sourceTypeOptions = getSourceTypeOptions();
-  const marketOptions = getMarketOptions();
-  const experienceOptions = getExperienceOptions();
-  const workModeOptions = getWorkModeOptions();
-
-  const visibleSources = useFilteredSources(sources, selection);
-  const selectedInView = visibleSources.filter((s) => selectedIds.has(s.id)).length;
-  const totalSelected = selectedIds.size;
-  const hasZeroResult = sources.length > 0 && visibleSources.length === 0;
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const activeSourcesCount = sources.filter((s) => s.enabled && s.health !== "disabled").length;
 
   return (
-    <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5">
-      <div className="flex items-center gap-2">
-        <ServerCog className="h-4 w-4 text-[var(--chartreuse)]" />
-        <h2 className="text-sm font-semibold text-[var(--paper)]">New crawl</h2>
-        <span className="text-[11px] text-dim">No run starts until you press Start crawl.</span>
-      </div>
+    <section className="rounded-[1.5rem] border border-[var(--line)] bg-[var(--ink-card)]/70 p-6 space-y-5">
+      {/* Top Channel Bar */}
+      <CrawlerChannelBar
+        activeChannel={channel}
+        onSelectChannel={(ch) => onChannelChange?.(ch)}
+        sources={sources}
+        onOpenCompanyDiscovery={() => onOpenCompanyDiscovery?.()}
+      />
 
-      <div className="mt-4 grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(180px,1fr)_150px_150px_150px_150px_100px_auto] sm:items-end">
-        <label className="space-y-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Search terms</span>
+      {/* Search Input, Result Limit, and Run Actions */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--paper-dim)]" />
           <input
+            type="text"
             value={keyword}
             onChange={(e) => onKeywordChange(e.target.value)}
-            placeholder="AI engineer, LangGraph, RAG"
-            className="h-10 w-full rounded-xl border border-[var(--line)] bg-black/20 px-3 text-sm text-[var(--paper)] outline-none transition-colors focus:border-[var(--chartreuse)]/50"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !crawling) onStart();
+            }}
+            placeholder="Role title, skills, or target company (e.g. Distributed Systems, Rust, Stripe)..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.03] border border-[var(--line)] text-sm text-[var(--paper)] placeholder-[var(--paper-dim)] focus:border-[var(--chartreuse)] focus:outline-none transition-colors"
           />
-        </label>
+        </div>
 
-        <label className="space-y-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Source type</span>
-          <Select
-            value={selection.sourceType}
-            onChange={(v: string) => onSelectionChange({ ...selection, sourceType: v as SourceTypeSelection })}
-            options={sourceTypeOptions.map((o) => ({ value: o.value, label: o.label }))}
-          />
-        </label>
-
-        <label className="space-y-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Market / location</span>
-          <Select
-            value={selection.market}
-            onChange={(v: string) => onSelectionChange({ ...selection, market: v as MarketSelection })}
-            options={marketOptions.map((o) => ({ value: o.value, label: o.label }))}
-          />
-        </label>
-
-        <label className="space-y-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Experience</span>
-          <Select
-            value={selection.experience}
-            onChange={(v: string) => onSelectionChange({ ...selection, experience: v as never })}
-            options={experienceOptions.map((o) => ({ value: o.value, label: o.label }))}
-          />
-        </label>
-
-        <label className="space-y-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Work mode</span>
-          <Select
-            value={selection.workMode}
-            onChange={(v: string) => onSelectionChange({ ...selection, workMode: v as never })}
-            options={workModeOptions.map((o) => ({ value: o.value, label: o.label }))}
-          />
-        </label>
-
-        <label className="space-y-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Result cap</span>
-          <input
-            type="number"
-            min={1}
-            max={150}
+        {/* Limit selector */}
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--line)] bg-white/[0.02]">
+          <span className="text-[11px] text-[var(--paper-dim)] font-mono">Limit:</span>
+          <select
             value={crawlLimit}
-            onChange={(e) => onCrawlLimitChange(Math.min(150, Math.max(1, Number(e.target.value) || 1)))}
-            className="h-10 w-full rounded-xl border border-[var(--line)] bg-black/20 px-3 font-mono text-sm text-[var(--paper)]"
-          />
-        </label>
+            onChange={(e) => onCrawlLimitChange(Number(e.target.value))}
+            className="bg-transparent text-xs text-[var(--paper)] font-mono focus:outline-none cursor-pointer"
+          >
+            <option value={20} className="bg-[var(--ink-card)]">20</option>
+            <option value={50} className="bg-[var(--ink-card)]">50</option>
+            <option value={100} className="bg-[var(--ink-card)]">100</option>
+            <option value={150} className="bg-[var(--ink-card)]">150</option>
+          </select>
+        </div>
 
-        <Button onClick={onStart} loading={crawling} disabled={!checked || offline} className="h-10 px-5 lg:mt-auto">
-          <Play className="h-4 w-4" /> {crawling ? "Crawling…" : "Start crawl"}
+        {/* Sources Health Drawer Trigger */}
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border border-[var(--line)] bg-white/[0.02] text-[var(--paper)] hover:text-white hover:border-white/20 transition-all"
+        >
+          <Activity className="h-3.5 w-3.5 text-emerald-400" />
+          <span>Sources ({activeSourcesCount})</span>
+        </button>
+
+        {/* Save Search Button */}
+        {onSaveSearch && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onSaveSearch}
+            className="gap-1.5 text-xs text-[var(--paper)] hover:text-white border-[var(--line)] hover:border-white/20"
+          >
+            <BookmarkPlus className="h-3.5 w-3.5 text-sky-400" />
+            <span className="hidden sm:inline">Save Search</span>
+          </Button>
+        )}
+
+        {/* Run Crawl Button */}
+        <Button
+          type="button"
+          onClick={onStart}
+          disabled={crawling}
+          className="gap-2 bg-[var(--chartreuse)] text-black hover:bg-[var(--chartreuse)]/90 font-semibold text-xs px-5 py-2.5 rounded-xl transition-all shadow-sm"
+        >
+          {crawling ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-black" />
+              <span>Crawling Network...</span>
+            </>
+          ) : (
+            <>
+              <Play className="h-3.5 w-3.5 fill-black text-black" />
+              <span>Run Discovery</span>
+            </>
+          )}
         </Button>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[10px] text-dim">
-        <span>
-          {visibleSources.length} visible
-        </span>
-        <span className="opacity-40">·</span>
-        <span>
-          {selectedInView} selected in view
-        </span>
-        <span className="opacity-40">·</span>
-        <span>{totalSelected} selected total</span>
-        {selection.sourceType !== DEFAULT_FILTER_SELECTION.sourceType ||
-        selection.market !== DEFAULT_FILTER_SELECTION.market ||
-        selection.experience !== DEFAULT_FILTER_SELECTION.experience ||
-        selection.workMode !== DEFAULT_FILTER_SELECTION.workMode ? (
-          <button
-            type="button"
-            onClick={() => onSelectionChange(DEFAULT_FILTER_SELECTION)}
-            className="ml-2 rounded-full border border-[var(--line)] px-2 py-0.5 text-[10px] text-[var(--paper)] hover:border-[var(--chartreuse)]/40"
-          >
-            Clear filters
-          </button>
-        ) : null}
-      </div>
+      {/* Faceted Filters */}
+      {onFacetsChange && (
+        <CrawlerFacetedFilters
+          filters={facets}
+          onChange={onFacetsChange}
+          onClear={() => onClearFacets?.()}
+        />
+      )}
 
-      <div className="mt-5 border-t border-[var(--line)] pt-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">Sources in this view</p>
-          <span className="font-mono text-[10px] text-dim">{selectedInView} selected</span>
-        </div>
-
-        {hasZeroResult ? (
-          <div className="rounded-xl border border-dashed border-[var(--line)] bg-black/10 p-8 text-center">
-            <p className="text-sm font-semibold text-[var(--paper)]">No boards match these filters</p>
-            <p className="mt-1 text-xs text-dim">Try broadening Source type or Market. Your previously selected sources stay selected when they are hidden.</p>
-            <button
-              type="button"
-              onClick={() => onSelectionChange(DEFAULT_FILTER_SELECTION)}
-              className="mt-3 rounded-xl border border-[var(--line)] bg-white/[0.04] px-4 py-2 text-xs font-semibold text-[var(--paper)] hover:border-[var(--chartreuse)]/40"
-            >
-              Show all sources
-            </button>
-          </div>
-        ) : (
-          <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-            {visibleSources.map((source) => {
-              const selected = selectedIds.has(source.id);
-              return (
-                <button
-                  key={source.id}
-                  onClick={() => onToggleSource(source.id)}
-                  data-testid="source-card"
-                  data-source-id={source.id}
-                  data-selected={selected ? "true" : "false"}
-                  className={`flex items-start gap-3 rounded-xl border p-3 text-left transition-colors ${selected ? "border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/5" : "border-[var(--line)] bg-black/10 opacity-65 hover:opacity-100"}`}
-                  title={source.note || source.url}
-                >
-                  {selected ? <CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--chartreuse)]" /> : <CircleX className="mt-0.5 h-4 w-4 shrink-0 text-dim" />}
-                  <span className="min-w-0">
-                    <span className="block truncate text-xs font-semibold text-[var(--paper)]">{source.name}</span>
-                    <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-wider text-dim">
-                      {(source.sourceType as string) ?? source.type} · {Array.isArray(source.markets) ? source.markets.join("/") : source.category} · {source.experience ?? "all"} · {source.workMode ?? "all"}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-            {visibleSources.length === 0 && <p className="text-xs text-dim">Source controls appear when the agent is online.</p>}
-          </div>
-        )}
-      </div>
+      {/* Source Health Drawer */}
+      <SourceHealthDrawer
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        sources={sources}
+        onToggleSource={async (id, enabled) => {
+          if (onToggleSource) await onToggleSource(id, enabled);
+        }}
+      />
     </section>
   );
 }

@@ -147,6 +147,12 @@ def end_run(run_id: str, status: str, message: str, data: Optional[dict[str, Any
     record(run_id, message, event_kind, data)
 
 
+def _cloudinary_upload_url(cloud_name: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,255}", cloud_name):
+        raise ValueError("Invalid Cloudinary cloud name")
+    return f"https://api.cloudinary.com/v1_1/{cloud_name}/image/upload"
+
+
 def _cloudinary_upload(file_path: Path) -> Optional[str]:
     """Upload a PNG to Cloudinary with a signed request."""
     cloud_name = config.cloudinary_cloud_name or os.environ.get("CLOUDINARY_CLOUD_NAME", "")
@@ -161,7 +167,7 @@ def _cloudinary_upload(file_path: Path) -> Optional[str]:
         signature = hmac.new(
             api_secret.encode(), params_to_sign.encode(), hashlib.sha1
         ).hexdigest()
-        url = f"https://api.cloudinary.com/v1_1/{cloud_name}/image/upload"
+        url = _cloudinary_upload_url(cloud_name)
 
         with open(file_path, "rb") as fh:
             file_bytes = fh.read()

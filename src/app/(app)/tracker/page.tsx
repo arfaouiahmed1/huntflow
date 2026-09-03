@@ -42,6 +42,16 @@ import { palette } from "@/lib/theme";
 import { buildBoardGuidance, COLUMN_HINTS } from "@/lib/boardGuidance";
 import { matchFallback } from "@/lib/prompts/generationPrompts";
 
+function isLinkedInJobUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    const hostname = parsed.hostname.toLowerCase();
+    return parsed.protocol === "https:" && (hostname === "linkedin.com" || hostname.endsWith(".linkedin.com")) && parsed.pathname.startsWith("/jobs");
+  } catch {
+    return false;
+  }
+}
+
 const columns: { id: ApplicationStatus; label: string; accent: string; hint: string }[] = [
   { id: "wishlist", label: "Wishlist", accent: palette.sky, hint: COLUMN_HINTS.wishlist },
   { id: "applied", label: "Applied", accent: palette.violet, hint: COLUMN_HINTS.applied },
@@ -193,7 +203,7 @@ export default function TrackerPage() {
   const [liResults, setLiResults] = useState<LinkedInJob[] | null>(null);
   const [liError, setLiError] = useState("");
   const liSavedUrls = useMemo(() => {
-    return applications.filter((a) => a.url && a.url.includes("linkedin.com")).map((a) => a.url || "");
+    return applications.filter((a) => isLinkedInJobUrl(a.url || "")).map((a) => a.url || "");
   }, [applications]);
 
   useEffect(() => {

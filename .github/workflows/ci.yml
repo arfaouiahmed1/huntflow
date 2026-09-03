@@ -56,6 +56,12 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      - name: Install LaTeX toolchain for resume integration tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended lmodern
+          sudo rm -rf /var/lib/apt/lists/*
+
       - name: Install dependencies
         run: npm ci
 

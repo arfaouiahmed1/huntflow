@@ -91,7 +91,7 @@ export function scanEmploymentContract(contractText: string): ContractScanReport
   // 4. Bonus Clawbacks
   if (
     (/clawback|repaid|repay|reimburse|reimbursement/i.test(text) && /bonus|relocation|signing/i.test(text)) ||
-    /signing\s+bonus.*?repaid/i.test(text)
+    /signing\s+bonus[^\n]{0,120}repaid/i.test(text)
   ) {
     const isTwoYears = /24\s*months|2\s*years/i.test(text);
     score += isTwoYears ? 15 : 10;

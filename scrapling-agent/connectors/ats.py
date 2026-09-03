@@ -6,8 +6,8 @@ import logging
 import re
 import xml.etree.ElementTree as ET
 from typing import Any, Optional
+from urllib.parse import urlparse
 import httpx
-
 from connectors.base import (
     ConnectorItem,
     ConnectorPage,
@@ -42,6 +42,22 @@ KNOWN_BOARDS: dict[str, tuple[str, str]] = {
     "loom": ("lever", "loom"),
 }
 
+_SAFE_TOKEN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,99}$", re.IGNORECASE)
+
+
+def _validated_token(value: object, label: str) -> str:
+    token = str(value or "").strip().lower()
+    if not _SAFE_TOKEN.fullmatch(token):
+        raise ValueError(f"Invalid {label} token")
+    return token
+
+
+def _validated_api_url(url: str, expected_host: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname != expected_host or parsed.username or parsed.password:
+        raise ValueError("Invalid ATS API URL")
+    return url
+
 
 def detect_ats_provider(target: str) -> tuple[str, str]:
     """Detect ATS provider and board token from a URL or company slug."""
@@ -65,11 +81,11 @@ def detect_ats_provider(target: str) -> tuple[str, str]:
     if sr_match:
         return ("smartrecruiters", sr_match.group(1).lower())
 
-    personio_match = re.search(r"([^.]+)\.jobs\.personio\.de", clean, re.I)
+    personio_match = re.search(r"([a-z0-9_-]+)\.jobs\.personio\.de", clean, re.I)
     if personio_match:
         return ("personio", personio_match.group(1).lower())
 
-    recruitee_match = re.search(r"([^.]+)\.recruitee\.com", clean, re.I)
+    recruitee_match = re.search(r"([a-z0-9_-]+)\.recruitee\.com", clean, re.I)
     if recruitee_match:
         return ("recruitee", recruitee_match.group(1).lower())
 
@@ -108,8 +124,9 @@ class GreenhouseConnector:
         query: Optional[dict[str, Any]],
         client: httpx.AsyncClient,
     ) -> ConnectorPage:
-        token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("gh_", "")
-        url = GREENHOUSE_URL.format(board=token)
+        raw_token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("gh_", "")
+        token = _validated_token(raw_token, "Greenhouse")
+        url = _validated_api_url(GREENHOUSE_URL.format(board=token), "boards-api.greenhouse.io")
 
         headers: dict[str, str] = {"Accept": "application/json"}
         if state.get("etag"):
@@ -208,8 +225,9 @@ class LeverConnector:
         query: Optional[dict[str, Any]],
         client: httpx.AsyncClient,
     ) -> ConnectorPage:
-        token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("lever_", "")
-        url = LEVER_URL.format(company=token)
+        raw_token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("lever_", "")
+        token = _validated_token(raw_token, "Lever")
+        url = _validated_api_url(LEVER_URL.format(company=token), "api.lever.co")
 
         headers: dict[str, str] = {"Accept": "application/json"}
         if state.get("etag"):
@@ -312,8 +330,9 @@ class AshbyConnector:
         query: Optional[dict[str, Any]],
         client: httpx.AsyncClient,
     ) -> ConnectorPage:
-        token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("ashby_", "")
-        url = ASHBY_URL.format(company=token)
+        raw_token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("ashby_", "")
+        token = _validated_token(raw_token, "Ashby")
+        url = _validated_api_url(ASHBY_URL.format(company=token), "api.ashbyhq.com")
 
         headers: dict[str, str] = {"Accept": "application/json"}
         if state.get("etag"):
@@ -409,8 +428,9 @@ class SmartRecruitersConnector:
         query: Optional[dict[str, Any]],
         client: httpx.AsyncClient,
     ) -> ConnectorPage:
-        token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("sr_", "").replace("smartrecruiters_", "")
-        url = SMARTRECRUITERS_URL.format(company=token)
+        raw_token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("sr_", "").replace("smartrecruiters_", "")
+        token = _validated_token(raw_token, "SmartRecruiters")
+        url = _validated_api_url(SMARTRECRUITERS_URL.format(company=token), "api.smartrecruiters.com")
 
         try:
             resp = await client.get(url, timeout=10.0)
@@ -473,7 +493,8 @@ class PersonioConnector:
         query: Optional[dict[str, Any]],
         client: httpx.AsyncClient,
     ) -> ConnectorPage:
-        token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("personio_", "")
+        raw_token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("personio_", "")
+        token = _validated_token(raw_token, "Personio")
         url = PERSONIO_URL.format(company=token)
 
         try:
@@ -551,7 +572,8 @@ class RecruiteeConnector:
         query: Optional[dict[str, Any]],
         client: httpx.AsyncClient,
     ) -> ConnectorPage:
-        token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("recruitee_", "")
+        raw_token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("recruitee_", "")
+        token = _validated_token(raw_token, "Recruitee")
         url = RECRUITEE_URL.format(company=token)
 
         try:
@@ -615,7 +637,8 @@ class WorkableConnector:
         query: Optional[dict[str, Any]],
         client: httpx.AsyncClient,
     ) -> ConnectorPage:
-        token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("workable_", "")
+        raw_token = source.get("token") or source.get("config", {}).get("token") or source.get("id", "").replace("workable_", "")
+        token = _validated_token(raw_token, "Workable")
         url = WORKABLE_URL.format(company=token)
 
         try:

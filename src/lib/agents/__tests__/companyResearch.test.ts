@@ -42,10 +42,10 @@ function successfulResearchFetch(): typeof fetch {
         },
       });
     }
-    if (url.includes("en.wikipedia.org")) {
+    if (new URL(url).hostname === "en.wikipedia.org") {
       return jsonResponse({ query: { pages: { "1": { extract: "OpenAI is an artificial intelligence organization." } } } });
     }
-    if (url.includes("gdeltproject.org")) {
+    if (new URL(url).hostname === "gdeltproject.org") {
       return jsonResponse({
         articles: [
           {
@@ -104,7 +104,7 @@ describe("source-backed company research", () => {
   it("returns an unavailable state instead of fabricating identity facts", async () => {
     const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
       if (String(input).includes("wbsearchentities")) return jsonResponse({ search: [] });
-      if (String(input).includes("gdeltproject.org")) return jsonResponse({ articles: [] });
+      if (new URL(String(input)).hostname === "gdeltproject.org") return jsonResponse({ articles: [] });
       return new Response("not found", { status: 404 });
     }) as unknown as typeof fetch;
     const research = await researchCompany({ company: "Unfindable Example Company" }, { fetchImpl });

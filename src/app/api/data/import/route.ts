@@ -4,8 +4,15 @@ import { importAllData, BackupData } from "@/lib/db";
 import { settingsRepo } from "@/lib/db";
 import { isMasked } from "@/lib/masking";
 
+const UNSAFE_SETTING_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+
+function writeSetting(out: Record<string, string>, key: string, value: string): void {
+  if (UNSAFE_SETTING_KEYS.has(key)) return;
+  Object.defineProperty(out, key, { value, enumerable: true, writable: true, configurable: true });
+}
+
 function restoreMaskedSecrets(settings: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
+  const out = Object.create(null) as Record<string, string>;
   let storedProviders: { id: string; apiKey?: string }[] = [];
   let storedMail: { imapPass?: string; smtpPass?: string } = {};
   try {
@@ -17,28 +24,29 @@ function restoreMaskedSecrets(settings: Record<string, string>): Record<string, 
   const keyById = new Map(storedProviders.map((p) => [p.id, p.apiKey ?? ""]));
 
   for (const [key, value] of Object.entries(settings)) {
+    if (UNSAFE_SETTING_KEYS.has(key)) continue;
     if (key === "llm_providers") {
       try {
         const chain = JSON.parse(value) as { id: string; apiKey?: string }[];
-        out[key] = JSON.stringify(
-          chain.map((p) => (isMasked(p.apiKey) ? { ...p, apiKey: keyById.get(p.id) ?? "" } : p))
-        );
+        writeSetting(out, key, JSON.stringify(
+          chain.map((p) => (isMasked(p.apiKey) ? { ...p, apiKey: keyById.get(p.id) ?? "" } : p)),
+        ));
       } catch {
-        out[key] = value;
+        writeSetting(out, key, value);
       }
     } else if (key === "mail_settings") {
       try {
         const ms = JSON.parse(value) as { imapPass?: string; smtpPass?: string };
-        out[key] = JSON.stringify({
+        writeSetting(out, key, JSON.stringify({
           ...ms,
           imapPass: isMasked(ms.imapPass) ? storedMail.imapPass ?? "" : ms.imapPass,
           smtpPass: isMasked(ms.smtpPass) ? storedMail.smtpPass ?? "" : ms.smtpPass,
-        });
+        }));
       } catch {
-        out[key] = value;
+        writeSetting(out, key, value);
       }
     } else {
-      out[key] = value;
+      writeSetting(out, key, value);
     }
   }
   return out;

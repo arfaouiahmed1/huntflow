@@ -593,7 +593,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   }, [profile, dataReady]);
 
   useEffect(() => {
-    if (dataReady) localStorage.setItem(PROVIDER_STORAGE_KEY, JSON.stringify(llmSettings));
+    if (dataReady) {
+      localStorage.setItem(PROVIDER_STORAGE_KEY, JSON.stringify({
+        providerId: llmSettings.providerId,
+        apiKey: "",
+        model: llmSettings.model,
+        baseURL: llmSettings.baseURL,
+        temperature: llmSettings.temperature,
+      }));
+    }
   }, [llmSettings, dataReady]);
 
   useEffect(() => {

@@ -138,7 +138,7 @@ const MARKDOWN_HTML_PATTERNS: PatternDef[] = [
   // HTML tag injections
   {
     name: "html:script_tag",
-    regex: /<script\b[^>]*>[\s\S]*?<\/script\s*>/gi,
+    regex: /<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi,
     score: 40,
   },
   {

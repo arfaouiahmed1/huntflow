@@ -7,6 +7,7 @@ import { useApp } from "@/context/AppContext";
 import { useToast } from "@/components/ui/Toaster";
 import type { JobApplication } from "@/types";
 import JobDetailSalaryPanel from "@/components/detail/JobDetailSalaryPanel";
+import { sanitizeJobDescription } from "@/lib/security/jdSanitizer";
 
 interface JobDetailOverviewProps {
   job: JobApplication;
@@ -22,7 +23,7 @@ export default function JobDetailOverview({ job }: JobDetailOverviewProps) {
   const brief = job.jobBrief;
   const salaryIntel = job.salaryIntel;
   const companyResearch = job.multiAgentOutputs?.companyResearch;
-  const cleanedDescription = (job.jobDescription || "").replace(/<[^>]*>/g, "").trim();
+  const cleanedDescription = sanitizeJobDescription(job.jobDescription || "").cleanText.trim();
 
   const runBrief = async () => {
     setLoadingBrief(true);

@@ -47,15 +47,16 @@ const LANGUAGE_TAXONOMY: readonly { name: string; regex: RegExp }[] = [
 
 export function sanitizeJobDescription(raw: string): string {
   if (!raw) return "";
-  let text = raw.replace(/<[^>]+>/g, " ");
-  text = text
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ");
-  return text.replace(/\s+/g, " ").trim();
+  const text = raw.replace(/<[^>]+>/g, " ");
+  const entities: Record<string, string> = {
+    "&amp;": "&",
+    "&lt;": "<",
+    "&gt;": ">",
+    "&quot;": '"',
+    "&#39;": "'",
+    "&nbsp;": " ",
+  };
+  return text.replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (entity) => entities[entity] ?? entity).replace(/\s+/g, " ").trim();
 }
 
 export function extractSeniority(title: string, description = ""): SeniorityLevel | null {

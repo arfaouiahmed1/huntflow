@@ -69,9 +69,10 @@ const EXHAUSTIVE_SOURCE_TYPES: Record<SourceType, true> = {
 };
 const EXHAUSTIVE_MARKETS: Record<Market, true> = {
   global: true,
+  americas: true,
   europe: true,
   mena: true,
-  americas: true,
+  africa: true,
   apac: true,
 };
 const EXHAUSTIVE_EXPERIENCE: Record<ExperienceLevel, true> = {
@@ -92,7 +93,7 @@ describe("source taxonomy unions", () => {
     expect([...SOURCE_TYPES].sort()).toEqual(Object.keys(EXHAUSTIVE_SOURCE_TYPES).sort());
   });
 
-  it("declares exactly the five contract market members", () => {
+  it("declares exactly the six contract market members", () => {
     expect([...MARKETS].sort()).toEqual(Object.keys(EXHAUSTIVE_MARKETS).sort());
   });
 

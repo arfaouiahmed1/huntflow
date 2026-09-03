@@ -1,13 +1,28 @@
 import { z } from "zod";
+import type {
+  CrawlerChannel,
+  CrawlerRegion,
+  SourceAttribution,
+  SourceAuthMode,
+  SourceCapability,
+  SourceCrawlPolicy,
+  SourceHealthStatus,
+} from "./crawler/contracts";
 
 /* ------------------------------------------------------------------ *
- * Taxonomy unions — single source of truth for the four filter axes.
- * Structural contract mirrors the Task 4 sidecar source fields
- * (sourceType, markets, experience, workMode) without importing them.
+ * Taxonomy unions — single source of truth for the filter axes.
+ * Structural contract mirrors the v2 source registry & contracts.
  * ------------------------------------------------------------------ */
 
 export const SOURCE_TYPES = ["general", "remote_board", "community"] as const;
-export const MARKETS = ["global", "europe", "mena", "americas", "apac"] as const;
+export const MARKETS = [
+  "global",
+  "americas",
+  "europe",
+  "mena",
+  "africa",
+  "apac",
+] as const;
 export const EXPERIENCE_LEVELS = ["entry", "mid", "senior", "all"] as const;
 export const WORK_MODES = ["remote", "hybrid", "onsite", "all"] as const;
 
@@ -32,9 +47,10 @@ export const SOURCE_TYPE_LABELS: Readonly<Record<SourceType, string>> = Object.f
 
 export const MARKET_LABELS: Readonly<Record<Market, string>> = Object.freeze({
   global: "Global",
+  americas: "Americas",
   europe: "Europe",
   mena: "MENA",
-  americas: "Americas",
+  africa: "Africa",
   apac: "APAC",
 });
 
@@ -64,12 +80,33 @@ const ALL_OPTION_LABELS: Readonly<Record<"sourceType" | "market", string>> = Obj
 export interface TaxonomySource {
   readonly id: string;
   readonly name: string;
+  readonly channel?: CrawlerChannel;
+  readonly connector?: string;
+  readonly regions?: readonly CrawlerRegion[];
+  readonly countryCodes?: readonly string[];
+  readonly languages?: readonly string[];
+  readonly capabilities?: readonly SourceCapability[];
+  readonly authMode?: SourceAuthMode;
+  readonly crawlPolicy?: SourceCrawlPolicy;
+  readonly cadenceMinutes?: number;
+  readonly perDomainRps?: number;
+  readonly termsUrl?: string;
+  readonly attribution?: SourceAttribution;
+  readonly health?: SourceHealthStatus;
+  readonly description?: string;
   readonly sourceType: SourceType;
   readonly markets: readonly Market[];
   readonly experience: ExperienceLevel;
   readonly workMode: WorkMode;
   readonly enabledByDefault: boolean;
 }
+
+export type CrawlerSourceForControls = TaxonomySource & {
+  category?: string;
+  type?: "static" | "stealth" | "posts";
+  url?: string;
+  note?: string;
+};
 
 export interface FilterOption<Value extends string> {
   readonly value: Value;
@@ -154,17 +191,80 @@ export function getFallbackFilterOptions(): FilterOptionSet {
  * Zod boundary parsing — untrusted API payload in, typed result out.
  * ------------------------------------------------------------------ */
 
-const SourcesPayloadSchema = z.object({ sources: z.array(z.unknown()) });
+const SourcesPayloadSchema = z.object({
+  schemaVersion: z.number().optional(),
+  sources: z.array(z.unknown()),
+});
+
 const BoardIdPeekSchema = z.object({ id: z.string() });
 
-export const TaxonomySourceSchema = z.object({
+const RawEntrySchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  sourceType: z.enum(SOURCE_TYPES),
-  markets: z.array(z.enum(MARKETS)).min(1),
+  channel: z.enum(["ats", "aggregator", "regional", "community", "directory"]).optional(),
+  connector: z.string().optional(),
+  regions: z.array(z.enum(MARKETS)).optional(),
+  markets: z.array(z.enum(MARKETS)).optional(),
+  countryCodes: z.array(z.string()).optional(),
+  languages: z.array(z.string()).optional(),
+  capabilities: z.array(z.string()).optional(),
+  authMode: z.enum(["none", "optional_key", "required_key", "user_session"]).optional(),
+  crawlPolicy: z.enum(["automatic", "manual_only", "disabled"]).optional(),
+  cadenceMinutes: z.number().optional(),
+  perDomainRps: z.number().optional(),
+  termsUrl: z.string().optional(),
+  attribution: z.object({ name: z.string(), url: z.string(), licenseNotice: z.string().optional(), termsUrl: z.string().optional() }).optional(),
+  health: z.enum(["healthy", "degraded", "unconfigured", "manual_only", "disabled", "circuit_open"]).optional(),
+  description: z.string().optional(),
+  sourceType: z.enum(SOURCE_TYPES).optional(),
   experience: z.enum(EXPERIENCE_LEVELS).default("all"),
   workMode: z.enum(WORK_MODES).default("all"),
-  enabledByDefault: z.boolean(),
+  enabledByDefault: z.boolean().default(true),
+}).passthrough();
+
+export const TaxonomySourceSchema = RawEntrySchema.transform((raw) => {
+  const regions: Market[] = raw.regions && raw.regions.length > 0
+    ? raw.regions
+    : raw.markets && raw.markets.length > 0
+    ? raw.markets
+    : ["global"];
+
+  let derivedSourceType: SourceType = raw.sourceType ?? "general";
+  if (!raw.sourceType && raw.channel) {
+    if (raw.channel === "community") {
+      derivedSourceType = "community";
+    } else if (raw.channel === "aggregator") {
+      derivedSourceType = "remote_board";
+    } else {
+      derivedSourceType = "general";
+    }
+  }
+  const result: Record<string, unknown> = {
+    id: raw.id,
+    name: raw.name,
+    sourceType: derivedSourceType,
+    markets: regions,
+    experience: raw.experience,
+    workMode: raw.workMode,
+    enabledByDefault: raw.enabledByDefault,
+  };
+
+  if (raw.channel !== undefined) result.channel = raw.channel;
+  if (raw.connector !== undefined) result.connector = raw.connector;
+  if (raw.regions !== undefined) result.regions = regions;
+  if (raw.countryCodes !== undefined) result.countryCodes = raw.countryCodes;
+  if (raw.languages !== undefined) result.languages = raw.languages;
+  if (raw.capabilities !== undefined) result.capabilities = raw.capabilities;
+  if (raw.authMode !== undefined) result.authMode = raw.authMode;
+  if (raw.crawlPolicy !== undefined) result.crawlPolicy = raw.crawlPolicy;
+  if (raw.cadenceMinutes !== undefined) result.cadenceMinutes = raw.cadenceMinutes;
+  if (raw.perDomainRps !== undefined) result.perDomainRps = raw.perDomainRps;
+  if (raw.termsUrl !== undefined) result.termsUrl = raw.termsUrl;
+  if (raw.attribution !== undefined) result.attribution = raw.attribution;
+  if (raw.health !== undefined) result.health = raw.health;
+  if (raw.description !== undefined) result.description = raw.description;
+
+  return result as unknown as TaxonomySource;
 });
 
 export interface SourceParseFailure {
@@ -208,14 +308,33 @@ export function parseSourceCatalog(payload: unknown): SourceCatalogParse {
   const sources: TaxonomySource[] = [];
   const failures: SourceParseFailure[] = [];
   payloadResult.data.sources.forEach((entry, index) => {
+    if (typeof entry === "object" && entry !== null) {
+      const e = entry as Record<string, unknown>;
+      const hasMarketsKey = "markets" in e;
+      const hasRegions = Array.isArray(e.regions) && e.regions.length > 0;
+      const hasMarkets = Array.isArray(e.markets) && e.markets.length > 0;
+      if (!hasRegions && !hasMarkets) {
+        const peek = BoardIdPeekSchema.safeParse(entry);
+        failures.push({
+          index,
+          boardId: peek.success ? peek.data.id : null,
+          path: hasMarketsKey ? "markets" : "regions",
+          message: "Array must contain at least 1 element(s)",
+        });
+        return;
+      }
+    }
+
     const entryResult = TaxonomySourceSchema.safeParse(entry);
     if (entryResult.success) {
-      sources.push(
-        Object.freeze({
-          ...entryResult.data,
-          markets: Object.freeze([...entryResult.data.markets]),
-        })
-      );
+      const data: Record<string, unknown> = {
+        ...entryResult.data,
+        markets: Object.freeze([...entryResult.data.markets]),
+      };
+      if (entryResult.data.regions) {
+        data.regions = Object.freeze([...entryResult.data.regions]);
+      }
+      sources.push(Object.freeze(data) as unknown as TaxonomySource);
       return;
     }
     const peek = BoardIdPeekSchema.safeParse(entry);

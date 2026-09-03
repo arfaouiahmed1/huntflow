@@ -1,7 +1,6 @@
 "use client";
 
 import { useApp } from "@/context/AppContext";
-import { cn } from "@/lib/utils";
 import { BarChart3, TrendingUp, Clock3, CalendarCheck, Building2, Mail, Users } from "lucide-react";
 
 export default function StatsPanel() {

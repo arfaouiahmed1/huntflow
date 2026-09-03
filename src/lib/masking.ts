@@ -58,6 +58,17 @@ export function redactSettings(all: Record<string, string>): Record<string, stri
       } catch {
         out[k] = v;
       }
+    } else if (k === "crawler_connector_keys" || k.startsWith("connector_key:") || k === "crawler_keys") {
+      try {
+        const keys = JSON.parse(v) as Record<string, string>;
+        const masked: Record<string, string> = {};
+        for (const [ck, cv] of Object.entries(keys)) {
+          masked[ck] = typeof cv === "string" ? maskSecret(cv) : cv;
+        }
+        out[k] = JSON.stringify(masked);
+      } catch {
+        out[k] = maskSecret(v);
+      }
     } else {
       out[k] = v;
     }

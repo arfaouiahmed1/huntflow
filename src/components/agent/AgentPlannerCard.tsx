@@ -150,13 +150,13 @@ export default function AgentPlannerCard({
       </div>
 
       {investigation && (
-        <div className="space-y-3 rounded-xl border border-white/5 bg-white/[0.02] p-3.5">
+        <div className="space-y-3 rounded-xl border border-[var(--line)] bg-[var(--ink-card)]/[0.4] p-3.5">
           <div className="flex items-center justify-between text-xs font-bold text-[var(--paper)]">
             <span className="flex items-center gap-1.5 text-[var(--sky)]">
               <Building2 className="h-4 w-4" /> {investigation.company} context
             </span>
             {investigation.stage && (
-              <span className="rounded-md bg-white/10 px-2 py-0.5 font-mono text-[9px] text-dim">
+              <span className="rounded-md bg-[var(--ink-deep)]/[0.06] px-2 py-0.5 font-mono text-[9px] text-dim">
                 {investigation.stage}
               </span>
             )}
@@ -190,7 +190,7 @@ export default function AgentPlannerCard({
 
           <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
             {investigation.atsType && (
-              <div className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/30 p-2">
+              <div className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--ink-deep)]/[0.05] p-2">
                 <Globe2 className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
                 <div>
                   <span className="block text-[9px] text-dim">ATS Platform</span>
@@ -202,7 +202,7 @@ export default function AgentPlannerCard({
             )}
 
             {investigation.salaryEstimate && (
-              <div className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/30 p-2">
+              <div className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--ink-deep)]/[0.05] p-2">
                 <DollarSign className="h-3.5 w-3.5 text-[var(--amber)]" />
                 <div>
                   <span className="block text-[9px] text-dim">Local Compensation Benchmark</span>
@@ -223,7 +223,7 @@ export default function AgentPlannerCard({
                 {Array.from(new Set(investigation.techStack)).map((tech) => (
                   <span
                     key={tech}
-                    className="rounded-md border border-[var(--line)] bg-black/40 px-2 py-0.5 font-mono text-[9px] text-[var(--paper)]"
+                    className="rounded-md border border-[var(--line)] bg-[var(--ink-deep)]/[0.06] px-2 py-0.5 font-mono text-[9px] text-[var(--paper)]"
                   >
                     {tech}
                   </span>
@@ -234,7 +234,7 @@ export default function AgentPlannerCard({
         </div>
       )}
 
-      <ol className="divide-y divide-[var(--line)]/40 overflow-hidden rounded-xl border border-[var(--line)] bg-black/20">
+      <ol className="divide-y divide-[var(--line)]/40 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--ink-deep)]/[0.04]">
         {AGENT_STEPS.map((step) => {
           const status = effectiveStatuses[step.id] ?? "queued";
           const meta = STATUS_META[status];

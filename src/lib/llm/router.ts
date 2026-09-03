@@ -13,6 +13,105 @@ import { budgetFor } from "./context";
 import { estimateCost } from "./costs";
 import { countTokens, countTokensOf } from "./tokens";
 
+export interface NodeCostBreakdown {
+  nodeName: string;
+  promptTokens: number;
+  completionTokens: number;
+  costEst: number;
+  latencyMs: number;
+}
+
+interface NodeUsageRecord extends NodeCostBreakdown {
+  provider: string;
+  ts: number;
+}
+
+const NODE_USAGE_WINDOW_MAX = 100;
+const nodeUsageWindow: NodeUsageRecord[] = [];
+
+export function trackNodeUsage(
+  node: string,
+  usage: { promptTokens: number; completionTokens: number; latencyMs: number; provider: string },
+): void {
+  const costEst = estimateCost(usage.provider, usage.promptTokens, usage.completionTokens);
+  const record: NodeUsageRecord = {
+    nodeName: node,
+    promptTokens: usage.promptTokens,
+    completionTokens: usage.completionTokens,
+    costEst,
+    latencyMs: usage.latencyMs,
+    provider: usage.provider,
+    ts: Date.now(),
+  };
+  nodeUsageWindow.push(record);
+  if (nodeUsageWindow.length > NODE_USAGE_WINDOW_MAX) nodeUsageWindow.shift();
+}
+
+export function getNodeBreakdowns(): NodeCostBreakdown[] {
+  return nodeUsageWindow.map((r) => ({
+    nodeName: r.nodeName,
+    promptTokens: r.promptTokens,
+    completionTokens: r.completionTokens,
+    costEst: r.costEst,
+    latencyMs: r.latencyMs,
+  }));
+}
+
+export function getNodeBreakdownsWithProvider(): Array<NodeCostBreakdown & { provider: string; ts: number }> {
+  return nodeUsageWindow.map((r) => ({
+    nodeName: r.nodeName,
+    promptTokens: r.promptTokens,
+    completionTokens: r.completionTokens,
+    costEst: r.costEst,
+    latencyMs: r.latencyMs,
+    provider: r.provider,
+    ts: r.ts,
+  }));
+}
+
+export function getNodeCostStats(): {
+  totalNodes: number;
+  totalTokens: number;
+  totalCost: number;
+  avgLatencyMs: number;
+  byNode: Record<string, { calls: number; tokens: number; cost: number; avgLatencyMs: number }>;
+} {
+  const totalNodes = nodeUsageWindow.length;
+  let totalTokens = 0;
+  let totalCost = 0;
+  let totalLatency = 0;
+  const byNode: Record<string, { calls: number; tokens: number; cost: number; avgLatencyMs: number }> = {};
+  const latencySums: Record<string, number> = {};
+  for (const r of nodeUsageWindow) {
+    const tokens = r.promptTokens + r.completionTokens;
+    totalTokens += tokens;
+    totalCost += r.costEst;
+    totalLatency += r.latencyMs;
+    const cur = byNode[r.nodeName] ?? { calls: 0, tokens: 0, cost: 0, avgLatencyMs: 0 };
+    cur.calls += 1;
+    cur.tokens += tokens;
+    cur.cost += r.costEst;
+    byNode[r.nodeName] = cur;
+    latencySums[r.nodeName] = (latencySums[r.nodeName] ?? 0) + r.latencyMs;
+  }
+  for (const node of Object.keys(byNode)) {
+    const cur = byNode[node];
+    cur.avgLatencyMs = Math.round((latencySums[node] ?? 0) / cur.calls);
+  }
+  return {
+    totalNodes,
+    totalTokens,
+    totalCost,
+    avgLatencyMs: totalNodes ? Math.round(totalLatency / totalNodes) : 0,
+    byNode,
+  };
+}
+
+export function clearNodeBreakdowns(): void {
+  nodeUsageWindow.length = 0;
+}
+
+
 /* -------------------------------------------------------------------------- *
  *  LLM Router — multi-provider with classified retries, circuit breaking,
  *  capability filtering and a usage ledger.
@@ -34,7 +133,7 @@ interface CircuitState {
 const CIRCUIT: Record<string, CircuitState> = {};
 const COOLDOWN_MS = 90_000; // one failed provider stays out for 90s
 const MAX_FAILURES = 3;
-const PER_PROVIDER_ATTEMPTS = 2;
+const PER_PROVIDER_ATTEMPTS = 3; // free-tier 429s need extra retry + jitter
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));

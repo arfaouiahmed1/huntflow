@@ -111,6 +111,28 @@ export function pruneExpired(nowIso = new Date().toISOString()): number {
   return memoryRepo.deleteExpired(nowIso);
 }
 
+/** Fingerprint for idempotent consolidation — sorted episodic ids + content hash.
+ *  Used by consolidator to avoid re-summarizing unchanged episodic sets; stored in agent_state (`consolidator:fp:<jobId>`).
+ *  No new tables — reuses the existing `agent_state` table. */
+export function fingerprintEntries(entries: Pick<MemoryEntry, "id" | "content">[]): string {
+  const ids = entries
+    .map((e) => `${e.id ?? "?"}:${e.content.slice(0, 80).replace(/\s+/g, " ").trim()}`)
+    .join("|");
+  let h = 0;
+  for (let i = 0; i < ids.length; i++) h = (Math.imul(31, h) + ids.charCodeAt(i)) | 0;
+  return `${entries.length}:${h >>> 0}:${ids.slice(0, 120)}`;
+}
+
+export function getConsolidationFingerprint(jobId: string): string | null {
+  const raw = getAgentState("consolidator", `fp:${jobId}`, null);
+  return typeof raw === "string" ? raw : null;
+}
+
+export function setConsolidationFingerprint(jobId: string, fingerprint: string): void {
+  setAgentState("consolidator", `fp:${jobId}`, fingerprint);
+}
+
+
 export function embedMemory(memoryId: number, embedding: number[], model = "local") {
   return memoryEmbeddingsRepo.upsert({ memoryId, embedding, model });
 }
@@ -204,3 +226,13 @@ export function getAgentState(agent: string, key: string, fallback: unknown = nu
 export function setAgentState(agent: string, key: string, value: unknown) {
   agentStateRepo.set(agent, key, typeof value === "string" ? value : JSON.stringify(value));
 }
+
+export {
+  recordCareerOutcome,
+  listCareerOutcomes,
+  deriveCareerPatternInsights,
+  formatEpisodicContextForRole,
+  type EpisodicCareerOutcome,
+  type CareerPatternInsight,
+  type ApplicationStage,
+} from "./episodicMemory";

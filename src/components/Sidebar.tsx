@@ -118,7 +118,14 @@ export default function Sidebar() {
           sidebarCollapsed ? "w-[76px]" : "w-[236px]",
         )}
       >
-        <div className={cn("flex items-center justify-between", sidebarCollapsed ? "px-3 pb-5 pt-5" : "px-5 pb-8 pt-7")}>
+        <div
+          className={cn(
+            "flex",
+            sidebarCollapsed
+              ? "flex-col items-center gap-3 px-3 pb-5 pt-5"
+              : "items-center justify-between px-5 pb-8 pt-7",
+          )}
+        >
           <div className="flex items-center gap-3">
             <div className="relative grid h-10 w-10 place-items-center rounded-xl border border-[var(--chartreuse)]/40 bg-chartreuse/10">
               <Crosshair className="h-5 w-5 text-chartreuse" />

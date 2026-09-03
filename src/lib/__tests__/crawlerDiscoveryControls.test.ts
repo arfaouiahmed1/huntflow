@@ -23,13 +23,13 @@ describe("Task 7 — Crawler discovery filters", () => {
   });
 
   it("visible list preserves catalog order and selected-in-view vs total-selected diverge when filtered", () => {
-    const visibleAll = useFilteredSources(RAW as never, DEFAULT_FILTER_SELECTION);
-    expect(visibleAll.map((s) => s.id)).toEqual(["remotive", "wttj", "forem"]);
-    const visibleRemote = useFilteredSources(RAW as never, { ...DEFAULT_FILTER_SELECTION, sourceType: "remote_board" });
-    expect(visibleRemote.map((s) => s.id)).toEqual(["remotive"]);
+    const visibleAll = useFilteredSources(RAW, DEFAULT_FILTER_SELECTION);
+    expect(visibleAll.map((s: (typeof RAW)[number]) => s.id)).toEqual(["remotive", "wttj", "forem"]);
+    const visibleRemote = useFilteredSources(RAW, { ...DEFAULT_FILTER_SELECTION, sourceType: "remote_board" });
+    expect(visibleRemote.map((s: (typeof RAW)[number]) => s.id)).toEqual(["remotive"]);
     const selected = new Set(["forem"]);
     // forem is hidden under remote_board filter, but selection set keeps it — card gone but count stable
-    expect(visibleRemote.some((s) => selected.has(s.id))).toBe(false);
+    expect(visibleRemote.some((s: (typeof RAW)[number]) => selected.has(s.id))).toBe(false);
     expect(selected.has("forem")).toBe(true);
   });
 

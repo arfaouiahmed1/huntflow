@@ -241,3 +241,9 @@ export const MailSettingsSchema = z.object({
   fromName: z.string().trim().max(100).optional().or(z.literal("")),
   fromEmail: z.string().trim().email("From email must be a valid email").optional().or(z.literal("")),
 });
+
+// ------------------------------------------------------------------ *
+// 4. Security — Job Description Sanitizer (re-export)
+// ------------------------------------------------------------------ *
+export { sanitizeJobDescription } from "./security/jdSanitizer";
+export type { SanitizeResult } from "./security/jdSanitizer";

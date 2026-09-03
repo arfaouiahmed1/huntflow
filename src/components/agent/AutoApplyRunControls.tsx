@@ -9,16 +9,24 @@ import { RegionCode } from "@/lib/agents/regionalNorms";
 import { cn } from "@/lib/utils";
 
 const REGIONS: { code: RegionCode; label: string }[] = [
-  { code: "US", label: "US & Canada" },
+  { code: "US", label: "United States" },
+  { code: "CA", label: "Canada" },
+  { code: "UK", label: "United Kingdom" },
   { code: "DE", label: "Germany (DACH)" },
   { code: "FR", label: "France" },
-  { code: "TN", label: "Tunisia (MENA)" },
-  { code: "UK", label: "UK & Australia" },
-  { code: "ES", label: "Spain & LATAM" },
-  { code: "JP", label: "Japan" },
+  { code: "NL", label: "Netherlands" },
   { code: "CH", label: "Switzerland" },
-  { code: "NL", label: "Netherlands & Nordics" },
-  { code: "UAE", label: "UAE & Gulf" },
+  { code: "TN", label: "Tunisia" },
+  { code: "EG", label: "Egypt" },
+  { code: "AE", label: "UAE / GCC" },
+  { code: "AU", label: "Australia" },
+  { code: "SG", label: "Singapore" },
+  { code: "IN", label: "India" },
+  { code: "JP", label: "Japan" },
+  { code: "BR", label: "Brazil" },
+  { code: "MX", label: "Mexico" },
+  { code: "NG", label: "Nigeria" },
+  { code: "ZA", label: "South Africa" },
   { code: "INTL", label: "Global Remote" },
 ];
 

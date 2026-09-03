@@ -16,6 +16,17 @@ export interface LLMProviderConfig {
 
 export const LLM_PROVIDERS: LLMProviderConfig[] = [
   {
+    id: "ollama",
+    label: "Local Ollama (Offline)",
+    kind: "openai",
+    baseURL: "http://127.0.0.1:11434/v1",
+    defaultModel: "qwen2.5-coder:7b",
+    needsKey: false,
+    website: "ollama.ai",
+    hint: "100% offline, zero token cost private local inference.",
+    capabilities: ["json", "cheap"],
+  },
+  {
     id: "openrouter",
     label: "OpenRouter",
     kind: "openai",

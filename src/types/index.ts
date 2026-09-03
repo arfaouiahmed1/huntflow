@@ -223,6 +223,22 @@ export interface JobApplication {
   skipReason?: string;
   /** Job location postal code / ZIP — used for filtering and Auto-Apply location fills */
   postalCode?: string;
+  canonicalKey?: string;
+  firstSeenAt?: string;
+  lastSeenAt?: string;
+  postedAt?: string;
+  closedAt?: string;
+  seniority?: 'intern' | 'junior' | 'mid' | 'senior' | 'staff' | 'lead' | 'principal';
+  workMode?: 'remote' | 'hybrid' | 'onsite';
+  employmentType?: 'full_time' | 'part_time' | 'contract' | 'internship';
+  salaryMin?: number;
+  salaryMax?: number;
+  salaryCurrency?: string;
+  visaSignal?: 'explicit' | 'likely' | 'unknown';
+  techTags?: string[];
+  sourceConfidence?: number;
+  sourcesCount?: number;
+  rankingBreakdown?: Record<string, number>;
 }
 
 export interface CloudinarySettings {
@@ -469,6 +485,29 @@ export interface ResumeDoc {
   autoCompile: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ResumeVariant {
+  id: string;
+  name: string;
+  archetype: string;
+  tag: string;
+  templateId: string;
+  content: ResumeContent;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ResumeVariantConversionStat {
+  variantId: string;
+  variantName: string;
+  tag: string;
+  totalApplications: number;
+  interviewsCount: number;
+  offersCount: number;
+  rejectionsCount: number;
+  screeningPassRatePct: number;
+  offerRatePct: number;
 }
 
 export interface NotificationItem {

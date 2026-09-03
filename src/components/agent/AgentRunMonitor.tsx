@@ -27,8 +27,8 @@ export default function AgentRunMonitor({ job, submit, region, onFinished }: Age
   const failed = controller.terminalStatus === "failed";
 
   return (
-    <section className="space-y-4 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] pb-4">
+    <section className="space-y-8 rounded-[1.75rem] border border-[var(--line)] bg-[var(--ink-card)]/70 p-6 sm:p-8 shadow-[0_8px_40px_rgba(0,0,0,0.12)]">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--line)] pb-6">
         <div className="flex items-center gap-2.5">
           <span
             className={cn(
@@ -68,44 +68,50 @@ export default function AgentRunMonitor({ job, submit, region, onFinished }: Age
         </Button>
       </div>
 
-      <AgentReasoningTimeline entries={controller.reasoning} running={controller.running} />
-      <AgentPlannerCard stepStatuses={controller.stepStatuses} stepReasons={controller.stepReasons} />
-
-      {!controller.running && controller.terminalStatus && (
-        <div
-          className={cn(
-            "flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-xs font-semibold",
-            controller.terminalStatus === "applied"
-              ? "border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/[0.07] text-[var(--chartreuse)]"
-              : controller.terminalStatus === "manual_required"
-                ? "border-[var(--amber)]/30 bg-[var(--amber)]/[0.07] text-[var(--amber)]"
-                : "border-[var(--coral)]/30 bg-[var(--coral)]/[0.07] text-[var(--coral)]"
+      <div className="grid gap-8 lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+          <AgentPlannerCard stepStatuses={controller.stepStatuses} stepReasons={controller.stepReasons} />
+          {!controller.running && controller.terminalStatus && (
+            <div
+              className={cn(
+                "flex items-center gap-2.5 rounded-2xl border px-4 py-3 text-xs font-semibold",
+                controller.terminalStatus === "applied"
+                  ? "border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/[0.07] text-[var(--chartreuse)]"
+                  : controller.terminalStatus === "manual_required"
+                    ? "border-[var(--amber)]/30 bg-[var(--amber)]/[0.07] text-[var(--amber)]"
+                    : "border-[var(--coral)]/30 bg-[var(--coral)]/[0.07] text-[var(--coral)]"
+              )}
+            >
+              {controller.terminalStatus === "applied" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+              Outcome: {controller.terminalStatus.replace(/_/g, " ")}
+            </div>
           )}
-        >
-          {controller.terminalStatus === "applied" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-          Outcome: {controller.terminalStatus.replace(/_/g, " ")}
         </div>
-      )}
-
-      {pausedForReview && (
-        <ApprovalReviewPanel
-          header="Human review gate — the agent is paused"
-          stateLabel="Awaiting you"
-          acknowledgement="I reviewed the field plan and understand the next action may submit this application."
-          approveLabel="Approve & submit"
-          manualLabel="Keep prefilled"
-          reviewPitch={controller.reviewPitch}
-          onReviewPitchChange={controller.setReviewPitch}
-          submitAcknowledged={controller.submitAcknowledged}
-          onSubmitAcknowledgedChange={controller.setSubmitAcknowledged}
-          isResuming={controller.resuming}
-          hasReviewThread={Boolean(controller.threadId)}
-          onApproveAndSubmit={() => controller.resumePipeline(true, true)}
-          onKeepPrefilled={() => controller.resumePipeline(true, false)}
-          onSkip={() => controller.resumePipeline(false, false)}
-        />
-      )}
-
+        <div className="min-w-0 space-y-6">
+          <AgentReasoningTimeline entries={controller.reasoning} running={controller.running} />
+          {pausedForReview && (
+            <ApprovalReviewPanel
+              header="Human review gate — the agent is paused"
+              stateLabel="Awaiting you"
+              acknowledgement="I reviewed the field plan and understand the next action may submit this application."
+              approveLabel="Approve & submit"
+              manualLabel="Keep prefilled"
+              reviewPitch={controller.reviewPitch}
+              onReviewPitchChange={controller.setReviewPitch}
+              submitAcknowledged={controller.submitAcknowledged}
+              onSubmitAcknowledgedChange={controller.setSubmitAcknowledged}
+              isResuming={controller.resuming}
+              hasReviewThread={Boolean(controller.threadId)}
+              onApproveAndSubmit={() => controller.resumePipeline(true, true)}
+              onKeepPrefilled={() => controller.resumePipeline(true, false)}
+              onSkip={() => controller.resumePipeline(false, false)}
+            />
+          )}
+          {!controller.running && !controller.reasoning.length && !pausedForReview && (
+            <div className="rounded-2xl border border-dashed border-[var(--line)] bg-white/[0.02] p-8 text-center text-xs leading-relaxed text-dim">Hit <span className="font-semibold text-[var(--paper)]">Run supervised pipeline</span> — each of the 11 agents will populate a spacious, copy-ready card (company intel, ATS, resume, letter, interview, salary, outreach).</div>
+          )}
+        </div>
+      </div>
       <AgentRawLogPanel logs={controller.logs} running={controller.running} />
     </section>
   );

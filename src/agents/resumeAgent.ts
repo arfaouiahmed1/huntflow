@@ -407,14 +407,12 @@ export async function runResumeAgentLoop(
   };
 
   let tex: string;
-  let content: ResumeContent | null = null;
   if (input.initialTex && input.initialTex.trim()) {
     tex = input.initialTex;
     emit({ type: "draft", tex, message: "Using provided initialTex" });
   } else {
     const draft = await runResumeAgent({ ...input, task: "draft" });
     tex = draft.tex;
-    content = draft.content;
     emit({ type: "draft", tex, message: draft.summary });
   }
 

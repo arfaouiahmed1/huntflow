@@ -5,7 +5,6 @@ import { useState } from "react";
 import {
   Bookmark,
   Building,
-  DollarSign,
   Loader2,
   MapPin,
   Sparkles,
@@ -14,18 +13,10 @@ import {
   Camera,
   CheckSquare,
   Square,
-  ExternalLink,
   Download,
   Search,
-  Filter,
-  Globe,
-  Tag,
-  CheckCircle2,
-  FileCheck,
-  ShieldCheck,
-  Award,
 } from "lucide-react";
-import { JobApplication, EmployerReview } from "@/types";
+import { JobApplication } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { agentScreenshotUrl } from "@/lib/agentScreenshot";
@@ -37,8 +28,6 @@ interface JobMatrixViewProps {
   onSave: (job: JobApplication) => void;
   onAutoApply: (job: JobApplication) => void;
   onTailor: (job: JobApplication) => void;
-  onRunEmployerReview?: (job: JobApplication) => void;
-  onReviewed: (job: JobApplication, reason?: string) => void;
   onBatchSave: (jobs: JobApplication[]) => void;
   onBatchAutoApply: (jobs: JobApplication[]) => Promise<void>;
   onBatchMatch: (jobs: JobApplication[]) => Promise<void>;
@@ -49,8 +38,6 @@ export function JobMatrixView({
   onSave,
   onAutoApply,
   onTailor,
-  onRunEmployerReview,
-  onReviewed,
   onBatchSave,
   onBatchAutoApply,
   onBatchMatch,

@@ -588,11 +588,9 @@ export default function JobsPage() {
             const saved = saveJob(job);
             void recordDecision(saved, "saved");
           }}
-          onReviewed={(job: JobApplication, reason?: string) => handleReviewed(job, reason)}
           onBatchSave={handleBatchSave}
           onBatchAutoApply={handleBatchAutoApply}
           onBatchMatch={handleBatchMatch}
-          onRunEmployerReview={handleOpenEmployerReview}
         />
       )}
 

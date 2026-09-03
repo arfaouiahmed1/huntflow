@@ -456,7 +456,7 @@ export default function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [error, success]);
+  }, [error, success, warn]);
 
   const exportBackup = async () => {
     setBackupBusy(true);

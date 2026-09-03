@@ -3,9 +3,8 @@ import {
   isOllamaOnline,
   listOllamaModels,
   RECOMMENDED_LOCAL_MODELS,
-  OLLAMA_DEFAULT_BASE_URL,
 } from "../providers/localOllama";
-import { getProvider, LLM_PROVIDERS } from "../providers";
+import { getProvider } from "../providers";
 
 describe("Local Offline Ollama Provider", () => {
   it("provides recommended local models including Qwen 2.5 Coder and Llama 3.2", () => {

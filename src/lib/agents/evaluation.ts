@@ -338,8 +338,7 @@ function isOutreachGrounded(
 
 function isInterviewGrounded(
   interviewTopics: string[] | undefined,
-  hallucinated: string[],
-  _job: { jobDescription?: string; title?: string }
+  hallucinated: string[]
 ): boolean {
   if (!interviewTopics || interviewTopics.length === 0) return true;
   // Any hallucinated skill surfacing in interview topics is a grounding failure
@@ -385,7 +384,7 @@ export function auditPerFieldHallucination(
 
   const salaryRealistic = isSalaryRealistic(outputs.salaryEstimate);
   const outreachGrounded = isOutreachGrounded(outputs.outreachSubject, dedupedHallucinated, job);
-  const interviewGrounded = isInterviewGrounded(outputs.interviewTopics, dedupedHallucinated, job);
+  const interviewGrounded = isInterviewGrounded(outputs.interviewTopics, dedupedHallucinated);
 
   const details: string[] = [];
   if (dedupedHallucinated.length) {

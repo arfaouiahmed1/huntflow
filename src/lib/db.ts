@@ -21,7 +21,6 @@ import type {
   EnrichmentItemRecord,
   JobSourceEdge,
 } from "./crawler/contracts";
-import { redactSettings } from "./masking";
 import { seedJobs } from "./seedData";
 import { initialProfile } from "./initialData";
 // without asking Next's file tracer to follow the entire repository.
@@ -454,6 +453,7 @@ export function migrate(database: DatabaseSync) {
   `);
   /* Idempotent column additions for databases created before a column existed */
   const addColumn = (table: string, column: string, ddl: string) => {
+    assertAllowedSqlTable(table, "migration");
     const cols = new Set(
       (database.prepare(`PRAGMA table_info(${table})`).all() as Record<string, unknown>[]).map((r) => String(r.name))
     );
@@ -2547,12 +2547,21 @@ export const ALL_TABLES_IN_DELETION_ORDER = [
   "meta",
 ] as const;
 
+const ALLOWED_MIGRATION_TABLES: ReadonlySet<string> = new Set(ALL_TABLES_IN_DELETION_ORDER);
+
+function assertAllowedSqlTable(table: string, operation: string): void {
+  if (!ALLOWED_MIGRATION_TABLES.has(table)) {
+    throw new Error(`Disallowed SQL table for ${operation}: ${table}`);
+  }
+}
+
 export function resetDatabase() {
   const database = getDb();
   migrate(database);
   try {
     database.exec("BEGIN");
     for (const table of ALL_TABLES_IN_DELETION_ORDER) {
+      assertAllowedSqlTable(table, "reset");
       database.exec(`DELETE FROM ${table};`);
     }
     database.exec("COMMIT");
@@ -2661,6 +2670,7 @@ export function importAllData(data: BackupData): { counts: Record<string, number
   try {
     db.exec("BEGIN");
     for (const table of ALL_TABLES_IN_DELETION_ORDER) {
+      assertAllowedSqlTable(table, "restore");
       db.exec(`DELETE FROM ${table};`);
     }
 

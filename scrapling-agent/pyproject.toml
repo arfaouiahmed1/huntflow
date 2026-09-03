@@ -8,7 +8,26 @@ dependencies = [
     "scrapling[fetchers]>=0.4.12",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
+    "httpx>=0.28.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.8.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501", "E402", "E722", "E741"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "."]
+python_files = ["test_*.py"]
 
 [tool.uv]
 package = false

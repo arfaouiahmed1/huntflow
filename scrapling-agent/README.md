@@ -1,41 +1,49 @@
-# HUNTFLOW Agent
+# HUNTFLOW Scrapling Sidecar & Connector SDK
 
-Scrapling-powered scraping & auto-apply agent. Managed with [uv](https://docs.astral.sh/uv/).
+High-throughput, anti-bot resilient scraping and ATS connector service managed with [uv](https://docs.astral.sh/uv/).
 
 ## Setup
 
 ```bash
 cd scrapling-agent
-uv sync                  # install dependencies
-uv run scrapling install # download browsers for Dynamic/Stealthy fetchers (once)
+uv sync --group dev       # install runtime & dev dependencies
+uv run scrapling install  # install browser binaries for stealth fetchers (once)
 ```
 
-## Run
+## Running the Sidecar
 
 ```bash
 uv run uvicorn server:app --port 8001
 ```
 
-## Endpoints
-
-- `POST /scrape` — `{"url": "https://..."}` → extracts job title, company, location, salary, description (adaptive, anti-bot aware)
-- `POST /apply` — `{"url", "profile", "documents", "submit": false}` → inspects the application form, fills it with the candidate's data, optionally submits. Returns a log stream and detected fields.
-
-The Next.js app falls back to its built-in extractor if this agent is offline.
-
-## Agent visibility (live screenshots)
-
-Every browser screenshot the agent takes is written locally under `.agent_runs/`
-and served at `GET /screenshots/*`. To also stream them to Cloudinary so the web
-console renders them live through a CDN, set these in the sidecar env:
+## Testing & Quality
 
 ```bash
-CLOUDINARY_CLOUD_NAME=dktc34wxa
-CLOUDINARY_API_KEY=...
-CLOUDINARY_API_SECRET=...
+# Run all connector adapter and contract tests
+uv run pytest
+
+# Run Ruff linter
+uv run ruff check .
 ```
 
-Keep the secret out of version control (`.env*` is gitignored). When all three
-are set, `shot()` uploads each PNG with a signed request and includes the
-`cloudinary` URL in the activity event; the UI shows it as a "live" thumbnail.
-Leave them unset to keep local-only screenshots.
+## Connector Architecture
+
+The sidecar exposes a modular Connector SDK under `connectors/`:
+- **ATS Adapters (`connectors/ats.py`)**: Greenhouse, Lever, Ashby, SmartRecruiters, Personio XML, Recruitee, Workable.
+- **Aggregator Adapters (`connectors/aggregators.py`)**: Arbeitnow, Jobicy, Remotive, Himalayas, ReliefWeb, The Muse, Adzuna, Jooble, Findwork, USAJobs.
+- **Regional & HTML Adapters (`connectors/html.py`)**: Static HTML, Stealthy browser fetcher, and Hacker News Who Is Hiring posts parser.
+- **Directory Discovery (`connectors/directory.py`)**: CareerPanels and JobBoardSearch.
+- **Rate Limiting (`rate_limiter.py`)**: Per-host token buckets with exponential backoff and circuit breaking.
+- **Adblocking Engine (`adblock.py`)**: Suffix-tree domain matcher and URL regex filter based on EasyList, EasyPrivacy, Peter Lowe's List, and cosmetic CSS rule injection (`filterlists/compiled_rules.json`).
+- **Filterlist Synchronizer (`sync_filterlists.py`)**: Downloads and compiles community adblock rules with fallback to baked offline rules.
+- **Browser Stealth Engine (`stealth.py`)**: Overrides `navigator.webdriver`, mocks WebGL vendor/renderer strings, and injects canvas/audio noise to pass Cloudflare/Datadome anti-bot checks.
+- **Cookie & Consent Manager (`cookies.py`)**: Offline-first `CookieJarManager` pre-seeding GDPR/CCPA consent cookies (`OptanonAlertBoxClosed`, `CookieConsent`) to prevent blocking modals.
+## Key Endpoints
+
+- `GET /sources` — Returns safe, user-facing crawler catalog metadata (no leaked selectors or secrets).
+- `GET /health` — Reports fetcher health, active source counts, and uptime.
+- `POST /crawl` — Parallel crawler execution with rate limiting and circuit breaking.
+- `POST /ats/crawl` — Direct high-throughput ATS API ingestion.
+- `POST /ats/discover` — Detects ATS provider and board token from career URLs or company names.
+- `POST /scrape` — Anti-bot aware single-page job extractor.
+- `POST /apply` — Supervised form detection and auto-apply preparation.

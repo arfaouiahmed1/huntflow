@@ -45,7 +45,7 @@ function successfulResearchFetch(): typeof fetch {
     if (new URL(url).hostname === "en.wikipedia.org") {
       return jsonResponse({ query: { pages: { "1": { extract: "OpenAI is an artificial intelligence organization." } } } });
     }
-    if (new URL(url).hostname === "gdeltproject.org") {
+    if (new URL(url).hostname === "gdeltproject.org" || new URL(url).hostname.endsWith(".gdeltproject.org")) {
       return jsonResponse({
         articles: [
           {
@@ -104,7 +104,7 @@ describe("source-backed company research", () => {
   it("returns an unavailable state instead of fabricating identity facts", async () => {
     const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
       if (String(input).includes("wbsearchentities")) return jsonResponse({ search: [] });
-      if (new URL(String(input)).hostname === "gdeltproject.org") return jsonResponse({ articles: [] });
+      if (new URL(String(input)).hostname === "gdeltproject.org" || new URL(String(input)).hostname.endsWith(".gdeltproject.org")) return jsonResponse({ articles: [] });
       return new Response("not found", { status: 404 });
     }) as unknown as typeof fetch;
     const research = await researchCompany({ company: "Unfindable Example Company" }, { fetchImpl });

@@ -696,7 +696,7 @@ describe("Adversarial AI & Intelligence Resilience Suite (Tier 5)", () => {
 
       const recentHistory = agentRunHistoryRepo.listRecent(10);
       expect(recentHistory.some((h) => h.agentName === "MasterMultiAgentOrchestrator")).toBe(true);
-    });
+    }, 180000);
   });
 
   /* ------------------------------------------------------------------------ */

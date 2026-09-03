@@ -1,0 +1,1836 @@
+[
+  {
+    "id": "ds_lead_bi_developer",
+    "domain": "Data & Analytics",
+    "role": "Senior Business Intelligence Developer",
+    "company": "Honeywell / Financial Services",
+    "region": "US",
+    "expectedFit": "Fit",
+    "jdText": "Senior BI Developer needed with 5+ years building SQL Server Integration Services (SSIS), SSAS tabular models, and Power BI dashboards. Required: T-SQL, DAX, Azure Data Factory, ETL design, star-schema data modeling. Preferred: C#, Python.",
+    "resumeText": "Summary: 7+ years of experience as a BI developer in Data Warehouse and analytics consulting. Skills: MS SQL Server, SSIS, SSAS, Power BI, DAX, T-SQL, Azure Data Factory, Powershell. Built enterprise data marts and ETL packages.",
+    "userSkills": [
+      "SQL",
+      "SSIS",
+      "SSAS",
+      "Power BI",
+      "DAX",
+      "T-SQL",
+      "Azure",
+      "ETL",
+      "Python"
+    ],
+    "requiredSkills": [
+      "SSIS",
+      "SSAS",
+      "Power BI",
+      "DAX",
+      "T-SQL",
+      "Azure Data Factory"
+    ],
+    "adversarialOmissions": [
+      "Solana",
+      "Cobol"
+    ],
+    "rawPii": "Candidate: Rajesh Patel, SSN: 987-65-4321, DOB: 1989-05-14, Address: 1200 Grand Blvd, Kansas City, MO 64106, Tel: +1 816-555-0199, rajesh@patel-bi.com.",
+    "tailoredBullets": [
+      "Architected enterprise Data Mart in SSAS and Power BI serving 1,200 executive stakeholders with sub-2s query response.",
+      "Engineered automated ETL pipelines in SSIS extracting 50M transaction records daily from mainframe core.",
+      "Decreased nightly cube processing duration by 44% through partition indexing and MDX optimization.",
+      "Embedded parameterized Power BI dashboards on Salesforce portals managing role-based row-level security."
+    ]
+  },
+  {
+    "id": "healthcare_data_analyst",
+    "domain": "Healthcare Analytics",
+    "role": "Healthcare Data Quality & Governance Analyst",
+    "company": "Milliman / General Motors Healthcare",
+    "region": "US",
+    "expectedFit": "Fit",
+    "jdText": "Healthcare Data Analyst with experience in claims analysis, clinical metrics, SAS, SQL Server, Tableau, and HIPAA compliance. Required: SQL, SAS, claims data analysis, Tableau Desktop. Preferred: Master's degree, Python.",
+    "resumeText": "Senior Analyst Data Quality & Governance. Expert in SAS, SQL Server Manager, Cognos, Tableau Server and Desktop, HIPAA compliance, claims data analysis, and clinical metrics.",
+    "userSkills": [
+      "SQL",
+      "SAS",
+      "Tableau",
+      "HIPAA",
+      "Data Analysis",
+      "Microsoft Access",
+      "Excel"
+    ],
+    "requiredSkills": [
+      "SQL",
+      "SAS",
+      "Tableau",
+      "Claims Analysis",
+      "HIPAA"
+    ],
+    "adversarialOmissions": [
+      "Rust",
+      "Kubernetes"
+    ],
+    "rawPii": "Name: Sarah Jenkins, SSN: 456-78-1234, DOB: 1987-10-02, 450 Pasadena Ave, Pasadena, CA 91105, sjenkins@health-analyst.org, +1 626-555-0182.",
+    "tailoredBullets": [
+      "Led HIPAA compliance and quality governance audits across 14 health ministry partner databases.",
+      "Constructed SAS claims analysis models forecasting hospital network fee schedule utilization within 2.5% variance.",
+      "Designed interactive Tableau Server dashboards tracking clinical metrics for 250,000 enrolled plan members."
+    ]
+  },
+  {
+    "id": "cloud_native_architect",
+    "domain": "Cloud Architecture",
+    "role": "Application Software Engineering Architect",
+    "company": "V-Soft / Enterprise Aerospace",
+    "region": "US",
+    "expectedFit": "Fit",
+    "jdText": "15+ years experience required in Java, cloud native architecture, Kubernetes, microservices, Kafka event-driven design, and AMQP messaging. Deep understanding of high availability patterns and distributed SQL.",
+    "resumeText": "Distributed systems architect with 16 years leading cloud-native migrations. Expert in Java, Spring Cloud, Kubernetes, Kafka, distributed transactions, and reactive microservices.",
+    "userSkills": [
+      "Java",
+      "Kubernetes",
+      "Kafka",
+      "Microservices",
+      "Cloud Native",
+      "Docker",
+      "AWS",
+      "Spring"
+    ],
+    "requiredSkills": [
+      "Java",
+      "Kubernetes",
+      "Kafka",
+      "Microservices",
+      "AMQP",
+      "Distributed SQL"
+    ],
+    "adversarialOmissions": [
+      "Flutter",
+      "Dart"
+    ],
+    "rawPii": "Architect: David Ross, SSN: 321-65-0987, DOB: 1978-03-21, 200 S Biscayne Blvd, Miami, FL 33131, david.ross@cloud-arch.com, +1 305-555-0143.",
+    "tailoredBullets": [
+      "Directed enterprise cloud migration of 60+ legacy services to Kubernetes reducing infrastructure overhead by $1.4M.",
+      "Architected event-driven Kafka messaging topology sustaining 350,000 events/sec with zero message loss.",
+      "Authored architectural standards and mentored 45 engineers on distributed consensus and high availability patterns."
+    ]
+  },
+  {
+    "id": "frontend_angular_lead",
+    "domain": "Frontend Web",
+    "role": "Lead Angular / UI Engineer",
+    "company": "LTIMindtree",
+    "region": "US",
+    "expectedFit": "No Fit",
+    "jdText": "7+ years hands-on experience with Angular 10+, TypeScript, JavaScript, HTML5, CSS, and AgGrid. Experience creating reusable components and transforming Figma mockups into accessible single page applications.",
+    "resumeText": "Enrolled Agent / Tax Accountant / Office Manager with 9 years preparing tax resolutions, QuickBooks, UltraTax, accounts payable, accounts receivable, and payroll. High school diploma in Business and Marketing.",
+    "userSkills": [
+      "Tax Accounting",
+      "QuickBooks",
+      "Office Management",
+      "Bookkeeping",
+      "Payroll"
+    ],
+    "requiredSkills": [
+      "Angular",
+      "TypeScript",
+      "JavaScript",
+      "HTML5",
+      "CSS",
+      "AgGrid"
+    ],
+    "adversarialOmissions": [
+      "Angular",
+      "TypeScript",
+      "AgGrid"
+    ],
+    "rawPii": "Tax Accountant: Robert Miller, SSN: 111-22-3333, DOB: 1979-11-04, 500 Ocean Lakes Dr, Virginia Beach, VA 23454, rmiller@tax-expert.net, +1 757-555-0120.",
+    "tailoredBullets": [
+      "Managed tax resolution settlement actions recovering $4.2M in disputed federal tax penalties.",
+      "Supervised payroll and accounting reconciliation for 450 tradesmen with 100% statutory compliance."
+    ]
+  },
+  {
+    "id": "software_qa_lead",
+    "domain": "Quality Engineering",
+    "role": "Senior Software QA & Test Automation Lead",
+    "company": "General Motors / Connected Vehicle",
+    "region": "US",
+    "expectedFit": "Fit",
+    "jdText": "7+ years experience in automated and manual testing, C#, .NET, Selenium WebDriver, SQL, and CI/CD pipelines. Certified Scrum Master with experience in test plans, traceability matrices, and defect management.",
+    "resumeText": "ASTQB Certified QA Professional and Scrum Master with 7+ years in C#, .NET, Selenium, SQL Server, and CI/CD. Extensive experience leading QA teams, test automation frameworks, and regression suites.",
+    "userSkills": [
+      "C#",
+      ".NET",
+      "Selenium",
+      "SQL",
+      "CI/CD",
+      "Scrum",
+      "Manual Testing",
+      "Test Automation",
+      "JIRA"
+    ],
+    "requiredSkills": [
+      "C#",
+      ".NET",
+      "Selenium",
+      "SQL",
+      "CI/CD",
+      "Scrum Master"
+    ],
+    "adversarialOmissions": [
+      "Scala",
+      "Haskell"
+    ],
+    "rawPii": "QA Lead: Priya Sundaram, SSN: 555-66-7777, DOB: 1991-08-19, 300 Renaissance Center, Detroit, MI 48243, priya.sundaram@gm-qa.com, +1 313-555-0198.",
+    "tailoredBullets": [
+      "Designed Selenium WebDriver automated regression framework in C# reducing release regression cycle from 4 days to 4 hours.",
+      "Authored comprehensive test plans and traceability matrices for 12 connected vehicle software modules.",
+      "Coordinated automated CI/CD quality gates in Azure DevOps preventing 140+ critical defects from reaching staging."
+    ]
+  },
+  {
+    "id": "corpus_case_6_nl",
+    "domain": "Cybersecurity & Identity",
+    "role": "IAM Systems Lead (NL)",
+    "company": "Global Tech Corp 6",
+    "region": "NL",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "IAM Systems Lead needed at Global Tech Corp. Essential tech stack: Java, Spring Security, Active Directory, Okta. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Java, Spring Security, Active Directory, Okta, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Java",
+      "Spring Security",
+      "Active Directory",
+      "Okta",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Java",
+      "Spring Security",
+      "Active Directory",
+      "Okta"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 6: Name Example, National ID: 10000005, DOB: 1990-01-01, Address: Tech Avenue 5, City Center, Tel: +1 555-015, candidate5@eval.org.",
+    "tailoredBullets": [
+      "Architected core Java service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Spring Security pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_7_ch",
+    "domain": "Data Engineering",
+    "role": "Lead Data Engineer (CH)",
+    "company": "Global Tech Corp 7",
+    "region": "CH",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Lead Data Engineer needed at Global Tech Corp. Essential tech stack: Python, Apache Spark, Snowflake, dbt, Airflow. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Python, Apache Spark, Snowflake, dbt, Airflow, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Python",
+      "Apache Spark",
+      "Snowflake",
+      "dbt",
+      "Airflow",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Python",
+      "Apache Spark",
+      "Snowflake",
+      "dbt",
+      "Airflow"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 7: Name Example, National ID: 10000006, DOB: 1990-01-01, Address: Tech Avenue 6, City Center, Tel: +1 555-016, candidate6@eval.org.",
+    "tailoredBullets": [
+      "Architected core Python service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Apache Spark pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_8_tn",
+    "domain": "Embedded & IoT",
+    "role": "IoT Systems Developer (TN)",
+    "company": "Global Tech Corp 8",
+    "region": "TN",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "IoT Systems Developer needed at Global Tech Corp. Essential tech stack: Rust, Embedded Linux, Yocto, Bluetooth. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Rust, Embedded Linux, Yocto, Bluetooth, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Rust",
+      "Embedded Linux",
+      "Yocto",
+      "Bluetooth",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Rust",
+      "Embedded Linux",
+      "Yocto",
+      "Bluetooth"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 8: Name Example, National ID: 10000007, DOB: 1990-01-01, Address: Tech Avenue 7, City Center, Tel: +1 555-017, candidate7@eval.org.",
+    "tailoredBullets": [
+      "Architected core Rust service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Embedded Linux pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_9_eg",
+    "domain": "Distributed Infrastructure",
+    "role": "Cloud Platform Lead (EG)",
+    "company": "Global Tech Corp 9",
+    "region": "EG",
+    "matchTier": "partial",
+    "expectedFit": "Partial Fit",
+    "jdText": "Cloud Platform Lead needed at Global Tech Corp. Essential tech stack: Python, Terraform, Kubernetes, GCP. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Python, Terraform. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Python",
+      "Terraform"
+    ],
+    "requiredSkills": [
+      "Python",
+      "Terraform",
+      "Kubernetes",
+      "GCP"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 9: Name Example, National ID: 10000008, DOB: 1990-01-01, Address: Tech Avenue 8, City Center, Tel: +1 555-018, candidate8@eval.org.",
+    "tailoredBullets": [
+      "Architected core Python service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Terraform pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_10_ae",
+    "domain": "Machine Learning & AI",
+    "role": "GenAI Systems Engineer (AE)",
+    "company": "Global Tech Corp 10",
+    "region": "AE",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "GenAI Systems Engineer needed at Global Tech Corp. Essential tech stack: Python, PyTorch, vLLM, CUDA, RAG. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Python, PyTorch, vLLM, CUDA, RAG, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Python",
+      "PyTorch",
+      "vLLM",
+      "CUDA",
+      "RAG",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Python",
+      "PyTorch",
+      "vLLM",
+      "CUDA",
+      "RAG"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 10: Name Example, National ID: 10000009, DOB: 1990-01-01, Address: Tech Avenue 9, City Center, Tel: +1 555-019, candidate9@eval.org.",
+    "tailoredBullets": [
+      "Architected core Python service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust PyTorch pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_11_sa",
+    "domain": "Frontend & Web Architecture",
+    "role": "Principal Web Engineer (SA)",
+    "company": "Global Tech Corp 11",
+    "region": "SA",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Principal Web Engineer needed at Global Tech Corp. Essential tech stack: TypeScript, Vue, Nuxt, Pinia, Vite. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in TypeScript, Vue, Nuxt, Pinia, Vite, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "TypeScript",
+      "Vue",
+      "Nuxt",
+      "Pinia",
+      "Vite",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "TypeScript",
+      "Vue",
+      "Nuxt",
+      "Pinia",
+      "Vite"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 11: Name Example, National ID: 10000010, DOB: 1990-01-01, Address: Tech Avenue 10, City Center, Tel: +1 555-0110, candidate10@eval.org.",
+    "tailoredBullets": [
+      "Architected core TypeScript service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Vue pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_12_au",
+    "domain": "Fintech & Payments",
+    "role": "Core Banking Architect (AU)",
+    "company": "Global Tech Corp 12",
+    "region": "AU",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Core Banking Architect needed at Global Tech Corp. Essential tech stack: Kotlin, AWS, Kafka, PostgreSQL, Microservices. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Kotlin, AWS, Kafka, PostgreSQL, Microservices, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Kotlin",
+      "AWS",
+      "Kafka",
+      "PostgreSQL",
+      "Microservices",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Kotlin",
+      "AWS",
+      "Kafka",
+      "PostgreSQL",
+      "Microservices"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 12: Name Example, National ID: 10000011, DOB: 1990-01-01, Address: Tech Avenue 11, City Center, Tel: +1 555-0111, candidate11@eval.org.",
+    "tailoredBullets": [
+      "Architected core Kotlin service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust AWS pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_13_sg",
+    "domain": "Mobile Engineering",
+    "role": "Staff iOS Engineer (SG)",
+    "company": "Global Tech Corp 13",
+    "region": "SG",
+    "matchTier": "partial",
+    "expectedFit": "Partial Fit",
+    "jdText": "Staff iOS Engineer needed at Global Tech Corp. Essential tech stack: Swift, SwiftUI, Combine, GraphQL, CI/CD. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Swift, SwiftUI, Combine. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Swift",
+      "SwiftUI",
+      "Combine"
+    ],
+    "requiredSkills": [
+      "Swift",
+      "SwiftUI",
+      "Combine",
+      "GraphQL",
+      "CI/CD"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 13: Name Example, National ID: 10000012, DOB: 1990-01-01, Address: Tech Avenue 12, City Center, Tel: +1 555-0112, candidate12@eval.org.",
+    "tailoredBullets": [
+      "Architected core Swift service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust SwiftUI pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_14_in",
+    "domain": "Cybersecurity & Identity",
+    "role": "Application Security Engineer (IN)",
+    "company": "Global Tech Corp 14",
+    "region": "IN",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Application Security Engineer needed at Global Tech Corp. Essential tech stack: C++, Rust, Linux, Cryptography, Zero-Trust. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in C++, Rust, Linux, Cryptography, Zero-Trust, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "C++",
+      "Rust",
+      "Linux",
+      "Cryptography",
+      "Zero-Trust",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "C++",
+      "Rust",
+      "Linux",
+      "Cryptography",
+      "Zero-Trust"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 14: Name Example, National ID: 10000013, DOB: 1990-01-01, Address: Tech Avenue 13, City Center, Tel: +1 555-0113, candidate13@eval.org.",
+    "tailoredBullets": [
+      "Architected core C++ service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Rust pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_15_jp",
+    "domain": "Data Engineering",
+    "role": "Streaming Data Specialist (JP)",
+    "company": "Global Tech Corp 15",
+    "region": "JP",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Streaming Data Specialist needed at Global Tech Corp. Essential tech stack: SQL, BigQuery, GCP, Looker, Python. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in SQL, BigQuery, GCP, Looker, Python, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "SQL",
+      "BigQuery",
+      "GCP",
+      "Looker",
+      "Python",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "SQL",
+      "BigQuery",
+      "GCP",
+      "Looker",
+      "Python"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 15: Name Example, National ID: 10000014, DOB: 1990-01-01, Address: Tech Avenue 14, City Center, Tel: +1 555-0114, candidate14@eval.org.",
+    "tailoredBullets": [
+      "Architected core SQL service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust BigQuery pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_16_br",
+    "domain": "Embedded & IoT",
+    "role": "Firmware Engineer (BR)",
+    "company": "Global Tech Corp 16",
+    "region": "BR",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Firmware Engineer needed at Global Tech Corp. Essential tech stack: C, C++, ARM, FreeRTOS, UART, I2C. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in C, C++, ARM, FreeRTOS, UART, I2C, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "C",
+      "C++",
+      "ARM",
+      "FreeRTOS",
+      "UART",
+      "I2C",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "C",
+      "C++",
+      "ARM",
+      "FreeRTOS",
+      "UART",
+      "I2C"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 16: Name Example, National ID: 10000015, DOB: 1990-01-01, Address: Tech Avenue 15, City Center, Tel: +1 555-0115, candidate15@eval.org.",
+    "tailoredBullets": [
+      "Architected core C service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust C++ pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_17_mx",
+    "domain": "Distributed Infrastructure",
+    "role": "Staff Systems Engineer (MX)",
+    "company": "Global Tech Corp 17",
+    "region": "MX",
+    "matchTier": "partial",
+    "expectedFit": "Partial Fit",
+    "jdText": "Staff Systems Engineer needed at Global Tech Corp. Essential tech stack: C++, Linux, DPDK, Networking. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in C++, Linux. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "C++",
+      "Linux"
+    ],
+    "requiredSkills": [
+      "C++",
+      "Linux",
+      "DPDK",
+      "Networking"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 17: Name Example, National ID: 10000016, DOB: 1990-01-01, Address: Tech Avenue 16, City Center, Tel: +1 555-0116, candidate16@eval.org.",
+    "tailoredBullets": [
+      "Architected core C++ service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Linux pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_18_ng",
+    "domain": "Machine Learning & AI",
+    "role": "Computer Vision Specialist (NG)",
+    "company": "Global Tech Corp 18",
+    "region": "NG",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Computer Vision Specialist needed at Global Tech Corp. Essential tech stack: Python, DeepSpeed, Transformers, FastAPI. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Python, DeepSpeed, Transformers, FastAPI, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Python",
+      "DeepSpeed",
+      "Transformers",
+      "FastAPI",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Python",
+      "DeepSpeed",
+      "Transformers",
+      "FastAPI"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 18: Name Example, National ID: 10000017, DOB: 1990-01-01, Address: Tech Avenue 17, City Center, Tel: +1 555-0117, candidate17@eval.org.",
+    "tailoredBullets": [
+      "Architected core Python service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust DeepSpeed pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_19_us",
+    "domain": "Frontend & Web Architecture",
+    "role": "Staff Frontend Architect (US)",
+    "company": "Global Tech Corp 19",
+    "region": "US",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Staff Frontend Architect needed at Global Tech Corp. Essential tech stack: TypeScript, React, Next.js, Tailwind, GraphQL. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in TypeScript, React, Next.js, Tailwind, GraphQL, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "TypeScript",
+      "React",
+      "Next.js",
+      "Tailwind",
+      "GraphQL",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "TypeScript",
+      "React",
+      "Next.js",
+      "Tailwind",
+      "GraphQL"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 19: Name Example, National ID: 10000018, DOB: 1990-01-01, Address: Tech Avenue 18, City Center, Tel: +1 555-0118, candidate18@eval.org.",
+    "tailoredBullets": [
+      "Architected core TypeScript service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust React pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_20_ca",
+    "domain": "Fintech & Payments",
+    "role": "Payments Platform Developer (CA)",
+    "company": "Global Tech Corp 20",
+    "region": "CA",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Payments Platform Developer needed at Global Tech Corp. Essential tech stack: Go, gRPC, CockroachDB, Redis, Temporal. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Go, gRPC, CockroachDB, Redis, Temporal, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Go",
+      "gRPC",
+      "CockroachDB",
+      "Redis",
+      "Temporal",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Go",
+      "gRPC",
+      "CockroachDB",
+      "Redis",
+      "Temporal"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 20: Name Example, National ID: 10000019, DOB: 1990-01-01, Address: Tech Avenue 19, City Center, Tel: +1 555-0119, candidate19@eval.org.",
+    "tailoredBullets": [
+      "Architected core Go service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust gRPC pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_21_uk",
+    "domain": "Mobile Engineering",
+    "role": "Senior Cross-Platform Engineer (UK)",
+    "company": "Global Tech Corp 21",
+    "region": "UK",
+    "matchTier": "partial",
+    "expectedFit": "Partial Fit",
+    "jdText": "Senior Cross-Platform Engineer needed at Global Tech Corp. Essential tech stack: React Native, TypeScript, Redux, Native Modules. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in React Native, TypeScript. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "React Native",
+      "TypeScript"
+    ],
+    "requiredSkills": [
+      "React Native",
+      "TypeScript",
+      "Redux",
+      "Native Modules"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 21: Name Example, National ID: 10000020, DOB: 1990-01-01, Address: Tech Avenue 20, City Center, Tel: +1 555-0120, candidate20@eval.org.",
+    "tailoredBullets": [
+      "Architected core React Native service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust TypeScript pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_22_de",
+    "domain": "Cybersecurity & Identity",
+    "role": "Cloud Security Architect (DE)",
+    "company": "Global Tech Corp 22",
+    "region": "DE",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Cloud Security Architect needed at Global Tech Corp. Essential tech stack: Python, Go, AWS, Terraform, OAuth2, OIDC. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Python, Go, AWS, Terraform, OAuth2, OIDC, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Python",
+      "Go",
+      "AWS",
+      "Terraform",
+      "OAuth2",
+      "OIDC",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Python",
+      "Go",
+      "AWS",
+      "Terraform",
+      "OAuth2",
+      "OIDC"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 22: Name Example, National ID: 10000021, DOB: 1990-01-01, Address: Tech Avenue 21, City Center, Tel: +1 555-0121, candidate21@eval.org.",
+    "tailoredBullets": [
+      "Architected core Python service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Go pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_23_fr",
+    "domain": "Data Engineering",
+    "role": "Snowflake Analytics Architect (FR)",
+    "company": "Global Tech Corp 23",
+    "region": "FR",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Snowflake Analytics Architect needed at Global Tech Corp. Essential tech stack: Scala, Kafka, Flink, PostgreSQL, AWS. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Scala, Kafka, Flink, PostgreSQL, AWS, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Scala",
+      "Kafka",
+      "Flink",
+      "PostgreSQL",
+      "AWS",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Scala",
+      "Kafka",
+      "Flink",
+      "PostgreSQL",
+      "AWS"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 23: Name Example, National ID: 10000022, DOB: 1990-01-01, Address: Tech Avenue 22, City Center, Tel: +1 555-0122, candidate22@eval.org.",
+    "tailoredBullets": [
+      "Architected core Scala service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Kafka pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_24_nl",
+    "domain": "Embedded & IoT",
+    "role": "Embedded Linux Specialist (NL)",
+    "company": "Global Tech Corp 24",
+    "region": "NL",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Embedded Linux Specialist needed at Global Tech Corp. Essential tech stack: C++, Python, ROS2, CAN bus, Linux. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in C++, Python, ROS2, CAN bus, Linux, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "C++",
+      "Python",
+      "ROS2",
+      "CAN bus",
+      "Linux",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "C++",
+      "Python",
+      "ROS2",
+      "CAN bus",
+      "Linux"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 24: Name Example, National ID: 10000023, DOB: 1990-01-01, Address: Tech Avenue 23, City Center, Tel: +1 555-0123, candidate23@eval.org.",
+    "tailoredBullets": [
+      "Architected core C++ service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Python pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_25_ch",
+    "domain": "Distributed Infrastructure",
+    "role": "Principal SRE (CH)",
+    "company": "Global Tech Corp 25",
+    "region": "CH",
+    "matchTier": "partial",
+    "expectedFit": "Partial Fit",
+    "jdText": "Principal SRE needed at Global Tech Corp. Essential tech stack: Go, Rust, Kubernetes, AWS, Kafka. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Go, Rust, Kubernetes. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Go",
+      "Rust",
+      "Kubernetes"
+    ],
+    "requiredSkills": [
+      "Go",
+      "Rust",
+      "Kubernetes",
+      "AWS",
+      "Kafka"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 25: Name Example, National ID: 10000024, DOB: 1990-01-01, Address: Tech Avenue 24, City Center, Tel: +1 555-0124, candidate24@eval.org.",
+    "tailoredBullets": [
+      "Architected core Go service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Rust pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_26_tn",
+    "domain": "Machine Learning & AI",
+    "role": "LLM Inference Architect (TN)",
+    "company": "Global Tech Corp 26",
+    "region": "TN",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "LLM Inference Architect needed at Global Tech Corp. Essential tech stack: Python, TensorFlow, Kubernetes, MLflow. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Python, TensorFlow, Kubernetes, MLflow, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Python",
+      "TensorFlow",
+      "Kubernetes",
+      "MLflow",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Python",
+      "TensorFlow",
+      "Kubernetes",
+      "MLflow"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 26: Name Example, National ID: 10000025, DOB: 1990-01-01, Address: Tech Avenue 25, City Center, Tel: +1 555-0125, candidate25@eval.org.",
+    "tailoredBullets": [
+      "Architected core Python service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust TensorFlow pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_27_eg",
+    "domain": "Frontend & Web Architecture",
+    "role": "UI Systems Lead (EG)",
+    "company": "Global Tech Corp 27",
+    "region": "EG",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "UI Systems Lead needed at Global Tech Corp. Essential tech stack: JavaScript, HTML5, CSS3, WebGL, WebAssembly. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in JavaScript, HTML5, CSS3, WebGL, WebAssembly, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "JavaScript",
+      "HTML5",
+      "CSS3",
+      "WebGL",
+      "WebAssembly",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "JavaScript",
+      "HTML5",
+      "CSS3",
+      "WebGL",
+      "WebAssembly"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 27: Name Example, National ID: 10000026, DOB: 1990-01-01, Address: Tech Avenue 26, City Center, Tel: +1 555-0126, candidate26@eval.org.",
+    "tailoredBullets": [
+      "Architected core JavaScript service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust HTML5 pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_28_ae",
+    "domain": "Fintech & Payments",
+    "role": "Senior Ledger Engineer (AE)",
+    "company": "Global Tech Corp 28",
+    "region": "AE",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Senior Ledger Engineer needed at Global Tech Corp. Essential tech stack: Java, Spring, Kafka, PostgreSQL, Docker. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Java, Spring, Kafka, PostgreSQL, Docker, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Java",
+      "Spring",
+      "Kafka",
+      "PostgreSQL",
+      "Docker",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Java",
+      "Spring",
+      "Kafka",
+      "PostgreSQL",
+      "Docker"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 28: Name Example, National ID: 10000027, DOB: 1990-01-01, Address: Tech Avenue 27, City Center, Tel: +1 555-0127, candidate27@eval.org.",
+    "tailoredBullets": [
+      "Architected core Java service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Spring pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_29_sa",
+    "domain": "Mobile Engineering",
+    "role": "Lead Android Developer (SA)",
+    "company": "Global Tech Corp 29",
+    "region": "SA",
+    "matchTier": "partial",
+    "expectedFit": "Partial Fit",
+    "jdText": "Lead Android Developer needed at Global Tech Corp. Essential tech stack: Kotlin, Jetpack Compose, Coroutines, Room, Hilt. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Kotlin, Jetpack Compose, Coroutines. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Kotlin",
+      "Jetpack Compose",
+      "Coroutines"
+    ],
+    "requiredSkills": [
+      "Kotlin",
+      "Jetpack Compose",
+      "Coroutines",
+      "Room",
+      "Hilt"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 29: Name Example, National ID: 10000028, DOB: 1990-01-01, Address: Tech Avenue 28, City Center, Tel: +1 555-0128, candidate28@eval.org.",
+    "tailoredBullets": [
+      "Architected core Kotlin service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Jetpack Compose pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_30_au",
+    "domain": "Cybersecurity & Identity",
+    "role": "IAM Systems Lead (AU)",
+    "company": "Global Tech Corp 30",
+    "region": "AU",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "IAM Systems Lead needed at Global Tech Corp. Essential tech stack: Java, Spring Security, Active Directory, Okta. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Java, Spring Security, Active Directory, Okta, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Java",
+      "Spring Security",
+      "Active Directory",
+      "Okta",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Java",
+      "Spring Security",
+      "Active Directory",
+      "Okta"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 30: Name Example, National ID: 10000029, DOB: 1990-01-01, Address: Tech Avenue 29, City Center, Tel: +1 555-0129, candidate29@eval.org.",
+    "tailoredBullets": [
+      "Architected core Java service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Spring Security pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_31_sg",
+    "domain": "Data Engineering",
+    "role": "Lead Data Engineer (SG)",
+    "company": "Global Tech Corp 31",
+    "region": "SG",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Lead Data Engineer needed at Global Tech Corp. Essential tech stack: Python, Apache Spark, Snowflake, dbt, Airflow. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Python, Apache Spark, Snowflake, dbt, Airflow, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Python",
+      "Apache Spark",
+      "Snowflake",
+      "dbt",
+      "Airflow",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Python",
+      "Apache Spark",
+      "Snowflake",
+      "dbt",
+      "Airflow"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 31: Name Example, National ID: 10000030, DOB: 1990-01-01, Address: Tech Avenue 30, City Center, Tel: +1 555-0130, candidate30@eval.org.",
+    "tailoredBullets": [
+      "Architected core Python service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Apache Spark pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_32_in",
+    "domain": "Embedded & IoT",
+    "role": "IoT Systems Developer (IN)",
+    "company": "Global Tech Corp 32",
+    "region": "IN",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "IoT Systems Developer needed at Global Tech Corp. Essential tech stack: Rust, Embedded Linux, Yocto, Bluetooth. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Rust, Embedded Linux, Yocto, Bluetooth, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Rust",
+      "Embedded Linux",
+      "Yocto",
+      "Bluetooth",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Rust",
+      "Embedded Linux",
+      "Yocto",
+      "Bluetooth"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 32: Name Example, National ID: 10000031, DOB: 1990-01-01, Address: Tech Avenue 31, City Center, Tel: +1 555-0131, candidate31@eval.org.",
+    "tailoredBullets": [
+      "Architected core Rust service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Embedded Linux pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_33_jp",
+    "domain": "Distributed Infrastructure",
+    "role": "Cloud Platform Lead (JP)",
+    "company": "Global Tech Corp 33",
+    "region": "JP",
+    "matchTier": "partial",
+    "expectedFit": "Partial Fit",
+    "jdText": "Cloud Platform Lead needed at Global Tech Corp. Essential tech stack: Python, Terraform, Kubernetes, GCP. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Python, Terraform. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Python",
+      "Terraform"
+    ],
+    "requiredSkills": [
+      "Python",
+      "Terraform",
+      "Kubernetes",
+      "GCP"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 33: Name Example, National ID: 10000032, DOB: 1990-01-01, Address: Tech Avenue 32, City Center, Tel: +1 555-0132, candidate32@eval.org.",
+    "tailoredBullets": [
+      "Architected core Python service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Terraform pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_34_br",
+    "domain": "Machine Learning & AI",
+    "role": "GenAI Systems Engineer (BR)",
+    "company": "Global Tech Corp 34",
+    "region": "BR",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "GenAI Systems Engineer needed at Global Tech Corp. Essential tech stack: Python, PyTorch, vLLM, CUDA, RAG. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Python, PyTorch, vLLM, CUDA, RAG, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Python",
+      "PyTorch",
+      "vLLM",
+      "CUDA",
+      "RAG",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Python",
+      "PyTorch",
+      "vLLM",
+      "CUDA",
+      "RAG"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 34: Name Example, National ID: 10000033, DOB: 1990-01-01, Address: Tech Avenue 33, City Center, Tel: +1 555-0133, candidate33@eval.org.",
+    "tailoredBullets": [
+      "Architected core Python service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust PyTorch pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_35_mx",
+    "domain": "Frontend & Web Architecture",
+    "role": "Principal Web Engineer (MX)",
+    "company": "Global Tech Corp 35",
+    "region": "MX",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Principal Web Engineer needed at Global Tech Corp. Essential tech stack: TypeScript, Vue, Nuxt, Pinia, Vite. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in TypeScript, Vue, Nuxt, Pinia, Vite, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "TypeScript",
+      "Vue",
+      "Nuxt",
+      "Pinia",
+      "Vite",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "TypeScript",
+      "Vue",
+      "Nuxt",
+      "Pinia",
+      "Vite"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 35: Name Example, National ID: 10000034, DOB: 1990-01-01, Address: Tech Avenue 34, City Center, Tel: +1 555-0134, candidate34@eval.org.",
+    "tailoredBullets": [
+      "Architected core TypeScript service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Vue pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_36_ng",
+    "domain": "Fintech & Payments",
+    "role": "Core Banking Architect (NG)",
+    "company": "Global Tech Corp 36",
+    "region": "NG",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Core Banking Architect needed at Global Tech Corp. Essential tech stack: Kotlin, AWS, Kafka, PostgreSQL, Microservices. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Kotlin, AWS, Kafka, PostgreSQL, Microservices, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Kotlin",
+      "AWS",
+      "Kafka",
+      "PostgreSQL",
+      "Microservices",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Kotlin",
+      "AWS",
+      "Kafka",
+      "PostgreSQL",
+      "Microservices"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 36: Name Example, National ID: 10000035, DOB: 1990-01-01, Address: Tech Avenue 35, City Center, Tel: +1 555-0135, candidate35@eval.org.",
+    "tailoredBullets": [
+      "Architected core Kotlin service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust AWS pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_37_us",
+    "domain": "Mobile Engineering",
+    "role": "Staff iOS Engineer (US)",
+    "company": "Global Tech Corp 37",
+    "region": "US",
+    "matchTier": "partial",
+    "expectedFit": "Partial Fit",
+    "jdText": "Staff iOS Engineer needed at Global Tech Corp. Essential tech stack: Swift, SwiftUI, Combine, GraphQL, CI/CD. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Swift, SwiftUI, Combine. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Swift",
+      "SwiftUI",
+      "Combine"
+    ],
+    "requiredSkills": [
+      "Swift",
+      "SwiftUI",
+      "Combine",
+      "GraphQL",
+      "CI/CD"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 37: Name Example, National ID: 10000036, DOB: 1990-01-01, Address: Tech Avenue 36, City Center, Tel: +1 555-0136, candidate36@eval.org.",
+    "tailoredBullets": [
+      "Architected core Swift service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust SwiftUI pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_38_ca",
+    "domain": "Cybersecurity & Identity",
+    "role": "Application Security Engineer (CA)",
+    "company": "Global Tech Corp 38",
+    "region": "CA",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Application Security Engineer needed at Global Tech Corp. Essential tech stack: C++, Rust, Linux, Cryptography, Zero-Trust. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in C++, Rust, Linux, Cryptography, Zero-Trust, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "C++",
+      "Rust",
+      "Linux",
+      "Cryptography",
+      "Zero-Trust",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "C++",
+      "Rust",
+      "Linux",
+      "Cryptography",
+      "Zero-Trust"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 38: Name Example, National ID: 10000037, DOB: 1990-01-01, Address: Tech Avenue 37, City Center, Tel: +1 555-0137, candidate37@eval.org.",
+    "tailoredBullets": [
+      "Architected core C++ service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Rust pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_39_uk",
+    "domain": "Data Engineering",
+    "role": "Streaming Data Specialist (UK)",
+    "company": "Global Tech Corp 39",
+    "region": "UK",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Streaming Data Specialist needed at Global Tech Corp. Essential tech stack: SQL, BigQuery, GCP, Looker, Python. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in SQL, BigQuery, GCP, Looker, Python, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "SQL",
+      "BigQuery",
+      "GCP",
+      "Looker",
+      "Python",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "SQL",
+      "BigQuery",
+      "GCP",
+      "Looker",
+      "Python"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 39: Name Example, National ID: 10000038, DOB: 1990-01-01, Address: Tech Avenue 38, City Center, Tel: +1 555-0138, candidate38@eval.org.",
+    "tailoredBullets": [
+      "Architected core SQL service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust BigQuery pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_40_de",
+    "domain": "Embedded & IoT",
+    "role": "Firmware Engineer (DE)",
+    "company": "Global Tech Corp 40",
+    "region": "DE",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Firmware Engineer needed at Global Tech Corp. Essential tech stack: C, C++, ARM, FreeRTOS, UART, I2C. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in C, C++, ARM, FreeRTOS, UART, I2C, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "C",
+      "C++",
+      "ARM",
+      "FreeRTOS",
+      "UART",
+      "I2C",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "C",
+      "C++",
+      "ARM",
+      "FreeRTOS",
+      "UART",
+      "I2C"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 40: Name Example, National ID: 10000039, DOB: 1990-01-01, Address: Tech Avenue 39, City Center, Tel: +1 555-0139, candidate39@eval.org.",
+    "tailoredBullets": [
+      "Architected core C service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust C++ pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_41_fr",
+    "domain": "Distributed Infrastructure",
+    "role": "Staff Systems Engineer (FR)",
+    "company": "Global Tech Corp 41",
+    "region": "FR",
+    "matchTier": "partial",
+    "expectedFit": "Partial Fit",
+    "jdText": "Staff Systems Engineer needed at Global Tech Corp. Essential tech stack: C++, Linux, DPDK, Networking. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in C++, Linux. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "C++",
+      "Linux"
+    ],
+    "requiredSkills": [
+      "C++",
+      "Linux",
+      "DPDK",
+      "Networking"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 41: Name Example, National ID: 10000040, DOB: 1990-01-01, Address: Tech Avenue 40, City Center, Tel: +1 555-0140, candidate40@eval.org.",
+    "tailoredBullets": [
+      "Architected core C++ service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Linux pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_42_nl",
+    "domain": "Machine Learning & AI",
+    "role": "Computer Vision Specialist (NL)",
+    "company": "Global Tech Corp 42",
+    "region": "NL",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Computer Vision Specialist needed at Global Tech Corp. Essential tech stack: Python, DeepSpeed, Transformers, FastAPI. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Python, DeepSpeed, Transformers, FastAPI, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Python",
+      "DeepSpeed",
+      "Transformers",
+      "FastAPI",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Python",
+      "DeepSpeed",
+      "Transformers",
+      "FastAPI"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 42: Name Example, National ID: 10000041, DOB: 1990-01-01, Address: Tech Avenue 41, City Center, Tel: +1 555-0141, candidate41@eval.org.",
+    "tailoredBullets": [
+      "Architected core Python service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust DeepSpeed pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_43_ch",
+    "domain": "Frontend & Web Architecture",
+    "role": "Staff Frontend Architect (CH)",
+    "company": "Global Tech Corp 43",
+    "region": "CH",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Staff Frontend Architect needed at Global Tech Corp. Essential tech stack: TypeScript, React, Next.js, Tailwind, GraphQL. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in TypeScript, React, Next.js, Tailwind, GraphQL, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "TypeScript",
+      "React",
+      "Next.js",
+      "Tailwind",
+      "GraphQL",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "TypeScript",
+      "React",
+      "Next.js",
+      "Tailwind",
+      "GraphQL"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 43: Name Example, National ID: 10000042, DOB: 1990-01-01, Address: Tech Avenue 42, City Center, Tel: +1 555-0142, candidate42@eval.org.",
+    "tailoredBullets": [
+      "Architected core TypeScript service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust React pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_44_tn",
+    "domain": "Fintech & Payments",
+    "role": "Payments Platform Developer (TN)",
+    "company": "Global Tech Corp 44",
+    "region": "TN",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Payments Platform Developer needed at Global Tech Corp. Essential tech stack: Go, gRPC, CockroachDB, Redis, Temporal. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Go, gRPC, CockroachDB, Redis, Temporal, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Go",
+      "gRPC",
+      "CockroachDB",
+      "Redis",
+      "Temporal",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Go",
+      "gRPC",
+      "CockroachDB",
+      "Redis",
+      "Temporal"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 44: Name Example, National ID: 10000043, DOB: 1990-01-01, Address: Tech Avenue 43, City Center, Tel: +1 555-0143, candidate43@eval.org.",
+    "tailoredBullets": [
+      "Architected core Go service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust gRPC pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_45_eg",
+    "domain": "Mobile Engineering",
+    "role": "Senior Cross-Platform Engineer (EG)",
+    "company": "Global Tech Corp 45",
+    "region": "EG",
+    "matchTier": "partial",
+    "expectedFit": "Partial Fit",
+    "jdText": "Senior Cross-Platform Engineer needed at Global Tech Corp. Essential tech stack: React Native, TypeScript, Redux, Native Modules. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in React Native, TypeScript. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "React Native",
+      "TypeScript"
+    ],
+    "requiredSkills": [
+      "React Native",
+      "TypeScript",
+      "Redux",
+      "Native Modules"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 45: Name Example, National ID: 10000044, DOB: 1990-01-01, Address: Tech Avenue 44, City Center, Tel: +1 555-0144, candidate44@eval.org.",
+    "tailoredBullets": [
+      "Architected core React Native service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust TypeScript pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_46_ae",
+    "domain": "Cybersecurity & Identity",
+    "role": "Cloud Security Architect (AE)",
+    "company": "Global Tech Corp 46",
+    "region": "AE",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Cloud Security Architect needed at Global Tech Corp. Essential tech stack: Python, Go, AWS, Terraform, OAuth2, OIDC. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Python, Go, AWS, Terraform, OAuth2, OIDC, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Python",
+      "Go",
+      "AWS",
+      "Terraform",
+      "OAuth2",
+      "OIDC",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Python",
+      "Go",
+      "AWS",
+      "Terraform",
+      "OAuth2",
+      "OIDC"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 46: Name Example, National ID: 10000045, DOB: 1990-01-01, Address: Tech Avenue 45, City Center, Tel: +1 555-0145, candidate45@eval.org.",
+    "tailoredBullets": [
+      "Architected core Python service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Go pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_47_sa",
+    "domain": "Data Engineering",
+    "role": "Snowflake Analytics Architect (SA)",
+    "company": "Global Tech Corp 47",
+    "region": "SA",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Snowflake Analytics Architect needed at Global Tech Corp. Essential tech stack: Scala, Kafka, Flink, PostgreSQL, AWS. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Scala, Kafka, Flink, PostgreSQL, AWS, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Scala",
+      "Kafka",
+      "Flink",
+      "PostgreSQL",
+      "AWS",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Scala",
+      "Kafka",
+      "Flink",
+      "PostgreSQL",
+      "AWS"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 47: Name Example, National ID: 10000046, DOB: 1990-01-01, Address: Tech Avenue 46, City Center, Tel: +1 555-0146, candidate46@eval.org.",
+    "tailoredBullets": [
+      "Architected core Scala service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Kafka pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_48_au",
+    "domain": "Embedded & IoT",
+    "role": "Embedded Linux Specialist (AU)",
+    "company": "Global Tech Corp 48",
+    "region": "AU",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "Embedded Linux Specialist needed at Global Tech Corp. Essential tech stack: C++, Python, ROS2, CAN bus, Linux. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in C++, Python, ROS2, CAN bus, Linux, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "C++",
+      "Python",
+      "ROS2",
+      "CAN bus",
+      "Linux",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "C++",
+      "Python",
+      "ROS2",
+      "CAN bus",
+      "Linux"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 48: Name Example, National ID: 10000047, DOB: 1990-01-01, Address: Tech Avenue 47, City Center, Tel: +1 555-0147, candidate47@eval.org.",
+    "tailoredBullets": [
+      "Architected core C++ service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Python pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_49_sg",
+    "domain": "Distributed Infrastructure",
+    "role": "Principal SRE (SG)",
+    "company": "Global Tech Corp 49",
+    "region": "SG",
+    "matchTier": "partial",
+    "expectedFit": "Partial Fit",
+    "jdText": "Principal SRE needed at Global Tech Corp. Essential tech stack: Go, Rust, Kubernetes, AWS, Kafka. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Go, Rust, Kubernetes. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Go",
+      "Rust",
+      "Kubernetes"
+    ],
+    "requiredSkills": [
+      "Go",
+      "Rust",
+      "Kubernetes",
+      "AWS",
+      "Kafka"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 49: Name Example, National ID: 10000048, DOB: 1990-01-01, Address: Tech Avenue 48, City Center, Tel: +1 555-0148, candidate48@eval.org.",
+    "tailoredBullets": [
+      "Architected core Go service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust Rust pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  },
+  {
+    "id": "corpus_case_50_in",
+    "domain": "Machine Learning & AI",
+    "role": "LLM Inference Architect (IN)",
+    "company": "Global Tech Corp 50",
+    "region": "IN",
+    "matchTier": "strong",
+    "expectedFit": "Fit",
+    "jdText": "LLM Inference Architect needed at Global Tech Corp. Essential tech stack: Python, TensorFlow, Kubernetes, MLflow. Requirements: 5+ years building scalable services, designing fault-tolerant systems, and collaborating in Agile teams.",
+    "resumeText": "Professional candidate with proven experience in Python, TensorFlow, Kubernetes, MLflow, Docker, Git. Track record of delivering reliable systems and reducing operational latency.",
+    "userSkills": [
+      "Python",
+      "TensorFlow",
+      "Kubernetes",
+      "MLflow",
+      "Docker",
+      "Git"
+    ],
+    "requiredSkills": [
+      "Python",
+      "TensorFlow",
+      "Kubernetes",
+      "MLflow"
+    ],
+    "adversarialOmissions": [
+      "Haskell",
+      "Fortran"
+    ],
+    "rawPii": "Candidate ID 50: Name Example, National ID: 10000049, DOB: 1990-01-01, Address: Tech Avenue 49, City Center, Tel: +1 555-0149, candidate49@eval.org.",
+    "tailoredBullets": [
+      "Architected core Python service clusters supporting 150,000 peak requests per second with sub-15ms p99 latency.",
+      "Reduced cloud computing expenditure by 34% through automated node auto-scaling and container rightsizing.",
+      "Engineered robust TensorFlow pipeline processing 5TB event streams daily with zero downtime.",
+      "Mentored 8 mid-level software engineers on systems architecture, testing best practices, and code reviews."
+    ]
+  }
+]

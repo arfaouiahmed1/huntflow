@@ -27,7 +27,24 @@ from dataclasses import dataclass
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+import httpx
+from connectors.registry import get_connector
+from connectors.ats import detect_ats_provider
+from rate_limiter import CrawlerRateLimiter
 
+_rate_limiter = CrawlerRateLimiter(default_rps=2.0)
+
+class AtsCrawlTarget(BaseModel):
+    provider: str = "greenhouse"
+    token: str
+    company_name: Optional[str] = None
+class AtsCrawlRequest(BaseModel):
+    boards: list[AtsCrawlTarget] = Field(default_factory=list)
+    keyword: Optional[str] = None
+    limit: int = 100
+
+class AtsDiscoverRequest(BaseModel):
+    query: str
 AGENT_TOKEN = os.environ.get("HUNTFLOW_AGENT_TOKEN", "")
 
 # ---------------------------------------------------------------------------
@@ -241,29 +258,45 @@ class ConfigPayload(BaseModel):
     sources_enabled: Optional[dict[str, bool]] = None
 
 
+def _iter_sources(data: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(data, dict):
+        return []
+    if "sources" in data and isinstance(data["sources"], list):
+        return [s for s in data["sources"] if isinstance(s, dict)]
+    out: list[dict[str, Any]] = []
+    for cat, boards in data.items():
+        if cat.startswith("_") or not isinstance(boards, list):
+            continue
+        for b in boards:
+            if isinstance(b, dict):
+                b_copy = dict(b)
+                if "category" not in b_copy:
+                    b_copy["category"] = cat
+                out.append(b_copy)
+    return out
+
+
 def _sources_with_effective_enabled() -> list[dict[str, Any]]:
     try:
         _, data = _load_crawl_sources()
     except Exception:
         return []
     out: list[dict[str, Any]] = []
-    for cat, boards in data.items():
-        if cat.startswith("_") or not isinstance(boards, list):
-            continue
-        for b in boards:
-            bid = b.get("id", "")
-            default_enabled = b.get("enabledByDefault", True)
-            effective = _enabled_overrides.get(bid, default_enabled)
-            out.append({
-                "id": bid,
-                "name": b.get("name", bid),
-                "category": cat,
-                "experience": b.get("experience", "all"),
-                "workMode": b.get("workMode", "all"),
-                "enabledByDefault": default_enabled,
-                "effectiveEnabled": effective,
-                "overridden": bid in _enabled_overrides,
-            })
+    for b in _iter_sources(data):
+        bid = b.get("id", "")
+        default_enabled = b.get("enabledByDefault", True)
+        effective = _enabled_overrides.get(bid, default_enabled)
+        out.append({
+            "id": bid,
+            "name": b.get("name", bid),
+            "channel": b.get("channel", "ats"),
+            "category": b.get("category", b.get("channel", "ats")),
+            "experience": b.get("experience", "all"),
+            "workMode": b.get("workMode", "all"),
+            "enabledByDefault": default_enabled,
+            "effectiveEnabled": effective,
+            "overridden": bid in _enabled_overrides,
+        })
     return out
 
 
@@ -543,25 +576,50 @@ def crawl_sources(_auth: None = Depends(require_token if AGENT_TOKEN else lambda
         raise HTTPException(status_code=500, detail=f"Failed to load crawl sources: {e}") from e
 
     sources: list[dict[str, Any]] = []
-    for category, boards in sources_data.items():
-        if not isinstance(boards, list):
-            continue
-        for board in boards:
-            sources.append({
-                "id": board.get("id", ""),
-                "name": board.get("name", board.get("id", "")),
-                "category": category,
-                "type": board.get("type", "static"),
-                "url": board.get("url", ""),
-                "sourceType": board.get("sourceType", ""),
-                "markets": board.get("markets", []),
-                "experience": board.get("experience", "all"),
-                "workMode": board.get("workMode", "all"),
-                "enabledByDefault": board.get("enabledByDefault", True),
-                "note": board.get("_comment", ""),
-            })
-    return {"sources": sources, "count": len(sources)}
+    for board in _iter_sources(sources_data):
+        bid = board.get("id", "")
+        default_enabled = board.get("enabledByDefault", True)
+        effective_enabled = _enabled_overrides.get(bid, default_enabled)
+        channel = board.get("channel", "ats")
+        regions = board.get("regions") or board.get("markets") or ["global"]
+        source_type = board.get("sourceType")
+        if not source_type:
+            if channel == "community":
+                source_type = "community"
+            elif channel == "aggregator":
+                source_type = "remote_board"
+            else:
+                source_type = "general"
 
+        sources.append({
+            "id": bid,
+            "name": board.get("name", bid),
+            "channel": channel,
+            "connector": board.get("connector", board.get("type", "html_static")),
+            "regions": regions,
+            "countryCodes": board.get("countryCodes", []),
+            "languages": board.get("languages", []),
+            "capabilities": board.get("capabilities", ["search"]),
+            "authMode": board.get("authMode", "none"),
+            "crawlPolicy": board.get("crawlPolicy", "automatic"),
+            "cadenceMinutes": board.get("cadenceMinutes", 180),
+            "perDomainRps": board.get("perDomainRps", 2.0),
+            "termsUrl": board.get("termsUrl", ""),
+            "attribution": board.get("attribution", {"name": board.get("name", bid), "url": board.get("url", "")}),
+            "enabled": effective_enabled,
+            "enabledByDefault": default_enabled,
+            "health": "healthy" if board.get("crawlPolicy") != "disabled" else "disabled",
+            "description": board.get("description", board.get("_comment", "")),
+            "category": board.get("category", channel),
+            "type": board.get("type", "static"),
+            "url": board.get("url", board.get("attribution", {}).get("url", "")),
+            "sourceType": source_type,
+            "markets": regions,
+            "experience": board.get("experience", "all"),
+            "workMode": board.get("workMode", "all"),
+            "note": board.get("_comment", ""),
+        })
+    return {"sources": sources, "count": len(sources)}
 
 # ---------------------------------------------------------------------------
 # Card-level crawl — iterate job cards per board using sources.json selectors
@@ -808,20 +866,16 @@ def crawl(req: CrawlRequest, _auth: None = Depends(require_token if AGENT_TOKEN 
         return {"run_id": run_id, "jobs": [], "concurrency": max_workers, "boards_crawled": 0, "source_results": []}
 
     limit = max(1, min(req.limit, 150))
-    # A category may be a top-level key; "all" sweeps every board.
-    if req.category in sources_data and isinstance(sources_data[req.category], list):
-        target_categories = [req.category]
-    else:
-        target_categories = [k for k, v in sources_data.items() if isinstance(v, list)]
-
     # Collect board tasks
+    all_sources = _iter_sources(sources_data)
     tasks: list[dict[str, Any]] = []
-    for cat in target_categories:
-        for raw_board in sources_data.get(cat, []):
-            b = dict(raw_board)
-            b["category"] = cat
-            tasks.append(b)
-
+    for raw_board in all_sources:
+        cat = raw_board.get("category") or raw_board.get("channel") or "general"
+        if req.category != "all" and req.category not in (cat, raw_board.get("channel")):
+            continue
+        b = dict(raw_board)
+        b["category"] = cat
+        tasks.append(b)
     selected_ids = {source_id for source_id in (req.source_ids or []) if source_id}
     if req.source_ids is not None:
         tasks = [board for board in tasks if board.get("id") in selected_ids]
@@ -1053,7 +1107,6 @@ def _profile_value(profile: dict, key: str) -> Optional[str]:
 
 def _detect_and_fill(page, profile: dict, documents: dict, logs: list, submit: bool, run_id: str = ""):
     """Finds the application form and fills every mapped field via Playwright."""
-    from playwright.sync_api import Page  # type: ignore
 
     logs.append({"timestamp": ts(), "message": "🔍 Inspecting form DOM schema…", "type": "info"})
     record(run_id, "🔍 Inspecting form DOM schema…", "info")
@@ -1196,7 +1249,7 @@ def apply(req: ApplyRequest, _auth: None = Depends(require_token if AGENT_TOKEN 
             final_status, filled = _detect_and_fill(page, req.profile, req.documents, logs, req.submit, run_id)
             result = filled
 
-        page = DynamicFetcher.fetch(
+        DynamicFetcher.fetch(
             req.url,
             headless=True,
             network_idle=True,
@@ -1257,16 +1310,12 @@ def health():
     sources_enabled_default = 0
     try:
         _, sdata = _load_crawl_sources()
-        for cat, boards in sdata.items():
-            if cat.startswith("_") or not isinstance(boards, list):
-                continue
-            for b in boards:
-                sources_total += 1
-                if b.get("enabledByDefault", True):
-                    sources_enabled_default += 1
+        for b in _iter_sources(sdata):
+            sources_total += 1
+            if b.get("enabledByDefault", True):
+                sources_enabled_default += 1
     except Exception:
         pass
-
     effective_enabled = 0
     try:
         for s in _sources_with_effective_enabled():
@@ -1324,35 +1373,33 @@ def heal_selectors(payload: HealSelectorsPayload, _auth: None = Depends(require_
     drifts: list[dict[str, Any]] = []
     scanned = 0
 
-    for cat, boards in sdata.items():
-        if cat.startswith("_") or not isinstance(boards, list):
+    for b in _iter_sources(sdata):
+        cat = b.get("category") or b.get("channel") or "general"
+        bid = b.get("id", "")
+        if target_ids and bid not in target_ids:
             continue
-        for b in boards:
-            bid = b.get("id", "")
-            if target_ids and bid not in target_ids:
-                continue
-            scanned += 1
-            selectors: dict[str, Any] = b.get("selectors") or {}
-            missing = [k for k in ("item", "title", "url") if not selectors.get(k)]
-            drift_detected = bool(missing)
-            drift_entry: dict[str, Any] = {
-                "id": bid,
-                "name": b.get("name", bid),
-                "category": cat,
-                "type": b.get("type", "static"),
-                "selectors": selectors,
-                "missing_required": missing,
-                "drift": drift_detected,
-                "enabledByDefault": b.get("enabledByDefault", True),
-                "effectiveEnabled": _enabled_overrides.get(bid, b.get("enabledByDefault", True)),
-                "would_heal": False,
-                "note": "no auto-write — report only; sources.json not modified" if drift_detected else "ok",
-            }
-            if drift_detected:
-                log.warning("🩹 heal-selectors drift — board %s (%s) missing %s — no auto-write", bid, cat, missing)
-            else:
-                log.info("🩹 heal-selectors ok — board %s (%s) selectors present", bid, cat)
-            drifts.append(drift_entry)
+        scanned += 1
+        selectors: dict[str, Any] = b.get("selectors") or {}
+        missing = [k for k in ("item", "title", "url") if not selectors.get(k)]
+        drift_detected = bool(missing)
+        drift_entry: dict[str, Any] = {
+            "id": bid,
+            "name": b.get("name", bid),
+            "category": cat,
+            "type": b.get("type", "static"),
+            "selectors": selectors,
+            "missing_required": missing,
+            "drift": drift_detected,
+            "enabledByDefault": b.get("enabledByDefault", True),
+            "effectiveEnabled": _enabled_overrides.get(bid, b.get("enabledByDefault", True)),
+            "would_heal": False,
+            "note": "no auto-write — report only; sources.json not modified" if drift_detected else "ok",
+        }
+        if drift_detected:
+            log.warning("🩹 heal-selectors drift — board %s (%s) missing %s — no auto-write", bid, cat, missing)
+        else:
+            log.info("🩹 heal-selectors ok — board %s (%s) selectors present", bid, cat)
+        drifts.append(drift_entry)
 
     return {
         "status": "ok",
@@ -1378,13 +1425,15 @@ _linkedin_lock = threading.Lock()
 
 def _li_launch(playwright, headless: bool = False):
     """Persistent Chromium context — cookies/session survive between requests."""
+    from adblock import get_ublock_extension_args
+    ext_args = get_ublock_extension_args()
+    args = ["--disable-blink-features=AutomationControlled"] + ext_args
     return playwright.chromium.launch_persistent_context(
         str(SESSION_DIR),
         headless=headless,
         viewport={"width": 1280, "height": 900},
-        args=["--disable-blink-features=AutomationControlled"],
+        args=args,
     )
-
 
 def _li_classify_page(page) -> str:
     """Classify the current page without navigating away from a login/challenge."""
@@ -1776,6 +1825,89 @@ def linkedin_jobs_search(req: ScrapeRequest, _auth: None = Depends(require_token
             return {"authenticated": True, "count": len(jobs), "jobs": jobs}
         finally:
             context.close()
+
+
+@app.post("/ats/crawl")
+async def crawl_ats_boards(req: AtsCrawlRequest, _auth: None = Depends(require_token)):
+    """Crawl multiple ATS JSON API boards directly in parallel using the Connector SDK."""
+    run_id = start_run("crawl", "https://ats.huntflow.local", label=f"ATS direct crawl ({len(req.boards)} boards)")
+    record(run_id, f"⚡ Starting direct ATS ingestion across {len(req.boards)} board(s)...")
+
+    all_jobs: list[dict[str, Any]] = []
+    keyword_lower = (req.keyword or "").lower().strip()
+
+    async with httpx.AsyncClient(timeout=12.0) as client:
+        for board in req.boards:
+            conn = get_connector(board.provider)
+            if not conn:
+                continue
+            try:
+                page = await conn.fetch_page(
+                    {"id": board.token, "token": board.token, "name": board.company_name, "connector": board.provider},
+                    {},
+                    {"keyword": req.keyword},
+                    client,
+                )
+                for item in page.items:
+                    job_dict = {
+                        "id": f"{board.provider}_{board.token}_{item.external_id}",
+                        "title": item.title,
+                        "company": item.company,
+                        "location": item.location,
+                        "salary": item.salary,
+                        "url": item.url,
+                        "jobDescription": item.description,
+                        "source": f"{board.provider.title()} ({item.company})",
+                        "status": "wishlist",
+                        "tags": item.tags,
+                        "atsType": board.provider,
+                    }
+                    if keyword_lower:
+                        match_text = (item.title + " " + item.description).lower()
+                        if keyword_lower not in match_text:
+                            continue
+                    all_jobs.append(job_dict)
+                record(run_id, f"✓ {board.provider.title()} ({board.company_name or board.token}): fetched {len(page.items)} job(s)")
+            except Exception as e:
+                record(run_id, f"⚠ Error fetching {board.token}: {e}", kind="warning")
+
+    if req.limit and len(all_jobs) > req.limit:
+        all_jobs = all_jobs[: req.limit]
+
+    end_run(run_id, "success", f"✅ Ingested {len(all_jobs)} structured ATS job(s)")
+    return {"ok": True, "count": len(all_jobs), "jobs": all_jobs, "runId": run_id}
+
+
+@app.post("/ats/discover")
+async def discover_ats_board(req: AtsDiscoverRequest, _auth: None = Depends(require_token)):
+    """Detect ATS provider and company board token from career URL or name."""
+    provider, token = detect_ats_provider(req.query)
+    conn = get_connector(provider)
+    sample_jobs: list[dict[str, Any]] = []
+    if conn:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                page = await conn.fetch_page({"id": token, "token": token, "connector": provider}, {}, None, client)
+                for item in page.items:
+                    sample_jobs.append({
+                        "id": f"{provider}_{token}_{item.external_id}",
+                        "title": item.title,
+                        "company": item.company,
+                        "location": item.location,
+                        "url": item.url,
+                        "jobDescription": item.description,
+                        "tags": item.tags,
+                    })
+            except Exception as e:
+                log.warning("Discovery fetch failed: %s", e)
+
+    return {
+        "ok": True,
+        "provider": provider,
+        "boardToken": token,
+        "activeJobsCount": len(sample_jobs),
+        "sampleJobs": sample_jobs[:3],
+    }
 
 
 app.mount("/screenshots", StaticFiles(directory=RUN_DIR), name="screenshots")

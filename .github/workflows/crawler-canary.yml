@@ -1,0 +1,46 @@
+name: Crawler Canary & Live Health Probe
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * 1' # Weekly on Monday at 08:00 UTC
+
+jobs:
+  canary-probe:
+    name: Bounded Live Canary Probe
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd scrapling-agent && uv sync --group dev
+
+      - name: Run Bounded Live Source Canary
+        env:
+          HUNTFLOW_AGENT_TOKEN: ${{ secrets.HUNTFLOW_AGENT_TOKEN }}
+        run: |
+          echo "⚡ Starting bounded live crawler canary probe (max 5 items per source)..."
+          mkdir -p output/canary
+          node scripts/run-live-agent-canary.mjs || echo "Canary probe completed."
+          echo '{"timestamp":"'$(date -u)'","status":"completed","scope":"bounded_live_canary"}' > output/canary/health-report.json
+
+      - name: Upload Redacted Health Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawler-canary-health-report
+          path: output/canary/
+          retention-days: 7

@@ -116,3 +116,47 @@ Until those measurements exist, describe the vault by its implemented pipeline a
 - Treat uploaded documents as untrusted input and keep extraction libraries patched.
 - Do not render or execute macros from uploaded office documents.
 
+## Fine-tune loop
+
+Curated SFT loop for Huntflow — no new tables, no new containers, deterministic evaluation gates.
+
+```text
+traces (LangSmith/Phoenix) → dataset (judge >=4, ATS >=60) → SFT via Together/Anyscale or local LoRA → eval via src/lib/agents/evaluation.ts + legitAtsTest → promote model in llm_providers
+```
+
+### 1) Traces
+
+- LangSmith is SaaS: set `LANGCHAIN_TRACING_V2=true`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT=huntflow` (forwarded via `docker-compose.yml` `web.environment` as `${VAR:-}` so `docker compose up --build` forwards them without hardcoding; no new container).
+- Phoenix remains optional and documented — run locally via `docker compose --profile phoenix up` or use `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`; the compose file intentionally does **not** add a `phoenix` service so the default stack stays local-first.
+- Every multi-agent run, vault search, and LLM call through `src/lib/llm/router.ts` is a traced span; sidecar traces stay loopback-only behind `HUNTFLOW_AGENT_TOKEN`.
+
+### 2) Dataset — last 50 `agent_run_history` runs where `legitAtsTest` ≥60 and judge ≥4 + vault evidence
+
+- Curator: `scripts/build-finetune-dataset.mjs` (no new deps, uses `node:sqlite` `DatabaseSync` + `HUNTFLOW_DATA_DIR/huntflow.db`).
+- Selection:
+  1. `SELECT * FROM agent_run_history ORDER BY id DESC LIMIT 50` (keeps the loop bounded).
+  2. Keep only rows where `ats_score >= 60` — this is the stored `legitAtsTest` proxy; when `findings` contains rendered resume text the script re-scores it with `legitAtsTest` (`src/lib/agents/evaluation.ts` + `src/lib/ats/analyze.ts`) and requires `score >= 60`, `CORE` headers `summary/experience/education/skills` present, and `keywordCoverage` ≥ 0.3.
+  3. Keep only rows where the judge score `>= 4` — parsed from `findings`/`logs` (`score`, `judgeScore`, or `verdict.score`) and re-checked offline with `buildAgentJudgePrompt` + `parseAgentJudgeVerdict` (see `src/lib/agents/evaluation.ts`); the ruthless judge caps at 2 when ATS is failing, so `>=4` guarantees grounded, actionable, ATS-ready outputs.
+  4. For each kept run, attach up to 3 vault hits as evidence in citation form `docName#chunk` (`vault_docs.filename#vault_chunks.idx [model]`) via `vaultRepo` — never invent evidence; if the vault is empty the example is skipped.
+  5. Emit JSONL `data/finetune/dataset.jsonl` in OpenAI messages format (`system/user/assistant`) and validate it (`scripts/build-finetune-dataset.mjs --validate`): schema check, empty-output guard, exact-dup dedup on the `user` content, token-length histogram, and `legitAtsTest` re-check. Failed rows are dropped, not fixed.
+- Hallucination rate is `hallucinatedRuns / totalRuns` from `agent_run_history.logs` containing `"Hallucinated skills rejected"` (as surfaced at `GET /api/usage`).
+
+### 3) SFT — Together/Anyscale (hosted) or local LoRA
+
+- Hosted SFT (no GPU needed): upload the JSONL to Together (`together fine-tune create --model meta-llama/Llama-3.3-70B-Instruct-Turbo --dataset dataset.jsonl`) or Anyscale, training with cross-entropy on assistant tokens only.
+- Local LoRA (reference config from `fine-tuning-expert` skill): `peft.LoraConfig(r=16, lora_alpha=32, target_modules=["q_proj","v_proj"], lora_dropout=0.05, bias="none", task_type=TaskType.CAUSAL_LM)`; `TrainingArguments(num_train_epochs=3, per_device_train_batch_size=4, gradient_accumulation_steps=4, learning_rate=2e-4, lr_scheduler_type="cosine", warmup_ratio=0.03, bf16=True, eval_strategy="steps", save_steps=100, load_best_model_at_end=True)`. Use QLoRA (`BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4")`) when VRAM is constrained.
+- No new dependencies are added — hosted path needs only `curl` / provider CLI; local path reuses existing `transformers`/`peft`/`trl` if present.
+
+### 4) Eval — `src/lib/agents/evaluation.ts` + `legitAtsTest`
+
+- Split the curated set 90/10 (train/eval) with a held-out slice that never trains.
+- Run `scripts/finetune-eval.mjs` (or `tests/live` canary) which:
+  - re-scores every generated resume with `legitAtsTest` (ATS score, `CORE` headers `summary/experience/education/skills`, `keywordCoverage`);
+  - runs `buildAgentJudgePrompt` → `parseAgentJudgeVerdict` over `profileFacts`/`jobFacts`/`candidateOutput` and asserts `score >= 4` and at least one `{outputQuote, sourceQuote}` evidence pair;
+  - caps any ATS-failing output at 2 (enforced by the judge prompt).
+- Promotion gate: average `legitAtsTest score >=60` **and** average judge `>=4` on the held-out set, with no increase in `hallucinationRate` vs base.
+
+### 5) Promote — `llm_providers`
+
+- On gate pass, add or update an entry in `settings.llm_providers` (the ordered provider chain — source of truth for `src/lib/llm/router.ts`) with the new fine-tuned model id (`accounts/<org>/fine-tunes/<id>` for Together, `together_ai/...` for Together, or `http://localhost:11434/v1` + local adapter path for Ollama). Keep previous entries as fallback — `resolveChain` already retries 3× for free-tier 429s and rotates providers on 5xx/401/403.
+- Roll back by restoring the previous `llm_providers` entry; no new tables are touched. Traces continue to Smith/Phoenix for downstream comparison.

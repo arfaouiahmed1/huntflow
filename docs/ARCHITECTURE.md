@@ -51,7 +51,9 @@ erDiagram
   contacts ||--o{ emails : "contact_id"
   vault_docs ||--o{ vault_chunks : "doc_id"
   memory ||--o{ memory_embeddings : "memory_id"
-
+  jobs ||--o{ job_source_edges : "job_id"
+  crawler_sources ||--o{ crawler_runs : "source_id"
+  crawler_sources ||--o{ job_source_edges : "source_id"
   jobs {
     TEXT id PK
     TEXT title
@@ -199,6 +201,51 @@ erDiagram
     TEXT link
     INTEGER read
   }
+  crawler_sources {
+    TEXT id PK
+    TEXT name
+    TEXT channel "ats|aggregator|regional|community|directory"
+    TEXT crawl_policy "automatic|manual_only|disabled"
+    INTEGER is_active
+    INTEGER per_domain_rps
+    TEXT config_json
+  }
+  crawler_source_state {
+    TEXT source_id PK
+    TEXT last_etag
+    TEXT last_modified_header
+    TEXT content_sha256
+    TEXT health_status "healthy|degraded|unconfigured|disabled"
+    INTEGER consecutive_failures
+    INTEGER missing_runs_count
+    TEXT circuit_open_until
+  }
+  crawler_runs {
+    TEXT id PK
+    TEXT source_id FK
+    TEXT trigger_mode
+    TEXT status "success|partial|failed"
+    INTEGER jobs_found
+    INTEGER jobs_ingested
+    INTEGER duration_ms
+    TEXT error_message
+  }
+  job_source_edges {
+    INTEGER id PK
+    TEXT job_id FK
+    TEXT source_id FK
+    TEXT external_id
+    TEXT source_url
+    TEXT first_seen_at
+    TEXT last_seen_at
+  }
+  saved_searches {
+    TEXT id PK
+    TEXT name
+    TEXT query
+    TEXT filters_json
+    INTEGER is_active
+  }
 ```
 
 Schema notes (`src/lib/db.ts`): `memory.expires_at` implements short-vs-long
@@ -208,10 +255,11 @@ null means long-term; vectors for memories live in the child table
 `agent_checkpoints` + `agent_checkpoint_writes` back the LangGraph
 `SqliteCheckpointSaver` (HITL interrupt/resume); `agent_run_history` records
 per-thread runs; `notifications` powers the top-bar notification center;
-`resume_docs` stores drafted `.tex` documents. All newer columns are added by
+`resume_docs` stores drafted `.tex` documents. `crawler_sources`,
+`crawler_source_state`, `crawler_runs`, and `job_source_edges` manage the
+multi-channel job crawler and multi-source provenance. All newer columns are added by
 idempotent `addColumn` checks in `migrate()` so existing installs upgrade in
 place.
-
 `settings` JSON blobs (written by `AppContext`, read by repos and the
 router): `llm_providers` (the ordered provider chain - source of truth
 for `resolveChain`), `mail_settings` (IMAP/SMTP, masked passwords),

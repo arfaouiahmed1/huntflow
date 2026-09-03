@@ -1,0 +1,31 @@
+name: "🔌 Source Adapter Drift"
+description: "Report a changed API schema, selector drift, or broken connector on a job board"
+labels: ["connector-drift", "crawler"]
+body:
+  - type: markdown
+    attributes:
+      value: "Report changes to an existing job board connector or ATS adapter."
+  - type: input
+    id: source_id
+    attributes:
+      label: "Source Identifier"
+      description: "The source ID from `sources.json` (e.g. `greenhouse`, `arbeitnow`, `himalayas`)"
+      placeholder: "e.g. arbeitnow"
+    validations:
+      required: true
+  - type: textarea
+    id: drift_details
+    attributes:
+      label: "Drift / Failure Description"
+      description: "Describe what changed (e.g. new endpoint structure, 404 URL, changed markup)."
+      placeholder: "The API endpoint now returns data nested inside..."
+    validations:
+      required: true
+  - type: textarea
+    id: suggested_fix
+    attributes:
+      label: "Suggested Fix / Example Payload"
+      description: "If you know the new schema or selector, paste it here."
+      placeholder: "Update URL to https://..."
+    validations:
+      required: false

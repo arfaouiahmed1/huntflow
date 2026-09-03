@@ -81,11 +81,11 @@ def detect_ats_provider(target: str) -> tuple[str, str]:
     if sr_match:
         return ("smartrecruiters", sr_match.group(1).lower())
 
-    personio_match = re.search(r"([a-z0-9_-]+)\.jobs\.personio\.de", clean, re.I)
+    personio_match = re.search(r"([a-z0-9_-]{1,100})\.jobs\.personio\.de", clean, re.I)
     if personio_match:
         return ("personio", personio_match.group(1).lower())
 
-    recruitee_match = re.search(r"([a-z0-9_-]+)\.recruitee\.com", clean, re.I)
+    recruitee_match = re.search(r"([a-z0-9_-]{1,100})\.recruitee\.com", clean, re.I)
     if recruitee_match:
         return ("recruitee", recruitee_match.group(1).lower())
 

@@ -8,7 +8,6 @@ import { useToast } from "@/components/ui/Toaster";
 import type { JobApplication } from "@/types";
 import JobDetailSalaryPanel from "@/components/detail/JobDetailSalaryPanel";
 import { sanitizeJobDescription } from "@/lib/security/jdSanitizer";
-
 interface JobDetailOverviewProps {
   job: JobApplication;
 }

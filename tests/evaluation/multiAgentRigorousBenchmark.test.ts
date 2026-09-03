@@ -63,6 +63,14 @@ describe("Multi-Agent Real-World Dataset Benchmark (50 Cases)", () => {
       // 1. Run REAL PII Sanitizer Tool
       const piiResult = await executePiiSanitizerTool({ content: c.rawPii });
       expect(piiResult.success).toBe(true);
+      expect(piiResult.observation).toEqual(
+        expect.objectContaining({
+          status: expect.stringMatching(/^(success|warning|error)$/),
+          summary: expect.any(String),
+          next_actions: expect.any(Array),
+          artifacts: expect.any(Array),
+        }),
+      );
       const sanitized = piiResult.sanitizedContent;
 
       const hasRawSSN = /\b\d{3}-\d{2}-\d{4}\b/.test(sanitized);
@@ -79,6 +87,14 @@ describe("Multi-Agent Real-World Dataset Benchmark (50 Cases)", () => {
         userSkills: c.userSkills,
         region: c.region,
       });
+      expect(tailorResult.observation).toEqual(
+        expect.objectContaining({
+          status: expect.stringMatching(/^(success|warning|error)$/),
+          summary: expect.any(String),
+          next_actions: expect.any(Array),
+          artifacts: expect.any(Array),
+        }),
+      );
 
       // Expected vs Actual comparison
       const candSkillSet = new Set(c.userSkills.map((s) => s.toLowerCase()));

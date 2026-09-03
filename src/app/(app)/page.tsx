@@ -20,8 +20,6 @@ import { useApp } from "@/context/AppContext";
 import StatusBadge from "@/components/ui/StatusBadge";
 import UsagePanel from "@/components/UsagePanel";
 import StatsPanel from "@/components/StatsPanel";
-import { useToast } from "@/components/ui/Toaster";
-import { toErrorMessage } from "@/lib/errors";
 import { cn, scoreColor } from "@/lib/utils";
 import { displayJobCompany, displayJobTitle } from "@/lib/jobDisplay";
 
@@ -42,7 +40,6 @@ interface AgentPulse {
 
 export default function DashboardPage() {
   const { applications, emails } = useApp();
-  const { error: toastError } = useToast();
   const [agent, setAgent] = useState<AgentPulse>({ online: null, active: [], latest: null });
 
   useEffect(() => {
@@ -59,10 +56,9 @@ export default function DashboardPage() {
             latest: payload.runs?.[0] || null,
           });
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setAgent({ online: false, active: [], latest: null });
-          toastError(`Agent activity unavailable: ${toErrorMessage(err)}`);
         }
       }
     };

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { reduceBoardUpdate, parseBoardUpdate, type BoardLiveState, type BoardUpdateEvent } from "@/lib/boardUpdate";
+import { describe, it, expect } from "vitest";
+import { reduceBoardUpdate, type BoardLiveState, type BoardUpdateEvent } from "@/lib/boardUpdate";
 import fs from "node:fs";
 import path from "node:path";
 

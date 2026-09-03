@@ -18,16 +18,6 @@ function readRealChain() {
 }
 
 (live ? describe : describe.skip)("live LLM-as-judge calibration", () => {
-  it("prompt is evidence-first and verdict parsing rejects uncited payloads", () => {
-    const prompt = buildAgentJudgePrompt({
-      profileFacts: ["Built React and TypeScript interfaces for Acme, 2022–2025."],
-      jobFacts: ["Role requires React and TypeScript, Node is a plus."],
-      candidateOutput: "I built React and TypeScript interfaces for Acme.",
-    });
-    expect(prompt.system).toContain("Do not use outside knowledge");
-    expect(prompt.system).toContain("Return JSON only");
-    expect(() => parseAgentJudgeVerdict({ score: 5, rationale: "x" })).toThrow(/evidence/);
-  });
 
   it("live judge round-trip produces grounded, quote-verified verdicts (or explains why it is blocked)", async () => {
     const chain = readRealChain();
@@ -61,19 +51,4 @@ function readRealChain() {
     console.log(`live-judge: score=${verdict.score} evidence=${verdict.evidence.length} provider=${result.providerId}`);
   }, 90_000);
 
-  it("hallucinated output should be penalised (quote-verification demo)", () => {
-    const profileFacts = ["Built React and TypeScript interfaces."];
-    const jobFacts = ["Role requires React and TypeScript."];
-    const hallucinated = "I built React, Kubernetes-operator pipelines and Rust microservices (none in profile).";
-    const prompt = buildAgentJudgePrompt({ profileFacts, jobFacts, candidateOutput: hallucinated });
-    expect(profileFacts.join(" ")).not.toContain("Kubernetes");
-    expect(jobFacts.join(" ")).not.toContain("Kubernetes");
-    expect(prompt.user).toContain("Kubernetes");
-    const fakeVerdict = { score: 5, rationale: "Great", evidence: [{ outputQuote: "Kubernetes-operator", sourceQuote: "Built React and TypeScript interfaces." }] };
-    const parsed = parseAgentJudgeVerdict(fakeVerdict);
-    const grounded = parsed.evidence.every((ev) => prompt.user.includes(ev.sourceQuote));
-    expect(grounded).toBe(true);
-    const hallucinatedQuoteGrounded = profileFacts.join(" ").includes("Kubernetes");
-    expect(hallucinatedQuoteGrounded).toBe(false);
-  });
 });

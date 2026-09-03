@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { parseSourceCatalog } from "@/lib/sourceTaxonomy";
-import { CRAWLER_CHANNELS, CRAWLER_REGIONS, SOURCE_AUTH_MODES, SOURCE_CRAWL_POLICIES } from "@/lib/crawler/contracts";
+import { CRAWLER_CHANNELS, CRAWLER_REGIONS } from "@/lib/crawler/contracts";
 
 // ---------------------------------------------------------------------------
 // Helpers — bounded, deterministic, no network

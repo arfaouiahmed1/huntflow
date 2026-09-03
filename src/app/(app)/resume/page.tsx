@@ -221,7 +221,7 @@ export default function ResumeStudioPage() {
   const [docKind, setDocKind] = useState<"resume" | "cv">("resume");
   const [engine, setEngine] = useState<"latex" | "typst">("typst");
   const [latexSource, setLatexSource] = useState("");
-  const [_typstSource, setTypstSource] = useState("");
+  const [typstSource, setTypstSource] = useState("");
   const [compilingPdf, setCompilingPdf] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfState, setPdfState] = useState<"idle" | "compiling" | "ready" | "no-tex" | "error">("idle");
@@ -1002,7 +1002,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             pdfState={pdfState}
             pdfError={pdfError}
             compiledTex={compiledTex}
-            latexSource={latexSource}
+            latexSource={engine === "typst" ? typstSource : latexSource}
             compileToken={compileToken}
           />
           <ResumeHtmlFallback

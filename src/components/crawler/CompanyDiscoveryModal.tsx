@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Check, ExternalLink, Loader2, Play, Search, Sparkles, X, Zap } from "lucide-react";
+import { Search, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toaster";
-import { cn } from "@/lib/utils";
 
 interface CompanyDiscoveryModalProps {
   isOpen: boolean;

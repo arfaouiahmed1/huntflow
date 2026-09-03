@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { Filter, X, Check, DollarSign, Globe, Briefcase, Award, Shield } from "lucide-react";
-import type { CrawlerFacetFilters, CrawlerRegion, SeniorityLevel, VisaSignal, WorkMode } from "@/lib/crawler/contracts";
+import { Filter, X, DollarSign, Globe, Briefcase, Award, Shield } from "lucide-react";
+import type { CrawlerFacetFilters, CrawlerRegion, SeniorityLevel, WorkMode } from "@/lib/crawler/contracts";
 import { CRAWLER_REGIONS } from "@/lib/crawler/contracts";
 import { cn } from "@/lib/utils";
 

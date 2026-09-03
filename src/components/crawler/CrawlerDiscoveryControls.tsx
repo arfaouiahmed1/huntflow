@@ -74,8 +74,6 @@ export default function CrawlerDiscoveryControls({
   onStart,
   onSaveSearch,
   crawling,
-  checked: _checked,
-  offline: _offline,
   onOpenCompanyDiscovery,
 }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false);

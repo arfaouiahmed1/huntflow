@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collapseDuplicateJobs, areJobsDuplicates, normalizeUrl } from "@/lib/dedup";
+import { collapseDuplicateJobs, normalizeUrl } from "@/lib/dedup";
 import type { JobApplication } from "@/types";
 
 describe("Crawler Deduplication & Scale Performance", () => {

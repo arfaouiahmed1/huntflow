@@ -6,7 +6,6 @@ import {
   crawlerRunsRepo,
   crawlerJobsStagingRepo,
   jobSourceEdgesRepo,
-  crawlerSourceStateRepo,
   savedSearchesRepo,
 } from "@/lib/db";
 import { resolveCloudinaryConfig } from "@/lib/cloudinaryConfig";

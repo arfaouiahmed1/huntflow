@@ -72,6 +72,48 @@ export const ResumeCVTailorSchema = z.object({
   userSkills: z.array(z.string()),
 });
 
+export interface AgentObservation {
+  status: "success" | "warning" | "error";
+  summary: string;
+  next_actions: string[];
+  artifacts: string[];
+}
+
+export interface PiiSanitizerResult {
+  success: boolean;
+  sanitizedContent: string;
+  hasRedactions: boolean;
+  llmUsed: boolean;
+  llmReasoning: string | null;
+  llmFindings: string[];
+  regexEnforced: boolean;
+  meta: {
+    llmUsed: boolean;
+    llmReasoning: string | null;
+    llmFindings: string[];
+    ssnHits: number;
+    dobHits: number;
+    sinHits: number;
+    taxIdHits: number;
+    regexEnforced: boolean;
+  };
+  observation?: AgentObservation;
+}
+
+export interface ResumeCVTailorResult {
+  success: boolean;
+  matchingSkills: string[];
+  missingSkills: string[];
+  recommendedTemplate: string;
+  templateMeta: (typeof RESUME_TEMPLATES)[number];
+  llmUsed: boolean;
+  llmReasoning: string | null;
+  cultureKeywords: string[];
+  vaultHitsCount: number;
+  fallbackUsed: boolean;
+  observation?: AgentObservation;
+}
+
 export const LetterTailorSchema = z.object({
   jobTitle: z.string(),
   company: z.string(),
@@ -566,7 +608,7 @@ function sanitizeReasoningForLog(raw: string): string {
 export async function executePiiSanitizerTool(
   input: z.infer<typeof PiiSanitizerSchema>,
   settings?: LLMSettings | null
-) {
+): Promise<PiiSanitizerResult> {
   const original = Array.isArray(input.content)
     ? input.content.join("\n")
     : typeof input.content === "string"
@@ -702,7 +744,15 @@ Respond with valid JSON only — no markdown fences, no commentary.`;
         /\b((?:19|20)\d{2}[-/.](?:0[1-9]|1[0-2])[-/.](?:0[1-9]|[12]\d|3[01])|(?:0[1-9]|[12]\d|3[01])[-/.](?:0[1-9]|1[0-2])[-/.](?:19|20)\d{2}|(?:0[1-9]|1[0-2])[-/.](?:0[1-9]|[12]\d|3[01])[-/.](?:19|20)\d{2})\b/g
       ) ?? []
     ).length;
+  const sinHits = (baseContent.match(/\b\d{3}[ -]\d{3}[ -]\d{3}\b/g) ?? []).length;
+  const taxIdHits = (baseContent.match(/\b\d{2}\s\d{3}\s\d{3}\s\d{3}\b|\bDE\d{9}\b/gi) ?? []).length;
   const hasRedactions = sanitized !== original;
+  const observation: AgentObservation = {
+    status: hasRedactions ? "warning" : "success",
+    summary: hasRedactions ? "PII patterns were redacted before downstream use." : "No supported PII patterns were detected.",
+    next_actions: hasRedactions ? ["Use sanitizedContent for downstream agent inputs."] : [],
+    artifacts: [],
+  };
 
   return {
     success: true,
@@ -718,15 +768,18 @@ Respond with valid JSON only — no markdown fences, no commentary.`;
       llmFindings,
       ssnHits,
       dobHits,
+      sinHits,
+      taxIdHits,
       regexEnforced: true,
     },
+    observation,
   };
 }
 
 export async function executeResumeCVTailorTool(
   input: z.infer<typeof ResumeCVTailorSchema>,
   settings?: LLMSettings | null
-) {
+): Promise<ResumeCVTailorResult> {
   const fallbackTerms = extractJdTerms(input.jobDescription, input.userSkills);
   const fallbackMatching = fallbackTerms.filter((t) => t.inResume).map((t) => t.term);
   const fallbackMissing = fallbackTerms.filter((t) => !t.inResume).map((t) => t.term);
@@ -897,6 +950,16 @@ Respond with valid JSON only — no markdown fences, no commentary.`;
   const uniqMatching = Array.from(new Map(effectiveMatching.map((s) => [s.toLowerCase(), s])).values());
   const uniqMissing = Array.from(new Map(dedupedMissing.map((s) => [s.toLowerCase(), s])).values());
 
+  const fallbackUsed = !llmUsed || uniqMatching.length === 0;
+  const observation: AgentObservation = {
+    status: fallbackUsed ? "warning" : "success",
+    summary: `Tailored ${uniqMatching.length} grounded matches and ${uniqMissing.length} skill gaps.`,
+    next_actions: fallbackUsed
+      ? ["Review deterministic fallback output before using it externally."]
+      : ["Review grounded matches and gaps before exporting application materials."],
+    artifacts: [`template:${template.id}`],
+  };
+
   return {
     success: true,
     matchingSkills: uniqMatching,
@@ -907,7 +970,8 @@ Respond with valid JSON only — no markdown fences, no commentary.`;
     llmReasoning,
     cultureKeywords,
     vaultHitsCount: vaultSnippets.length,
-    fallbackUsed: !llmUsed || uniqMatching.length === 0,
+    fallbackUsed,
+    observation,
   };
 }
 

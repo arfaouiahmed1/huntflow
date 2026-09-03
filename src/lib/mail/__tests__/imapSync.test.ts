@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { syncImapInbox } from "../imapSync";
 import { emailsRepo, jobsRepo } from "@/lib/db";
-import { POST as syncRoutePost, GET as syncRouteGet } from "@/app/api/mail/sync/route";
+import { POST as syncRoutePost } from "@/app/api/mail/sync/route";
 import { NextRequest } from "next/server";
 
 // Mock imapflow client with a proper class constructor

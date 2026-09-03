@@ -46,7 +46,7 @@ const TIER_TEMPLATES: Record<
       ],
     },
     {
-      questionTemplate: (topic, _company) =>
+      questionTemplate: (topic) =>
         `How have you collaborated across cross-functional teams when delivering ${topic} projects at past companies?`,
       probes: () => [
         "Can you share an example where you had to push back on an unrealistic delivery deadline?",
@@ -82,7 +82,7 @@ const TIER_TEMPLATES: Record<
       ],
     },
     {
-      questionTemplate: (topic, _company) =>
+      questionTemplate: (topic) =>
         `How do you approach deprecating legacy systems or migrating critical infrastructure to modern ${topic} stacks with zero downtime?`,
       probes: () => [
         "How do you handle schema migrations or state consistency during rolling updates?",

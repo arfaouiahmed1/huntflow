@@ -21,7 +21,7 @@ import {
   Tag,
   ImageIcon,
 } from "lucide-react";
-import { JobApplication, EmployerReview } from "@/types";
+import { JobApplication } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { agentScreenshotUrl } from "@/lib/agentScreenshot";
 import { displayJobCompany, displayJobTitle } from "@/lib/jobDisplay";

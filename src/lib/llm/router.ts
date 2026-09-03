@@ -4,12 +4,113 @@ import {
   LLMSettings,
   llmSettingsFrom,
   toLLMProvider,
+  type AgentModelRoute,
+  prioritizeProviderChain,
 } from "./providers";
 import { LLMError, callProvider, extractJson, LLMResult } from "./client";
 import { settingsRepo, usageRepo } from "@/lib/db";
 import { budgetFor } from "./context";
 import { estimateCost } from "./costs";
 import { countTokens, countTokensOf } from "./tokens";
+
+export interface NodeCostBreakdown {
+  nodeName: string;
+  promptTokens: number;
+  completionTokens: number;
+  costEst: number;
+  latencyMs: number;
+}
+
+interface NodeUsageRecord extends NodeCostBreakdown {
+  provider: string;
+  ts: number;
+}
+
+const NODE_USAGE_WINDOW_MAX = 100;
+const nodeUsageWindow: NodeUsageRecord[] = [];
+
+export function trackNodeUsage(
+  node: string,
+  usage: { promptTokens: number; completionTokens: number; latencyMs: number; provider: string },
+): void {
+  const costEst = estimateCost(usage.provider, usage.promptTokens, usage.completionTokens);
+  const record: NodeUsageRecord = {
+    nodeName: node,
+    promptTokens: usage.promptTokens,
+    completionTokens: usage.completionTokens,
+    costEst,
+    latencyMs: usage.latencyMs,
+    provider: usage.provider,
+    ts: Date.now(),
+  };
+  nodeUsageWindow.push(record);
+  if (nodeUsageWindow.length > NODE_USAGE_WINDOW_MAX) nodeUsageWindow.shift();
+}
+
+export function getNodeBreakdowns(): NodeCostBreakdown[] {
+  return nodeUsageWindow.map((r) => ({
+    nodeName: r.nodeName,
+    promptTokens: r.promptTokens,
+    completionTokens: r.completionTokens,
+    costEst: r.costEst,
+    latencyMs: r.latencyMs,
+  }));
+}
+
+export function getNodeBreakdownsWithProvider(): Array<NodeCostBreakdown & { provider: string; ts: number }> {
+  return nodeUsageWindow.map((r) => ({
+    nodeName: r.nodeName,
+    promptTokens: r.promptTokens,
+    completionTokens: r.completionTokens,
+    costEst: r.costEst,
+    latencyMs: r.latencyMs,
+    provider: r.provider,
+    ts: r.ts,
+  }));
+}
+
+export function getNodeCostStats(): {
+  totalNodes: number;
+  totalTokens: number;
+  totalCost: number;
+  avgLatencyMs: number;
+  byNode: Record<string, { calls: number; tokens: number; cost: number; avgLatencyMs: number }>;
+} {
+  const totalNodes = nodeUsageWindow.length;
+  let totalTokens = 0;
+  let totalCost = 0;
+  let totalLatency = 0;
+  const byNode: Record<string, { calls: number; tokens: number; cost: number; avgLatencyMs: number }> = {};
+  const latencySums: Record<string, number> = {};
+  for (const r of nodeUsageWindow) {
+    const tokens = r.promptTokens + r.completionTokens;
+    totalTokens += tokens;
+    totalCost += r.costEst;
+    totalLatency += r.latencyMs;
+    const cur = byNode[r.nodeName] ?? { calls: 0, tokens: 0, cost: 0, avgLatencyMs: 0 };
+    cur.calls += 1;
+    cur.tokens += tokens;
+    cur.cost += r.costEst;
+    byNode[r.nodeName] = cur;
+    latencySums[r.nodeName] = (latencySums[r.nodeName] ?? 0) + r.latencyMs;
+  }
+  for (const node of Object.keys(byNode)) {
+    const cur = byNode[node];
+    cur.avgLatencyMs = Math.round((latencySums[node] ?? 0) / cur.calls);
+  }
+  return {
+    totalNodes,
+    totalTokens,
+    totalCost,
+    avgLatencyMs: totalNodes ? Math.round(totalLatency / totalNodes) : 0,
+    byNode,
+  };
+}
+
+export function clearNodeBreakdowns(): void {
+  nodeUsageWindow.length = 0;
+}
+
 
 /* -------------------------------------------------------------------------- *
  *  LLM Router — multi-provider with classified retries, circuit breaking,
@@ -32,7 +133,7 @@ interface CircuitState {
 const CIRCUIT: Record<string, CircuitState> = {};
 const COOLDOWN_MS = 90_000; // one failed provider stays out for 90s
 const MAX_FAILURES = 3;
-const PER_PROVIDER_ATTEMPTS = 2;
+const PER_PROVIDER_ATTEMPTS = 3; // free-tier 429s need extra retry + jitter
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -40,6 +141,48 @@ function sleep(ms: number) {
 
 let _cachedChain: LLMProvider[] | null = null;
 let _cachedChainAt = 0;
+let _cachedAgentRoutes: AgentModelRoute[] | null = null;
+let _cachedAgentRoutesAt = 0;
+
+/** Reset process-local settings caches after the Settings API persists a change. */
+export function invalidateLLMRouterCache() {
+  _cachedChain = null;
+  _cachedChainAt = 0;
+  _cachedAgentRoutes = null;
+  _cachedAgentRoutesAt = 0;
+}
+
+function storedProvider(provider: LLMProvider): LLMProvider {
+  return {
+    ...provider,
+    // Old backups predate key slots. Preserve them by treating the entry id as
+    // the provider id until the user edits the provider row.
+    providerId: provider.providerId || provider.id,
+  };
+}
+
+/** Persisted per-agent overrides from the settings table. */
+export function loadAgentRoutesFromDb(): AgentModelRoute[] {
+  const now = Date.now();
+  if (_cachedAgentRoutes && now - _cachedAgentRoutesAt < 10_000) return _cachedAgentRoutes;
+  try {
+    const raw = settingsRepo.get("llm_agent_routes");
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    _cachedAgentRoutes = parsed.filter(
+      (route): route is AgentModelRoute =>
+        route &&
+        typeof route === "object" &&
+        typeof route.agent === "string" &&
+        typeof route.providerSlotId === "string" &&
+        typeof route.model === "string",
+    );
+    _cachedAgentRoutesAt = now;
+    return _cachedAgentRoutes;
+  } catch {
+    return [];
+  }
+}
 
 /** Persisted provider chain from the settings table (source of truth). */
 export function loadChainFromDb(): LLMProvider[] | null {
@@ -50,7 +193,9 @@ export function loadChainFromDb(): LLMProvider[] | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as LLMProvider[];
     if (!Array.isArray(parsed)) return null;
-    _cachedChain = parsed.filter((p) => p && typeof p === "object" && p.enabled !== false);
+    _cachedChain = parsed
+      .filter((p) => p && typeof p === "object" && p.enabled !== false)
+      .map((p) => storedProvider(p));
     _cachedChainAt = now;
     return _cachedChain;
   } catch {
@@ -85,6 +230,10 @@ export function resolveChain(llmSettings?: LLMSettings | null): LLMProvider[] {
     { id: "openai", keyVar: "OPENAI_API_KEY", modelVar: "OPENAI_MODEL" },
     { id: "groq", keyVar: "GROQ_API_KEY", modelVar: "GROQ_MODEL" },
     { id: "deepseek", keyVar: "DEEPSEEK_API_KEY", modelVar: "DEEPSEEK_MODEL" },
+    { id: "cerebras", keyVar: "CEREBRAS_API_KEY", modelVar: "CEREBRAS_MODEL" },
+    { id: "fireworks", keyVar: "FIREWORKS_API_KEY", modelVar: "FIREWORKS_MODEL" },
+    { id: "perplexity", keyVar: "PERPLEXITY_API_KEY", modelVar: "PERPLEXITY_MODEL" },
+    { id: "nvidia", keyVar: "NVIDIA_API_KEY", modelVar: "NVIDIA_MODEL" },
   ];
   for (const e of envMap) {
     if (seen.has(e.id)) continue;
@@ -117,13 +266,23 @@ export function resolveChain(llmSettings?: LLMSettings | null): LLMProvider[] {
   return chain;
 }
 
+/**
+ * Resolve an ordered chain for one workflow. The selected slot/model is first;
+ * every remaining enabled provider remains available for the existing 429/5xx
+ * rotation loop in callLLM.
+ */
+export function resolveChainForAgent(agent: string, llmSettings?: LLMSettings | null): LLMProvider[] {
+  const route = loadAgentRoutesFromDb().find((candidate) => candidate.agent === agent);
+  return prioritizeProviderChain(resolveChain(llmSettings), route);
+}
+
 /** Find the first provider capable of the request that isn't cooling down. */
 function eligible(chain: LLMProvider[], needsJson: boolean): LLMProvider[] {
   const now = Date.now();
   return chain.filter((p) => {
     if (!p.enabled) return false;
-    const cfg = getProvider(p.id);
-    if (needsJson && cfg.capabilities && !cfg.capabilities.includes("json") && p.id !== "custom") {
+    const cfg = getProvider(p.providerId || p.id);
+    if (needsJson && cfg.capabilities && !cfg.capabilities.includes("json") && (p.providerId || p.id) !== "custom") {
       return false;
     }
     if (!p.apiKey && cfg.needsKey) return false;
@@ -153,11 +312,17 @@ export async function callLLM(req: LLMRouterRequest, chain: LLMProvider[]): Prom
   const started = Date.now();
   let lastError: unknown = null;
 
-  const providers = eligible(chain, json);
+  const providers = eligible(
+    prioritizeProviderChain(
+      chain,
+      loadAgentRoutesFromDb().find((candidate) => candidate.agent === agent),
+    ),
+    json,
+  );
 
   for (const provider of providers) {
     const settings = llmSettingsFrom(provider);
-    const cfg = getProvider(provider.id);
+    const cfg = getProvider(provider.providerId || provider.id);
     const sys = json ? `${system}${JSON_HINT}` : system;
 
     for (let attempt = 0; attempt < PER_PROVIDER_ATTEMPTS; attempt++) {

@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AGENT_BASE_URL, agentHeaders } from "@/lib/agentClient";
 
-const AGENT_URL = process.env.SCRAPLING_AGENT_URL || "http://127.0.0.1:8001";
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const since = req.nextUrl.searchParams.get("since") || "0";
+  const rawSince = req.nextUrl.searchParams.get("since") || "0";
+  const since = /^\d+$/.test(rawSince.trim()) ? rawSince.trim() : "0";
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3500);
-    const res = await fetch(`${AGENT_URL}/activity?since=${since}`, { signal: controller.signal });
+    const res = await fetch(`${AGENT_BASE_URL}/activity?since=${since}`, {
+      headers: agentHeaders(),
+      cache: "no-store",
+      signal: controller.signal,
+    });
     clearTimeout(timer);
     if (!res.ok) return NextResponse.json({ online: false }, { status: 503 });
     const data = await res.json();

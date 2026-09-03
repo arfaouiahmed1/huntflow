@@ -1,0 +1,42 @@
+▲ Next.js 16.3.1 (Turbopack)
+- Local:         http://localhost:3013
+- Network:       http://192.168.1.15:3013
+- Environments: .env
+✓ Ready in 506ms
+⚠ Warning: Next.js ignored package-lock.json in C:\Users\ahmed because it is outside the current Git repository (C:\Users\ahmed\Desktop\Personal Projects\Job Finder).
+ To use this directory, set `turbopack.root` in your Next.js config.
+
+✓ Running next.config.ts took 30ms
+
+ GET / 200 in 562ms (next.js: 260ms, application-code: 303ms)
+ GET /api/data/stats 200 in 100ms (next.js: 69ms, application-code: 31ms)
+ GET /api/data/stats 200 in 16ms (next.js: 7ms, application-code: 9ms)
+ GET /api/data 200 in 53ms (next.js: 41ms, application-code: 12ms)
+ GET /api/notifications 200 in 95ms (next.js: 89ms, application-code: 7ms)
+ GET /api/usage 200 in 171ms (next.js: 162ms, application-code: 9ms)
+ GET /api/agent/health 503 in 241ms (next.js: 125ms, application-code: 116ms)
+ GET /api/agent/activity?since=0 503 in 262ms (next.js: 208ms, application-code: 54ms)
+ GET /api/agent/health 503 in 96ms (next.js: 77ms, application-code: 18ms)
+ GET /api/notifications 200 in 24ms (next.js: 14ms, application-code: 10ms)
+ GET /api/vault 200 in 613ms (next.js: 244ms, application-code: 369ms)
+ GET /api/agent/activity?since=0 503 in 615ms (next.js: 6ms, application-code: 609ms)
+ GET /api/usage 200 in 600ms (next.js: 592ms, application-code: 8ms)
+ GET /api/notifications 200 in 12ms (next.js: 4ms, application-code: 8ms)
+ GET /api/notifications 200 in 12ms (next.js: 4ms, application-code: 8ms)
+ GET /api/agent/activity?since=0 503 in 12ms (next.js: 4ms, application-code: 8ms)
+ GET /api/notifications 200 in 9ms (next.js: 4ms, application-code: 5ms)
+ GET /api/agent/activity?since=0 503 in 18ms (next.js: 11ms, application-code: 8ms)
+ GET /api/notifications 200 in 7ms (next.js: 3ms, application-code: 4ms)
+ GET /api/agent/health 503 in 17ms (next.js: 3ms, application-code: 14ms)
+ GET /api/agent/activity?since=0 503 in 18ms (next.js: 10ms, application-code: 8ms)
+ GET /api/notifications 200 in 9ms (next.js: 4ms, application-code: 6ms)
+ GET /api/agent/activity?since=0 503 in 10ms (next.js: 3ms, application-code: 7ms)
+ GET /api/notifications 200 in 8ms (next.js: 4ms, application-code: 4ms)
+ GET /api/agent/activity?since=0 503 in 13ms (next.js: 4ms, application-code: 9ms)
+ GET /api/notifications 200 in 12ms (next.js: 5ms, application-code: 7ms)
+ GET /api/notifications 200 in 34ms (next.js: 26ms, application-code: 8ms)
+ GET /api/agent/activity?since=0 503 in 39ms (next.js: 6ms, application-code: 33ms)
+ GET /api/agent/health 503 in 40ms (next.js: 17ms, application-code: 23ms)
+ GET /api/dev-tools 404 in 346ms (next.js: 333ms, application-code: 12ms)
+ GET /api/dev-tools?asset=react-scan 404 in 25ms (next.js: 10ms, application-code: 15ms)
+[?25h

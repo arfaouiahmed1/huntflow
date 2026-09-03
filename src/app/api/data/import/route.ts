@@ -4,8 +4,15 @@ import { importAllData, BackupData } from "@/lib/db";
 import { settingsRepo } from "@/lib/db";
 import { isMasked } from "@/lib/masking";
 
+const SAFE_SETTING_KEY = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
+
+function writeSetting(out: Record<string, string>, key: string, value: string): void {
+  if (!SAFE_SETTING_KEY.test(key)) return;
+  Object.defineProperty(out, key, { value, enumerable: true, writable: true, configurable: true });
+}
+
 function restoreMaskedSecrets(settings: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
+  const out = Object.create(null) as Record<string, string>;
   let storedProviders: { id: string; apiKey?: string }[] = [];
   let storedMail: { imapPass?: string; smtpPass?: string } = {};
   try {
@@ -17,28 +24,29 @@ function restoreMaskedSecrets(settings: Record<string, string>): Record<string, 
   const keyById = new Map(storedProviders.map((p) => [p.id, p.apiKey ?? ""]));
 
   for (const [key, value] of Object.entries(settings)) {
+    if (!SAFE_SETTING_KEY.test(key)) continue;
     if (key === "llm_providers") {
       try {
         const chain = JSON.parse(value) as { id: string; apiKey?: string }[];
-        out[key] = JSON.stringify(
-          chain.map((p) => (isMasked(p.apiKey) ? { ...p, apiKey: keyById.get(p.id) ?? "" } : p))
-        );
+        writeSetting(out, key, JSON.stringify(
+          chain.map((p) => (isMasked(p.apiKey) ? { ...p, apiKey: keyById.get(p.id) ?? "" } : p)),
+        ));
       } catch {
-        out[key] = value;
+        writeSetting(out, key, value);
       }
     } else if (key === "mail_settings") {
       try {
         const ms = JSON.parse(value) as { imapPass?: string; smtpPass?: string };
-        out[key] = JSON.stringify({
+        writeSetting(out, key, JSON.stringify({
           ...ms,
           imapPass: isMasked(ms.imapPass) ? storedMail.imapPass ?? "" : ms.imapPass,
           smtpPass: isMasked(ms.smtpPass) ? storedMail.smtpPass ?? "" : ms.smtpPass,
-        });
+        }));
       } catch {
-        out[key] = value;
+        writeSetting(out, key, value);
       }
     } else {
-      out[key] = value;
+      writeSetting(out, key, value);
     }
   }
   return out;
@@ -46,8 +54,14 @@ function restoreMaskedSecrets(settings: Record<string, string>): Record<string, 
 
 export async function POST(req: NextRequest) {
   try {
-    const raw = (await req.json()) as { app?: string; format?: number; data?: Partial<BackupData> };
-    if (!raw || raw.app !== "huntflow" || typeof raw.data !== "object" || raw.data === null) {
+    const raw = (await req.json()) as { app?: unknown; format?: number; data?: Partial<BackupData> };
+    if (
+      !raw ||
+      typeof raw.app !== "string" ||
+      raw.app !== "huntflow" ||
+      typeof raw.data !== "object" ||
+      raw.data === null
+    ) {
       throw new AppError("Not a HUNTFLOW backup file.", "BAD_BODY", 400);
     }
     const data = raw.data as BackupData;

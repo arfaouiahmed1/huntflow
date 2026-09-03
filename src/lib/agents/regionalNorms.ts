@@ -1,14 +1,27 @@
 export type RegionCode =
   | "US"
+  | "CA"
+  | "UK"
   | "DE"
   | "FR"
-  | "TN"
-  | "UK"
-  | "ES"
-  | "JP"
   | "CH"
   | "NL"
+  | "TN"
+  | "EG"
+  | "AE"
   | "UAE"
+  | "GCC"
+  | "SA"
+  | "AU"
+  | "SG"
+  | "JP"
+  | "IN"
+  | "BR"
+  | "MX"
+  | "NG"
+  | "KE"
+  | "ZA"
+  | "ES"
   | "INTL";
 
 export interface RegionalRules {
@@ -153,9 +166,37 @@ export const REGIONAL_RULES_DATA: Record<RegionCode, RegionalRules> = {
     recommendedTemplate: "nordic-clean",
     letterKind: "cover_letter",
   },
-  UAE: {
-    region: "UAE",
-    name: "UAE & Gulf (GCC)",
+  CA: {
+    region: "CA",
+    name: "Canada (Human Rights Code Compliant)",
+    pageLimit: 2,
+    photoRequired: false,
+    photoAllowed: false,
+    includeDateLocationLine: false,
+    salutationFormat: "Dear Hiring Manager,",
+    closingFormat: "Sincerely,",
+    mandatorySections: ["Professional Summary", "Work Experience", "Education", "Skills"],
+    restrictedFields: ["photo", "age", "marital_status", "nationality", "gender", "religion"],
+    recommendedTemplate: "classic-ats",
+    letterKind: "cover_letter",
+  },
+  EG: {
+    region: "EG",
+    name: "Egypt (Bilingual Arabic / English)",
+    pageLimit: 2,
+    photoRequired: false,
+    photoAllowed: true,
+    includeDateLocationLine: true,
+    salutationFormat: "Dear Hiring Manager / حضرة السيد مدير التوظيف,",
+    closingFormat: "Best regards / مع خالص التقدير,",
+    mandatorySections: ["Summary", "Professional Experience", "Education", "Technical Skills", "Languages"],
+    restrictedFields: [],
+    recommendedTemplate: "modern-professional",
+    letterKind: "cover_letter",
+  },
+  AE: {
+    region: "AE",
+    name: "UAE & Gulf States (GCC)",
     pageLimit: 2,
     photoRequired: false,
     photoAllowed: true,
@@ -165,6 +206,160 @@ export const REGIONAL_RULES_DATA: Record<RegionCode, RegionalRules> = {
     mandatorySections: ["Executive Summary", "Core Competencies", "Work Experience", "Education & Credentials", "Visa & Contact Details"],
     restrictedFields: [],
     recommendedTemplate: "executive",
+    letterKind: "cover_letter",
+  },
+  UAE: {
+    region: "UAE",
+    name: "United Arab Emirates (Legacy Alias → AE)",
+    pageLimit: 2,
+    photoRequired: false,
+    photoAllowed: true,
+    includeDateLocationLine: false,
+    salutationFormat: "Dear Hiring Committee / Manager,",
+    closingFormat: "Warm regards,",
+    mandatorySections: ["Executive Summary", "Core Competencies", "Work Experience", "Education & Credentials", "Visa & Contact Details"],
+    restrictedFields: [],
+    recommendedTemplate: "executive",
+    letterKind: "cover_letter",
+  },
+  GCC: {
+    region: "GCC",
+    name: "Gulf Cooperation Council (Regional Standard)",
+    pageLimit: 2,
+    photoRequired: false,
+    photoAllowed: true,
+    includeDateLocationLine: false,
+    salutationFormat: "Dear Hiring Committee / Manager,",
+    closingFormat: "Warm regards,",
+    mandatorySections: ["Executive Summary", "Core Competencies", "Work Experience", "Education & Credentials", "Visa & Contact Details"],
+    restrictedFields: [],
+    recommendedTemplate: "executive",
+    letterKind: "cover_letter",
+  },
+  SA: {
+    region: "SA",
+    name: "Saudi Arabia (Saudization / Nitaqat Compliant)",
+    pageLimit: 2,
+    photoRequired: false,
+    photoAllowed: true,
+    includeDateLocationLine: false,
+    salutationFormat: "Dear Hiring Committee / حضرة لجنة التوظيف,",
+    closingFormat: "Best regards / وتفضلوا بقبول فائق الاحترام,",
+    mandatorySections: ["Executive Summary", "Core Competencies", "Professional Experience", "Education & Certifications", "Languages", "Iqama / Work Permit Status"],
+    restrictedFields: [],
+    recommendedTemplate: "executive",
+    letterKind: "cover_letter",
+  },
+  AU: {
+    region: "AU",
+    name: "Australia & New Zealand (APS Format)",
+    pageLimit: 3,
+    photoRequired: false,
+    photoAllowed: false,
+    includeDateLocationLine: false,
+    salutationFormat: "Dear Hiring Manager,",
+    closingFormat: "Kind regards,",
+    mandatorySections: ["Career Profile", "Key Achievements", "Professional Experience", "Education", "Referees"],
+    restrictedFields: ["photo", "age", "marital_status"],
+    recommendedTemplate: "modern-professional",
+    letterKind: "cover_letter",
+  },
+  SG: {
+    region: "SG",
+    name: "Singapore & Southeast Asia (TAFEP Compliant)",
+    pageLimit: 2,
+    photoRequired: false,
+    photoAllowed: false,
+    includeDateLocationLine: false,
+    salutationFormat: "Dear Hiring Manager,",
+    closingFormat: "Yours sincerely,",
+    mandatorySections: ["Professional Summary", "Work Experience", "Education", "Skills", "Languages"],
+    restrictedFields: ["photo", "age", "marital_status", "nationality", "gender"],
+    recommendedTemplate: "classic-ats",
+    letterKind: "cover_letter",
+  },
+  IN: {
+    region: "IN",
+    name: "India (Detailed Comprehensive Resume)",
+    pageLimit: 3,
+    photoRequired: false,
+    photoAllowed: true,
+    includeDateLocationLine: false,
+    salutationFormat: "Dear Hiring Manager / Respected Sir or Madam,",
+    closingFormat: "Sincerely,",
+    mandatorySections: ["Career Objective", "Technical Skills", "Professional Experience", "Education (with percentages)", "Certifications", "Personal Details"],
+    restrictedFields: [],
+    recommendedTemplate: "modern-professional",
+    letterKind: "cover_letter",
+  },
+  BR: {
+    region: "BR",
+    name: "Brazil (Currículo ABNT Norms)",
+    pageLimit: 2,
+    photoRequired: false,
+    photoAllowed: true,
+    includeDateLocationLine: true,
+    salutationFormat: "Prezado(a) Responsável pelo Recrutamento,",
+    closingFormat: "Atenciosamente,",
+    mandatorySections: ["Objetivo Profissional", "Experiência Profissional", "Formação Acadêmica", "Competências Técnicas", "Idiomas"],
+    restrictedFields: [],
+    recommendedTemplate: "modern-professional",
+    letterKind: "cover_letter",
+  },
+  MX: {
+    region: "MX",
+    name: "Mexico (Currículum Vitae Estándar)",
+    pageLimit: 2,
+    photoRequired: false,
+    photoAllowed: true,
+    includeDateLocationLine: true,
+    salutationFormat: "Estimado(a) Reclutador(a),",
+    closingFormat: "Atentamente,",
+    mandatorySections: ["Objetivo Profesional", "Experiencia Profesional", "Formación Académica", "Habilidades Técnicas", "Idiomas"],
+    restrictedFields: [],
+    recommendedTemplate: "modern-professional",
+    letterKind: "cover_letter",
+  },
+  NG: {
+    region: "NG",
+    name: "Nigeria (Comprehensive CV Standard)",
+    pageLimit: 3,
+    photoRequired: false,
+    photoAllowed: true,
+    includeDateLocationLine: false,
+    salutationFormat: "Dear Hiring Manager,",
+    closingFormat: "Yours faithfully,",
+    mandatorySections: ["Career Summary", "Professional Experience", "Education (NYSC Status)", "Technical Skills", "Certifications", "Referees"],
+    restrictedFields: [],
+    recommendedTemplate: "classic-ats",
+    letterKind: "cover_letter",
+  },
+  KE: {
+    region: "KE",
+    name: "Kenya & East Africa (Structured CV)",
+    pageLimit: 2,
+    photoRequired: false,
+    photoAllowed: true,
+    includeDateLocationLine: false,
+    salutationFormat: "Dear Hiring Manager,",
+    closingFormat: "Yours sincerely,",
+    mandatorySections: ["Professional Summary", "Work Experience", "Education", "Professional Memberships", "Skills & Competencies", "Referees"],
+    restrictedFields: [],
+    recommendedTemplate: "classic-ats",
+    letterKind: "cover_letter",
+  },
+  ZA: {
+    region: "ZA",
+    name: "South Africa (B-BBEE & EE Compliant)",
+    pageLimit: 2,
+    photoRequired: false,
+    photoAllowed: false,
+    includeDateLocationLine: false,
+    salutationFormat: "Dear Hiring Manager,",
+    closingFormat: "Kind regards,",
+    mandatorySections: ["Profile Summary", "Key Skills & Competencies", "Work Experience", "Education", "Certifications"],
+    restrictedFields: ["photo", "age", "race", "gender"],
+    recommendedTemplate: "modern-professional",
     letterKind: "cover_letter",
   },
   INTL: {
@@ -184,7 +379,8 @@ export const REGIONAL_RULES_DATA: Record<RegionCode, RegionalRules> = {
 };
 
 export function getRegionalRules(region: RegionCode): RegionalRules {
-  return REGIONAL_RULES_DATA[region] || REGIONAL_RULES_DATA.US;
+  if (region === "UAE" || region === "GCC") return REGIONAL_RULES_DATA["AE"];
+  return REGIONAL_RULES_DATA[region as RegionCode] || REGIONAL_RULES_DATA.US;
 }
 
 export interface ComplianceCheckResult {

@@ -39,6 +39,7 @@ describe("template registry", () => {
       "executive",
       "tabular-german",
       "modern-french",
+      "mena-cv",
       "nordic-clean",
       "creative-sidebar",
       "academic-cv",
@@ -55,8 +56,8 @@ describe("template registry", () => {
       "letter-modern",
       "letter-minimal",
     ]);
-    expect(templateMeta("classic-ats")?.atsScore).toBe(100);
-    expect(templatesForKind("resume").length).toBe(10);
+    expect(templateMeta("classic-ats")?.atsScore).toBe(98);
+    expect(templatesForKind("resume").length).toBe(11);
     expect(templatesForKind("cover_letter").map((t) => t.id)).toEqual([
       "letter-cover",
       "letter-modern",

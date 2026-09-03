@@ -2,6 +2,9 @@
   "name": "job-finder-app",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
     "predev": "node scripts/predev.mjs",
     "dev": "concurrently -n \"next,scrapling\" -c \"green,magenta\" \"next dev\" \"cd scrapling-agent && uv run uvicorn server:app --port 8001\"",
@@ -10,7 +13,21 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "check": "npm run lint && npx tsc --noEmit",
+    "test": "vitest run",
+    "test:crawler": "vitest run src/lib/__tests__/crawlerCatalog.validation.test.ts src/lib/__tests__/crawlerDb.test.ts src/lib/__tests__/crawlerDedupScale.test.ts src/lib/__tests__/crawlerNormalizer.test.ts src/lib/__tests__/crawlerRanking.test.ts src/lib/__tests__/sourceTaxonomy.test.ts src/lib/__tests__/directAts.test.ts",
+    "test:sidecar": "cd scrapling-agent && uv run pytest",
+    "test:agents": "vitest run src/agents/__tests__ src/lib/agents/__tests__ src/lib/__tests__/agent*.test.ts src/lib/__tests__/crawlerCatalog.validation.test.ts",
+    "sources:validate": "node -e \"const fs=require('fs'); const s=JSON.parse(fs.readFileSync('scrapling-agent/sources.json','utf-8')); if(s.schemaVersion!==2||!Array.isArray(s.sources)) process.exit(1); console.log('✓ sources.json v2 valid ('+s.sources.length+' sources)');\"",
+    "sources:sync": "cd scrapling-agent && uv run python -c \"import server; print(server.crawl_sources())\"",
+    "enrichment:sync": "node scripts/sync-enrichment-catalog.mjs",
+    "check:env": "node scripts/check-env-examples.mjs",
+    "doctor": "node scripts/repo-doctor.mjs",
+    "clean:local": "node scripts/clean-local.mjs",
+    "eval:agents:benchmark": "node scripts/eval-agents-benchmark.mjs",
+    "generate:dashboard": "node scripts/generate-plotly-visualizations.mjs",
+    "eval:agents:live": "node scripts/run-live-agent-canary.mjs",
+    "quality:react-doctor": "react-doctor --no-telemetry"
   },
   "dependencies": {
     "@langchain/langgraph": "^1.4.8",
@@ -24,12 +41,13 @@
     "imapflow": "^1.6.5",
     "lucide-react": "^1.28.0",
     "mammoth": "^1.12.0",
-    "next": "16.2.12",
+    "next": "^16.3.1",
     "nodemailer": "^9.0.3",
     "pdf-parse": "^2.4.5",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -39,8 +57,11 @@
     "@types/react-dom": "^19",
     "concurrently": "^8.2.2",
     "eslint": "^9",
-    "eslint-config-next": "16.2.12",
+    "eslint-config-next": "^16.3.1",
     "playwright": "^1.62.1",
+    "react-doctor": "^0.9.12",
+    "react-grab": "^0.2.0",
+    "react-scan": "^0.5.7",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite-tsconfig-paths": "^6.1.1",

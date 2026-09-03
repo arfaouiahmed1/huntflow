@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useCallback, useState } from "react";
+import React, { createContext, useContext, useCallback, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, AlertTriangle, Info, XCircle, X, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -56,8 +56,6 @@ export function ToasterProvider({ children }: { children: React.ReactNode }) {
       rawPalette.violet,
       rawPalette.coral,
     ];
-    // Lazy-load the confetti lib only when a celebration actually fires,
-    // keeping it out of the initial bundle.
     void import("canvas-confetti").then(({ default: confetti }) => {
       confetti({ particleCount: 90, spread: 75, origin: { y: 0.7 }, colors });
       setTimeout(() => {
@@ -67,19 +65,36 @@ export function ToasterProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const api: ToastContextType = {
-    toast,
-    success: (m) => toast("success", m),
-    error: (m) => toast("error", m),
-    info: (m) => toast("info", m),
-    warn: (m) => toast("warning", m),
-    celebrate,
-  };
+  const api: ToastContextType = useMemo(
+    () => ({
+      toast,
+      success: (m) => toast("success", m),
+      error: (m) => toast("error", m),
+      info: (m) => toast("info", m),
+      warn: (m) => toast("warning", m),
+      celebrate,
+    }),
+    [toast, celebrate]
+  );
 
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div className="pointer-events-none fixed right-4 top-4 z-[200] flex w-80 flex-col gap-2">
+      <div
+        aria-live="polite"
+        aria-atomic="false"
+        className={cn(
+          "pointer-events-none fixed z-[100] flex flex-col gap-2",
+          // Safe-area-aware viewport: avoids sidebar footer (left 236px) and browser chrome
+          "bottom-[calc(1rem+env(safe-area-inset-bottom))] right-[calc(1rem+env(safe-area-inset-right))]",
+          "left-auto w-[min(20rem,calc(100vw-2rem-env(safe-area-inset-left)-env(safe-area-inset-right)))]",
+          "max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto",
+          // Mobile: full width inset with safe-area
+          "max-sm:left-[max(1rem,env(safe-area-inset-left))] max-sm:right-[max(1rem,env(safe-area-inset-right))] max-sm:w-auto",
+          // At 375px single column is inherent (flex-col); ensure no overflow
+          "min-[375px]:w-[min(20rem,calc(100vw-2rem-env(safe-area-inset-left)-env(safe-area-inset-right)))]"
+        )}
+      >
         <AnimatePresence>
           {toasts.map((t) => {
             const c = icons[t.kind];
@@ -93,8 +108,12 @@ export function ToasterProvider({ children }: { children: React.ReactNode }) {
                 className="glass pointer-events-auto flex items-start gap-3 rounded-xl p-3.5 shadow-2xl"
               >
                 <c.icon className={cn("mt-0.5 h-4.5 w-4.5 shrink-0", c.color)} />
-                <p className="flex-1 text-xs leading-relaxed text-[var(--paper)]">{t.message}</p>
-                <button onClick={() => remove(t.id)} className="text-dim transition-colors hover:text-[var(--paper)]">
+                <p className="flex-1 text-xs leading-relaxed text-[var(--paper)] break-words">{t.message}</p>
+                <button
+                  onClick={() => remove(t.id)}
+                  className="text-dim transition-colors hover:text-[var(--paper)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chartreuse)]/60 rounded"
+                  aria-label="Dismiss"
+                >
                   <X className="h-3.5 w-3.5" />
                 </button>
               </motion.div>
@@ -106,8 +125,16 @@ export function ToasterProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export const useToast = () => {
+const noop = () => {};
+const fallbackToast: ToastContextType = {
+  toast: noop,
+  success: noop,
+  error: noop,
+  info: noop,
+  warn: noop,
+  celebrate: noop,
+};
+export const useToast = (): ToastContextType => {
   const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error("useToast must be used within ToasterProvider");
-  return ctx;
+  return ctx ?? fallbackToast;
 };

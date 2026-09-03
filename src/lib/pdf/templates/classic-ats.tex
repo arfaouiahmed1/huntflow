@@ -2,7 +2,8 @@
 % classic-ats — single-column, ATS-safe resume/CV
 % Adapted from sb2nov/resume (https://github.com/sb2nov/resume) — MIT License.
 % ATS notes: one column, standard section headers, no tables/images for
-% content, Helvetica (parseable everywhere), dates inline via \hfill.
+% content, Latin Modern Roman (native LaTeX typography), dates inline via
+% \hfill.
 % Modernized: refined ink/muted palette, accent rule under each section title,
 % tighter header with a colored title line. Placeholders are substituted by
 % the resume renderer.
@@ -12,8 +13,7 @@
 \usepackage[T1]{fontenc}
 \usepackage{geometry}
 \geometry{letterpaper, margin=0.55in, top=0.5in, bottom=0.5in}
-\usepackage{helvet}
-\renewcommand{\familydefault}{\sfdefault}
+\usepackage{lmodern}
 \usepackage{enumitem}
 \setlist{nosep, leftmargin=1.25em, topsep=0.15em}
 \usepackage{xcolor}

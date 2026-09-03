@@ -17,6 +17,7 @@ export interface SelectOption<T extends string = string> {
   hint?: string;
   /** Render a colored dot ahead of the label (like StatusSelect). */
   dot?: string;
+  disabled?: boolean;
 }
 
 export default function Select<T extends string = string>({
@@ -105,12 +106,16 @@ export default function Select<T extends string = string>({
                 type="button"
                 role="option"
                 aria-selected={activeOpt}
+                aria-disabled={o.disabled}
+                disabled={o.disabled}
                 onClick={() => {
+                  if (o.disabled) return;
                   onChange(o.value);
                   setOpen(false);
                 }}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors hover:bg-white/[0.05]",
+                  "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
+                  o.disabled ? "cursor-not-allowed opacity-40" : "hover:bg-white/[0.05]",
                   activeOpt ? "text-[var(--paper)]" : "text-dim hover:text-[var(--paper)]"
                 )}
               >

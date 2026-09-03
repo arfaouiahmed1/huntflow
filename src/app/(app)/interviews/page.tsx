@@ -16,15 +16,18 @@ import {
   Trash2,
   Trophy,
   Pencil,
+  Mic,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { InterviewEvent } from "@/types";
 import { Button } from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import Select from "@/components/ui/Select";
+import DateTimeField from "@/components/ui/DateTimeField";
 import { useToast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/utils";
 import { palette } from "@/lib/theme";
+import VoiceStarSimulator from "@/components/interviews/VoiceStarSimulator";
 
 const TYPE_META: Record<InterviewEvent["type"], { label: string; icon: typeof Video; color: string }> = {
   phone: { label: "Phone", icon: Phone, color: "var(--sky)" },
@@ -64,6 +67,7 @@ export default function InterviewsPage() {
   const [reviewing, setReviewing] = useState<InterviewEvent | null>(null);
   const [reviewRating, setReviewRating] = useState(4);
   const [reviewText, setReviewText] = useState("");
+  const [simOpen, setSimOpen] = useState(false);
   const [form, setForm] = useState({
     jobId: "",
     title: "",
@@ -74,7 +78,6 @@ export default function InterviewsPage() {
     notes: "",
     prep: [] as string[],
   });
-
   const jobFor = (id?: string) => applications.find((j) => j.id === id);
 
   const sorted = useMemo(() => {
@@ -180,11 +183,15 @@ export default function InterviewsPage() {
           <h1 className="font-display text-2xl font-bold tracking-tight text-[var(--paper)]">Interview Command</h1>
           <p className="mt-1 text-sm text-dim">Every conversation scheduled, prepped, and reviewed.</p>
         </div>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4" /> Schedule interview
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => setSimOpen(true)} className="gap-1.5 border-[var(--violet)]/40 bg-[var(--violet)]/10 text-[var(--violet)] hover:bg-[var(--violet)]/20">
+            <Mic className="h-4 w-4" /> Live Voice STAR Practice
+          </Button>
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4" /> Schedule interview
+          </Button>
+        </div>
       </div>
-
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
         {[
@@ -344,11 +351,11 @@ export default function InterviewsPage() {
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.15em] text-dim">When</span>
-                  <input
-                    type="datetime-local"
+                  <DateTimeField
                     value={form.scheduledAt}
-                    onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })}
-                    className="w-full rounded-lg border border-[var(--line)] bg-white/[0.03] px-3 py-2 text-sm text-[var(--paper)] focus:border-[var(--chartreuse)]/50 focus:outline-none"
+                    onChange={(v) => setForm({ ...form, scheduledAt: v })}
+                    placeholder="Pick date & time…"
+                    className="w-full"
                   />
                 </label>
                 <label className="block">
@@ -442,8 +449,35 @@ export default function InterviewsPage() {
               Cancel
             </Button>
             <Button onClick={saveReview}>Save review</Button>
-          </div>
+        </div>
       </Modal>
+
+      {/* Live Voice STAR Practice Modal */}
+      {simOpen && (
+        <Modal open={simOpen} onClose={() => setSimOpen(false)} title="Live Voice STAR Practice Simulator" wide>
+          <VoiceStarSimulator
+            question={{
+              id: "sim_q1",
+              tier: "hiring_manager",
+              topic: "Distributed Systems & Latency Optimization",
+              question: "Describe a complex production or scaling challenge you solved in your past systems, and how you verified performance.",
+              starGuidance: {
+                situation: "Set context on high-throughput or latency-sensitive architecture.",
+                task: "Define your technical responsibility and service constraints.",
+                action: "Explain concrete indexing, caching, and algorithmic changes you made.",
+                result: "End with quantifiable business metrics (e.g. 45% p99 latency drop).",
+              },
+              followUpProbes: [
+                "What were the trade-offs of using caching over database replicas?",
+                "How did you monitor cache hit ratios and eviction rates in production?",
+              ],
+            }}
+            onComplete={(res) => {
+              success(`Practice session complete — scored ${res.score}/100!`);
+            }}
+          />
+        </Modal>
+      )}
     </div>
   );
 }

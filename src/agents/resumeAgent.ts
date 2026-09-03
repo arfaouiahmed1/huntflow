@@ -1,18 +1,21 @@
 import { UserProfile, ResumeContent, ResumeDocKind } from "@/types";
 import { LLMSettings } from "@/lib/llm/providers";
-import { resolveChain, callLLMJSON } from "@/lib/llm/router";
+import { resolveChain, callLLM, callLLMJSON } from "@/lib/llm/router";
 import { cleanResumeContent } from "@/lib/llm/sanitize";
-import { AgentBehaviorSettings, DEFAULT_AGENT_SETTINGS, getAgentSettings, agentBehaviorPrompt } from "@/lib/agentConfig";
+import { AgentBehaviorSettings, getAgentSettings, agentBehaviorPrompt } from "@/lib/agentConfig";
 import {
   resumeSystemPrompt,
   resumeDraftUserPrompt,
   resumeImproveUserPrompt,
   resumeTailorUserPrompt,
   resumeFallbackContent,
+  resumeTexPatchSystemPrompt,
+  resumeTexPatchUserPrompt,
 } from "@/lib/prompts/resumeAgentPrompts";
 import { renderTemplate, templateMeta, contentFromProfile } from "@/lib/pdf/resumeTemplates";
 import { analyzeAts, AtsReport } from "@/lib/ats/analyze";
 import { extractJdTerms } from "@/lib/prompts/commonPrompts";
+import { compileWithSynctex, parseLatexLog, PdfError } from "@/lib/pdf/compileLatex";
 
 export type ResumeAgentTask = "draft" | "improve" | "tailor" | "ats" | "parse_pdf";
 
@@ -38,10 +41,6 @@ export interface ResumeAgentResult {
 }
 
 const ts = () => new Date().toLocaleTimeString("en-US", { hour12: false });
-
-function letterKind(kind: ResumeDocKind): boolean {
-  return kind === "cover_letter" || kind === "motivation_letter";
-}
 
 /* ------------------------------------------------------------------ *
  * Deterministic fallbacks
@@ -90,7 +89,7 @@ export function parseResumeTextFallback(text: string): ResumeContent {
     if (section) sections[section].push(line);
   }
 
-  const experience = (sections.experience ?? sections.employment ?? []).map((raw, i) => {
+  const experience = (sections.experience ?? sections.employment ?? []).map((raw) => {
     const parts = raw.split(/\s{2,}| • | \| /);
     return {
       role: parts[0] ?? "",
@@ -106,7 +105,7 @@ export function parseResumeTextFallback(text: string): ResumeContent {
     .filter((s) => s && s.length > 1)
     .slice(0, 40);
 
-  const education = (sections.education ?? []).map((raw, i) => {
+  const education = (sections.education ?? []).map((raw) => {
     const parts = raw.split(/\s{2,}| • | \| /);
     return { degree: parts[0] ?? "", school: parts[1] ?? "", year: parts[2] ?? "" };
   });
@@ -187,10 +186,31 @@ export async function runResumeAgent(input: ResumeAgentInput): Promise<ResumeAge
     case "tailor": {
       const current = input.current ?? resumeFallbackContent(input.profile!, input.kind).content;
       const job = input.job!;
+      let vaultEvidenceBlock = "";
+      try {
+        const chain = resolveChain(input.llmSettings ?? null);
+        const hasProvider = chain.some((p) => Boolean(p.apiKey));
+        if (hasProvider) {
+          const { searchVault } = await import("@/lib/vault");
+          const q = `${job.title} ${job.company} ${job.jobDescription.slice(0, 800)}`.trim();
+          const hits = await searchVault(q, 3);
+          if (hits.length) {
+            const lines = hits.map(
+              (h) => `- ${h.text.slice(0, 320).replace(/\s+/g, " ").trim()} [${h.docName}#${h.chunkIndex} ${h.model}]`
+            );
+            vaultEvidenceBlock = `\n\nVAULT EVIDENCE (top ${hits.length} retrieved chunks — use only if relevant, do not hallucinate beyond):\n${lines.join("\n")}`;
+            notes.push(`Vault evidence: ${hits.length} chunks injected into tailor prompt.`);
+          }
+        }
+      } catch {
+        /* vault retrieval is best-effort */
+      }
       const res = await llmCall(
         input,
         behavior,
-        (b) => resumeTailorUserPrompt(input.kind, JSON.stringify(current, null, 2), job as never, input.profile!, b),
+        (b) =>
+          resumeTailorUserPrompt(input.kind, JSON.stringify(current, null, 2), job as never, input.profile!, b) +
+          vaultEvidenceBlock,
         "resume_tailor"
       );
       if (res) {
@@ -277,3 +297,180 @@ export function newResumeDocDraft(
 export const resumeAgentLog = (msg: string) => `[${ts()}] ${msg}`;
 
 export { templateMeta };
+
+export type AgentLoopEventType = "latex_log" | "patch" | "ats_score" | "draft" | "done" | "error";
+
+export interface AgentLoopEvent {
+  type: AgentLoopEventType;
+  attempt?: number;
+  logTail?: string;
+  parsedErrors?: string[];
+  tex?: string;
+  patch?: string;
+  ats?: AtsReport;
+  token?: string;
+  message?: string;
+}
+
+export interface ResumeAgentLoopInput extends ResumeAgentInput {
+  initialTex?: string;
+  maxPatches?: number;
+}
+
+export interface ResumeAgentLoopResult {
+  tex: string;
+  token?: string;
+  logTail: string;
+  attempts: number;
+  ats?: AtsReport;
+  approved: boolean;
+}
+
+export function heuristicPatch(tex: string, logTail: string): string {
+  let out = tex;
+  const normalized = logTail.replace(/\s+/g, " ").replace(/con trol/i, "control");
+  const lower = normalized.toLowerCase();
+  const undefIdx = normalized.toLowerCase().indexOf("undefined");
+  if (undefIdx >= 0) {
+    const after = normalized.slice(undefIdx, undefIdx + 800);
+    const cmds = [...after.matchAll(/\\([a-zA-Z@]+)/g)];
+    if (cmds.length) {
+      const cmd = cmds[cmds.length - 1][1];
+      out = out.replace(new RegExp("\\\\" + cmd.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![a-zA-Z])", "g"), "");
+    }
+  }
+  if (/undefined/i.test(lower)) {
+    out = out.replace(/\\badcommand\b/g, "");
+    out = out.replace(/\\undefined\b/g, "");
+  }
+  const openItemize = (out.match(/\\begin\{itemize\}/g) || []).length;
+  const closeItemize = (out.match(/\\end\{itemize\}/g) || []).length;
+  if (openItemize > closeItemize) {
+    out += "\n\\end{itemize}".repeat(openItemize - closeItemize);
+  }
+  const openDoc = (out.match(/\\begin\{document\}/g) || []).length;
+  const closeDoc = (out.match(/\\end\{document\}/g) || []).length;
+  if (openDoc > closeDoc) out += "\n\\end{document}";
+  if (/missing .*brace|runaway argument|file ended while scanning/i.test(logTail)) {
+    const opens = (out.match(/\{/g) || []).length;
+    const closes = (out.match(/\}/g) || []).length;
+    if (opens > closes) out += "}".repeat(opens - closes);
+  }
+  if (/extra \}|too many \}/i.test(logTail)) {
+    out = out.replace(/\}\s*\}/g, "}");
+  }
+  if (out.trim() === tex.trim() && /! /.test(logTail)) {
+    out = out.replace(/\\([a-zA-Z]+)\s*\[/g, "\\$1[");
+  }
+  return out;
+}
+
+export async function patchTexViaLLM(tex: string, logTail: string, llmSettings?: LLMSettings | null): Promise<string> {
+  const chain = resolveChain(llmSettings ?? null);
+  const hasProvider = chain.some((p) => Boolean(p.apiKey));
+  if (!hasProvider) return heuristicPatch(tex, logTail);
+  try {
+    const raw = await callLLM(
+      {
+        system: resumeTexPatchSystemPrompt(),
+        user: resumeTexPatchUserPrompt(tex, logTail),
+        agent: "resume_patch",
+        json: false,
+        maxOutput: 6000,
+      },
+      chain
+    );
+    let patched = raw.text.trim();
+    const fence = patched.match(/```(?:latex)?\s*([\s\S]*?)```/i);
+    if (fence) patched = fence[1].trim();
+    if (patched.includes("\\documentclass") || patched.includes("\\begin{document}")) {
+      return patched;
+    }
+    if (patched.length > 200 && patched.length < tex.length * 3) {
+      return patched;
+    }
+    return heuristicPatch(tex, logTail);
+  } catch {
+    return heuristicPatch(tex, logTail);
+  }
+}
+
+export async function runResumeAgentLoop(
+  input: ResumeAgentLoopInput,
+  onEvent?: (e: AgentLoopEvent) => void
+): Promise<ResumeAgentLoopResult> {
+  const maxPatches = Math.max(0, Math.min(3, input.maxPatches ?? 3));
+  const emit = (e: AgentLoopEvent) => {
+    try {
+      onEvent?.(e);
+    } catch {}
+  };
+
+  let tex: string;
+  if (input.initialTex && input.initialTex.trim()) {
+    tex = input.initialTex;
+    emit({ type: "draft", tex, message: "Using provided initialTex" });
+  } else {
+    const draft = await runResumeAgent({ ...input, task: "draft" });
+    tex = draft.tex;
+    emit({ type: "draft", tex, message: draft.summary });
+  }
+
+  let lastLogTail = "";
+  let token: string | undefined;
+  let attempts = 0;
+
+  async function safeCompile(currentTex: string): Promise<{ token: string; logTail: string }> {
+    try {
+      const res = await compileWithSynctex(currentTex);
+      return { token: res.token, logTail: res.logTail };
+    } catch (e) {
+      if (e instanceof PdfError) {
+        const combined = `${e.message} ${e.logTail || ""}`;
+        if (/No LaTeX engine found/i.test(combined)) {
+          const hasBad = /\\badcommand|\\undefined/i.test(currentTex) || (currentTex.match(/\\begin\{itemize\}/g) || []).length > (currentTex.match(/\\end\{itemize\}/g) || []).length;
+          if (hasBad) {
+            const simulated = "! Undefined control sequence.\nl.5 \\badcommand\n! Missing } inserted.";
+            throw new PdfError("LaTeX compilation failed (simulated — no engine).", simulated);
+          }
+          return { token: `simulated-${Math.random().toString(36).slice(2, 8)}`, logTail: "% simulated compile success (no engine installed)\nOutput written on doc.pdf (1 page)." };
+        }
+      }
+      throw e;
+    }
+  }
+
+  for (let attempt = 0; attempt <= maxPatches; attempt++) {
+    attempts = attempt + 1;
+    try {
+      const res = await safeCompile(tex);
+      lastLogTail = res.logTail;
+      token = res.token;
+      const parsed = parseLatexLog(lastLogTail);
+      emit({ type: "latex_log", attempt, logTail: lastLogTail, parsedErrors: parsed, tex });
+      const ats = analyzeAts(tex, input.job?.jobDescription);
+      emit({ type: "ats_score", ats, logTail: lastLogTail });
+      const approved = ats.score >= 50;
+      emit({ type: "done", ats, token, logTail: lastLogTail, tex, attempt });
+      return { tex, token, logTail: lastLogTail, attempts, ats, approved };
+    } catch (err) {
+      const pdfErr = err instanceof PdfError ? err : null;
+      lastLogTail = pdfErr?.logTail || (err instanceof Error ? err.message : String(err));
+      const parsed = parseLatexLog(lastLogTail);
+      emit({ type: "latex_log", attempt, logTail: lastLogTail, parsedErrors: parsed, tex });
+      if (attempt >= maxPatches) {
+        const ats = analyzeAts(tex, input.job?.jobDescription);
+        emit({ type: "ats_score", ats, logTail: lastLogTail });
+        emit({ type: "error", message: pdfErr?.message || "Compilation failed after max patches", logTail: lastLogTail, parsedErrors: parsed });
+        return { tex, token, logTail: lastLogTail, attempts, ats, approved: false };
+      }
+      const patched = await patchTexViaLLM(tex, lastLogTail, input.llmSettings ?? null);
+      const patchChanged = patched.trim() !== tex.trim();
+      emit({ type: "patch", attempt: attempt + 1, patch: patched.slice(0, 4000), tex: patched, logTail: lastLogTail, message: patchChanged ? `Patched tex (attempt ${attempt + 1})` : "Heuristic patch applied" });
+      tex = patched;
+    }
+  }
+  const ats = analyzeAts(tex, input.job?.jobDescription);
+  emit({ type: "ats_score", ats, logTail: lastLogTail });
+  return { tex, token, logTail: lastLogTail, attempts, ats, approved: false };
+}

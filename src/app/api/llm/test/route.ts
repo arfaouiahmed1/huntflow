@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { routeError } from "@/lib/errors";
 import { resolveChain, callLLM, loadChainFromDb } from "@/lib/llm/router";
-import { toLLMProvider } from "@/lib/llm/providers";
+import { toLLMProvider, getProvider } from "@/lib/llm/providers";
 import { isMasked } from "@/lib/masking";
 
 export async function POST(req: NextRequest) {
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
       }
       const target = apiKey
         ? toLLMProvider({
-            providerId: requestedId,
+            providerId: body.provider?.providerId || requestedId,
             apiKey,
             model: body.model || body.provider?.model || "",
             baseURL: body.provider?.baseURL,
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       if (!target) {
         return Response.json({ error: "Provider not configured." }, { status: 400 });
       }
-      if (!target.apiKey) {
+      if (!target.apiKey && getProvider(target.providerId || target.id).needsKey) {
         return Response.json({ error: "This provider has no API key yet." }, { status: 400 });
       }
       chain = [{ ...target, model: body.model || body.provider?.model || target.model }];

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { palette } from "@/lib/theme";
+import { agentScreenshotUrl } from "@/lib/agentScreenshot";
 
 type EventKind = "info" | "success" | "warning" | "error" | "shot" | "reasoning";
 
@@ -29,7 +30,7 @@ interface ActivityEvent {
   ts: string;
   kind: EventKind;
   message: string;
-  data?: { screenshot?: string; cloudinary?: string };
+  data?: { screenshot?: string; cloudinary?: string; action?: string; target?: string };
 }
 
 interface RunSummary {
@@ -48,6 +49,8 @@ interface RunSummary {
 interface ActivityPayload {
   online: boolean;
   active: RunSummary | null;
+  active_runs?: RunSummary[];
+  concurrency?: number;
   events: ActivityEvent[];
   runs: RunSummary[];
 }
@@ -60,8 +63,6 @@ const KIND_STYLE: Record<EventKind, { color: string; icon: typeof Terminal }> = 
   error: { color: "var(--coral)", icon: XCircle },
   shot: { color: "var(--sky)", icon: Camera },
 };
-
-const AGENT_IMG = process.env.NEXT_PUBLIC_SCRAPLING_AGENT_URL || "http://127.0.0.1:8001";
 
 function elapsed(active: RunSummary): string {
   if (!active?.started_ts) return "0s";
@@ -81,16 +82,23 @@ function Elapsed({ run }: { run: RunSummary }) {
   return <>{elapsed(run)}</>;
 }
 
-export default function AgentLiveConsole() {
+export default function AgentLiveConsole({
+  title = "Live agent activity",
+}: {
+  title?: string;
+}) {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [active, setActive] = useState<RunSummary | null>(null);
+  const [activeRuns, setActiveRuns] = useState<RunSummary[]>([]);
   const [online, setOnline] = useState<boolean | null>(null);
   const [filter, setFilter] = useState<EventKind | "all">("all");
+  const [selectedRun, setSelectedRun] = useState<string | "all">("all");
   const [autoScroll, setAutoScroll] = useState(true);
   const lastId = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,9 +122,14 @@ export default function AgentLiveConsole() {
             return [...prev, ...fresh].slice(-400);
           });
         }
-        if (data.active) setActive(data.active);
+        if (data.active_runs) {
+          setActiveRuns(data.active_runs);
+        }
+        setActive(data.active ?? null);
         if (data.runs) setRuns(data.runs);
-      } catch {
+      } catch (_err) {
+        // Poll failure → offline pill is the user-facing signal; toast per 1.5s poll would spam.
+        void _err;
         if (!cancelled) setOnline(false);
       }
     };
@@ -145,13 +158,17 @@ export default function AgentLiveConsole() {
     setAutoScroll(nearBottom);
   }, []);
 
-  const shown = filter === "all" ? events : events.filter((e) => e.kind === filter);
-  const screenshots = events
+  const runEvents = selectedRun === "all" ? events : events.filter((e) => e.run_id === selectedRun);
+  const shown = filter === "all" ? runEvents : runEvents.filter((e) => e.kind === filter);
+  const screenshots = runEvents
     .filter((e) => e.kind === "shot" && (e.data?.screenshot || e.data?.cloudinary))
     .map((e) => ({
       id: e.id,
       cloudinary: e.data?.cloudinary,
       screenshot: e.data?.screenshot,
+      run_id: e.run_id,
+      ts: e.ts,
+      message: e.message,
     }));
 
   // Follow the newest shot so the user watches the agent live.
@@ -163,22 +180,24 @@ export default function AgentLiveConsole() {
 
   const kinds: (EventKind | "all")[] = ["all", "info", "reasoning", "success", "warning", "error", "shot"];
   const kindCount = (k: EventKind | "all") =>
-    k === "all" ? events.length : events.filter((e) => e.kind === k).length;
+    k === "all" ? runEvents.length : runEvents.filter((e) => e.kind === k).length;
 
   return (
     <div className="space-y-4">
       {/* Live header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-dim">
-          <Radio className={cn("h-4 w-4", active ? "animate-pulse text-[var(--chartreuse)]" : "text-dim")} />
-          Live agent feed
-          {active && (
-            <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10 px-2 py-0.5 text-[9px] font-bold text-[var(--chartreuse)]">
+        <div className="flex items-center gap-2">
+          <p className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-dim">
+            <Radio className={cn("h-4 w-4", activeRuns.length > 0 ? "animate-pulse text-[var(--chartreuse)]" : "text-dim")} />
+            {title}
+          </p>
+          {activeRuns.length > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10 px-2 py-0.5 text-[9px] font-bold text-[var(--chartreuse)]">
               <span className="h-1.5 w-1.5 animate-ping rounded-full bg-[var(--chartreuse)]" />
-              RUNNING
+              {activeRuns.length} ACTIVE WORKER{activeRuns.length > 1 ? "S" : ""}
             </span>
           )}
-        </p>
+        </div>
         <span
           className={cn(
             "font-mono text-[10px] font-bold",
@@ -189,24 +208,33 @@ export default function AgentLiveConsole() {
         </span>
       </div>
 
-      {/* Active run banner */}
+      {/* Active multi-run banner */}
       <AnimatePresence>
-        {active && (
+        {activeRuns.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
-            className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-[var(--chartreuse)]/25 bg-[var(--chartreuse)]/5 px-4 py-3"
+            className="grid gap-2 sm:grid-cols-2"
           >
-            <span className="flex items-center gap-2 text-xs font-bold text-[var(--paper)]">
-              <CircleDot className="h-4 w-4 animate-pulse text-[var(--chartreuse)]" />
-              {active.label || active.kind}
-            </span>
-            <span className="max-w-[320px] truncate font-mono text-[10px] text-dim">{active.url}</span>
-            <span className="ml-auto flex items-center gap-3 font-mono text-[10px]">
-              <span className="text-[var(--chartreuse)]">⏱ <Elapsed run={active} /></span>
-              <span className="text-dim">{active.events} events</span>
-            </span>
+            {activeRuns.map((r, i) => (
+              <div
+                key={r.run_id || i}
+                className="flex items-center gap-2.5 rounded-xl border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/5 px-3 py-2.5"
+              >
+                <CircleDot className="h-3.5 w-3.5 animate-pulse text-[var(--chartreuse)] shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-bold text-[var(--paper)]">
+                    {r.label || r.kind}
+                  </p>
+                  <p className="truncate font-mono text-[10px] text-dim">{r.url}</p>
+                </div>
+                <div className="text-right font-mono text-[10px] shrink-0">
+                  <span className="text-[var(--chartreuse)]">⏱ <Elapsed run={r} /></span>
+                  <span className="block text-dim">{r.events} events</span>
+                </div>
+              </div>
+            ))}
           </motion.div>
         )}
       </AnimatePresence>
@@ -252,7 +280,7 @@ export default function AgentLiveConsole() {
             <p className="py-8 text-center text-[11px] text-dim/70">
               {online === false
                 ? "Agent offline — start it with:  uv run uvicorn server:app --port 8001"
-                : "No activity yet. Dispatch a run from the command center below…"}
+                : "No activity yet. Start a crawl or supervised browser run to populate this feed."}
             </p>
           ) : shown.length === 0 ? (
             <p className="py-8 text-center text-[11px] text-dim/70">No {filter} events logged.</p>
@@ -281,6 +309,52 @@ export default function AgentLiveConsole() {
         </div>
       </div>
 
+      {/* Lightbox Modal */}
+      <AnimatePresence>
+        {lightboxSrc && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setLightboxSrc(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-h-[90vh] max-w-5xl overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink-card)] p-2 shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-2 text-xs">
+                <span className="flex items-center gap-2 font-mono font-bold text-[var(--sky)]">
+                  <Camera className="h-4 w-4" /> Live Browser Snapshot
+                  {lightboxSrc.includes("cloudinary") && (
+                    <span className="rounded bg-[var(--chartreuse)]/20 px-1.5 py-0.5 text-[9px] text-[var(--chartreuse)]">
+                      Cloudinary CDN
+                    </span>
+                  )}
+                </span>
+                <button
+                  onClick={() => setLightboxSrc(null)}
+                  className="rounded-lg p-1 text-dim hover:bg-white/10 hover:text-[var(--paper)]"
+                >
+                  <XCircle className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="overflow-auto p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={lightboxSrc}
+                  alt="Full Browser Snapshot"
+                  className="max-h-[75vh] w-auto rounded-xl object-contain"
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Screenshot strip */}
       {screenshots.length > 0 && (
         <div>
@@ -289,15 +363,15 @@ export default function AgentLiveConsole() {
           </p>
           <div ref={stripRef} className="flex gap-3 overflow-x-auto pb-2">
             {screenshots.slice(-8).map((shot) => {
-              const src = shot.cloudinary || `${AGENT_IMG}/screenshots/${shot.screenshot}`;
+              const src = agentScreenshotUrl(shot.screenshot, shot.cloudinary);
+              if (!src) return null;
               return (
-                <a
+                <div
                   key={shot.id}
-                  href={src}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="group relative shrink-0 overflow-hidden rounded-xl border border-[var(--line)] transition-transform hover:scale-[1.02]"
+                  onClick={() => setLightboxSrc(src)}
+                  className="group relative shrink-0 cursor-pointer overflow-hidden rounded-xl border border-[var(--line)] transition-transform hover:scale-[1.02]"
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={src}
                     alt="Agent browser snapshot"
@@ -305,14 +379,14 @@ export default function AgentLiveConsole() {
                     className="h-28 w-44 object-cover"
                   />
                   {shot.cloudinary && (
-                    <span className="absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase tracking-wider text-white/80">
-                      live
+                    <span className="absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase tracking-wider text-[var(--chartreuse)]">
+                      Cloudinary
                     </span>
                   )}
                   <span className="absolute right-1.5 top-1.5 rounded-md bg-black/60 p-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <ArrowUpRight className="h-3.5 w-3.5 text-white" />
                   </span>
-                </a>
+                </div>
               );
             })}
           </div>
@@ -322,12 +396,30 @@ export default function AgentLiveConsole() {
       {/* Run history */}
       {runs.length > 0 && (
         <div className="overflow-hidden rounded-2xl border border-[var(--line)]">
-          <p className="border-b border-[var(--line)] bg-white/[0.02] px-4 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-dim">
-            Run history
-          </p>
+          <div className="flex items-center justify-between border-b border-[var(--line)] bg-white/[0.02] px-4 py-2.5">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-dim">Run history</p>
+            <button
+              onClick={() => setSelectedRun("all")}
+              className={cn(
+                "rounded-md border px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-wider",
+                selectedRun === "all"
+                  ? "border-[var(--sky)]/50 bg-[var(--sky)]/10 text-[var(--sky)]"
+                  : "border-[var(--line)] text-dim hover:text-[var(--paper)]"
+              )}
+            >
+              All activity
+            </button>
+          </div>
           <div className="divide-y divide-[var(--line)]/50">
             {runs.slice(0, 8).map((run) => (
-              <div key={run.run_id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-xs">
+              <button
+                key={run.run_id}
+                onClick={() => setSelectedRun(run.run_id)}
+                className={cn(
+                  "flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-left text-xs transition-colors hover:bg-white/[0.03]",
+                  selectedRun === run.run_id && "bg-[var(--sky)]/5"
+                )}
+              >
                 <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-[var(--line)] bg-white/[0.02]">
                   {run.kind === "linkedin" ? (
                     <Link2 className="h-3.5 w-3.5 text-[var(--sky)]" />
@@ -347,7 +439,7 @@ export default function AgentLiveConsole() {
                 <span
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider",
-                    run.status === "success"
+                    run.status === "success" || run.status === "applied"
                       ? "border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
                       : run.status === "failed"
                       ? "border-[var(--coral)]/40 bg-[var(--coral)]/10 text-[var(--coral)]"
@@ -359,7 +451,7 @@ export default function AgentLiveConsole() {
                   {run.status === "running" && <Play className="h-2.5 w-2.5 animate-pulse" />}
                   {run.status}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>

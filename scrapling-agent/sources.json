@@ -1,201 +1,890 @@
 {
+  "$schema": "./source-registry.schema.json",
+  "schemaVersion": 2,
   "_meta": {
-    "description": "HUNTFLOW Scrapling crawl sources — each category maps to a list of job boards.",
-    "schema": {
-      "category": "string — board category key (remote | europe | mena | global | posts). Requesting category 'all' sweeps every category.",
-      "id": "string — unique board id (used for board_id on crawled jobs).",
-      "name": "string — display name surfaced as the job's source.",
-      "url": "string — listing URL the crawler fetches.",
-      "type": "'static' | 'stealth' | 'posts' — static = TLS-impersonated HTTP fetch; stealth = real stealth browser (JS-heavy pages); posts = forum/thread whose posts are parsed as hiring posts.",
-      "selectors": {
-        "item": "CSS selector matching each job card (or comment row for posts boards).",
-        "title": "CSS selector, or one of the special tokens 'text' / 'href' / 'domain', or a literal string.",
-        "company": "same field config as title.",
-        "location": "same field config as title.",
-        "url": "same field config as title.",
-        "text": "posts boards only — CSS selector for the full post text that gets parsed for the '| Company |' block."
-      },
-      "keyword": "optional — board-level keyword override; defaults to the crawl request keyword.",
-      "maxCards": "optional — per-board card cap (defaults to the remaining request limit).",
-      "_comment": "optional human note about the board."
-    },
-    "how_to_add_a_board": [
-      "1. Add a new top-level category key (or reuse an existing one) mapping to a list of board objects.",
-      "2. Give each board an id, name, url, type, and selectors.",
-      "3. For structured job listing pages set type to 'static' or 'stealth' and provide CSS selectors for item/title/company/location/url.",
-      "4. For forum hiring threads (e.g. HN Who is Hiring) set type to 'posts' and set selectors.item to the comment rows plus selectors.text to the post body; the agent parses the leading '| Company |' block.",
-      "5. Literal field values (e.g. location 'Remote', company 'YCombinator Network') are returned as-is; selectors like 'h4' or 'span.titleline > a' are resolved per card.",
-      "6. Restart the sidecar (uv run uvicorn server:app --port 8001) to pick up changes."
-    ]
+    "description": "HUNTFLOW Global Crawler Source Registry v2 — demand-driven multi-channel source catalog.",
+    "documentation": "docs/SOURCE-REGISTRY.md"
   },
-  "remote": [
+  "sources": [
     {
-      "id": "remoteok",
-      "name": "RemoteOK",
-      "url": "https://remoteok.com/remote-dev-jobs",
-      "type": "static",
-      "selectors": {
-        "item": "tr.job",
-        "title": "h2[itemprop='title']",
-        "company": "h3[itemprop='name']",
-        "location": ".location",
-        "url": "a[itemprop='url']"
+      "id": "greenhouse",
+      "name": "Greenhouse Public Job Boards",
+      "channel": "ats",
+      "connector": "greenhouse",
+      "regions": ["global", "americas", "europe", "mena", "africa", "apac"],
+      "capabilities": ["search", "location_filter", "pagination", "etag_caching"],
+      "authMode": "none",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 180,
+      "perDomainRps": 5.0,
+      "termsUrl": "https://www.greenhouse.com/privacy-policy",
+      "attribution": {
+        "name": "Greenhouse Software, Inc.",
+        "url": "https://boards-api.greenhouse.io"
       },
-      "_comment": "RemoteOK serves empty placeholder rows statically (infinite scroll) — set type to 'stealth' if you want real cards via the browser path."
+      "enabledByDefault": true,
+      "description": "Direct ATS JSON feed for companies hosted on Greenhouse boards-api."
     },
     {
-      "id": "weworkremotely",
-      "name": "WeWorkRemotely",
-      "url": "https://weworkremotely.com/categories/remote-full-stack-programming-jobs",
-      "type": "static",
-      "selectors": {
-        "item": "section.jobs article li:not(.view-all)",
-        "title": "span.title",
-        "company": "span.company",
-        "location": "span.region",
-        "url": "a"
+      "id": "lever",
+      "name": "Lever Postings Feed",
+      "channel": "ats",
+      "connector": "lever",
+      "regions": ["global", "americas", "europe", "mena", "africa", "apac"],
+      "capabilities": ["search", "location_filter", "pagination", "etag_caching"],
+      "authMode": "none",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 180,
+      "perDomainRps": 5.0,
+      "termsUrl": "https://www.lever.co/privacy-policy/",
+      "attribution": {
+        "name": "Lever, Inc.",
+        "url": "https://api.lever.co/v0/postings"
       },
-      "_comment": "Server-rendered board; the item selector also matches the filter tabs, which the keyword filter drops."
+      "enabledByDefault": true,
+      "description": "Direct ATS JSON postings feed for Lever-hosted career sites."
     },
     {
-      "id": "fmhy_remote",
-      "name": "FMHY Remote Directory",
-      "url": "https://fmhy.net/misc#remote-jobs",
-      "type": "static",
-      "selectors": {
-        "item": "a[href*='job'], a[href*='remote']",
-        "title": "text",
-        "company": "domain",
-        "location": "Remote",
-        "url": "href"
+      "id": "ashby",
+      "name": "Ashby Job Board Feed",
+      "channel": "ats",
+      "connector": "ashby",
+      "regions": ["global", "americas", "europe", "mena", "africa", "apac"],
+      "capabilities": ["search", "location_filter", "pagination", "etag_caching"],
+      "authMode": "none",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 180,
+      "perDomainRps": 5.0,
+      "termsUrl": "https://www.ashbyhq.com/privacy",
+      "attribution": {
+        "name": "Ashby, Inc.",
+        "url": "https://api.ashbyhq.com/posting-api"
       },
-      "_comment": "A link directory, not a real job board — low precision, mostly filtered by keyword. Included for coverage."
-    }
-  ],
-  "europe": [
-    {
-      "id": "wttj_eu",
-      "name": "Welcome to the Jungle Europe",
-      "url": "https://www.welcometothejungle.com/en/jobs?query=developer&page=1",
-      "type": "stealth",
-      "selectors": {
-        "item": "li[data-testid='search-results-item']",
-        "title": "h4",
-        "company": "span",
-        "location": "p",
-        "url": "a"
-      },
-      "_comment": "JS-heavy job board — stealth browser required; selectors may drift as the SPA re-renders."
+      "enabledByDefault": true,
+      "description": "Direct ATS JSON feed for Ashby-hosted career boards."
     },
     {
-      "id": "europeremotely",
-      "name": "EuropeRemotely",
-      "url": "https://europeremotely.com/",
-      "type": "static",
-      "selectors": {
-        "item": ".job-item",
-        "title": ".job-title",
-        "company": ".company-name",
-        "location": "Europe",
-        "url": "a"
+      "id": "smartrecruiters",
+      "name": "SmartRecruiters Public API",
+      "channel": "ats",
+      "connector": "smartrecruiters",
+      "regions": ["global", "americas", "europe", "mena", "africa", "apac"],
+      "capabilities": ["search", "location_filter", "pagination", "etag_caching"],
+      "authMode": "none",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 180,
+      "perDomainRps": 5.0,
+      "termsUrl": "https://www.smartrecruiters.com/legal/privacy-policy/",
+      "attribution": {
+        "name": "SmartRecruiters Inc.",
+        "url": "https://api.smartrecruiters.com"
       },
-      "_comment": "Currently returns 403 to the fetcher; kept for when the site reopens access."
-    }
-  ],
-  "mena": [
+      "enabledByDefault": true,
+      "description": "Direct public ATS postings API for companies using SmartRecruiters."
+    },
     {
-      "id": "keejob_tn",
+      "id": "personio",
+      "name": "Personio XML Career Feed",
+      "channel": "ats",
+      "connector": "personio",
+      "regions": ["europe", "global"],
+      "capabilities": ["location_filter", "rss_feed", "etag_caching"],
+      "authMode": "none",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 240,
+      "perDomainRps": 3.0,
+      "termsUrl": "https://www.personio.com/privacy-policy/",
+      "attribution": {
+        "name": "Personio SE & Co. KG",
+        "url": "https://personio.de"
+      },
+      "enabledByDefault": true,
+      "description": "Direct XML job feeds for European and global employers on Personio."
+    },
+    {
+      "id": "recruitee",
+      "name": "Recruitee Public Offers API",
+      "channel": "ats",
+      "connector": "recruitee",
+      "regions": ["europe", "global"],
+      "capabilities": ["search", "location_filter", "etag_caching"],
+      "authMode": "none",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 240,
+      "perDomainRps": 3.0,
+      "termsUrl": "https://recruitee.com/privacy",
+      "attribution": {
+        "name": "Recruitee B.V.",
+        "url": "https://recruitee.com"
+      },
+      "enabledByDefault": true,
+      "description": "Direct JSON public offers API for Recruitee career sites."
+    },
+    {
+      "id": "workable",
+      "name": "Workable Widget API",
+      "channel": "ats",
+      "connector": "workable",
+      "regions": ["global", "americas", "europe"],
+      "capabilities": ["location_filter", "etag_caching"],
+      "authMode": "none",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 240,
+      "perDomainRps": 3.0,
+      "termsUrl": "https://www.workable.com/privacy",
+      "attribution": {
+        "name": "Workable Software Limited",
+        "url": "https://workable.com"
+      },
+      "enabledByDefault": true,
+      "description": "Direct public widget feed for Workable-hosted jobs."
+    },
+    {
+      "id": "teamtailor",
+      "name": "Teamtailor API Feed",
+      "channel": "ats",
+      "connector": "teamtailor",
+      "regions": ["europe", "global"],
+      "capabilities": ["search", "location_filter", "pagination"],
+      "authMode": "optional_key",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 360,
+      "perDomainRps": 2.0,
+      "termsUrl": "https://www.teamtailor.com/en/privacy-policy/",
+      "attribution": {
+        "name": "Teamtailor AB",
+        "url": "https://api.teamtailor.com"
+      },
+      "enabledByDefault": false,
+      "description": "Optional-key API connector for Teamtailor-powered career sites."
+    },
+    {
+      "id": "workday",
+      "name": "Workday CXS Manual Feed",
+      "channel": "ats",
+      "connector": "workday",
+      "regions": ["global", "americas", "europe"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "manual_only",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.workday.com/en-us/privacy.html",
+      "attribution": {
+        "name": "Workday, Inc.",
+        "url": "https://myworkdayjobs.com"
+      },
+      "enabledByDefault": false,
+      "description": "Manual operator connector for specific verified Workday CXS endpoints."
+    },
+    {
+      "id": "bamboohr",
+      "name": "BambooHR Public Job Board",
+      "channel": "ats",
+      "connector": "bamboohr",
+      "regions": ["americas", "global"],
+      "capabilities": ["location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "manual_only",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.bamboohr.com/privacy-policy",
+      "attribution": {
+        "name": "Bamboo HR LLC",
+        "url": "https://bamboohr.com"
+      },
+      "enabledByDefault": false,
+      "description": "Manual operator connector for verified BambooHR company job boards."
+    },
+    {
+      "id": "arbeitnow",
+      "name": "Arbeitnow Job Board API",
+      "channel": "aggregator",
+      "connector": "arbeitnow",
+      "regions": ["europe", "global"],
+      "countryCodes": ["DE", "AT", "CH", "NL", "GB"],
+      "capabilities": [
+        "search",
+        "location_filter",
+        "pagination",
+        "structured_remote",
+        "structured_salary",
+        "etag_caching"
+      ],
+      "authMode": "none",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 120,
+      "perDomainRps": 2.0,
+      "termsUrl": "https://www.arbeitnow.com/privacy",
+      "attribution": {
+        "name": "Arbeitnow GmbH",
+        "url": "https://www.arbeitnow.com/api/job-board-api"
+      },
+      "enabledByDefault": true,
+      "description": "Open developer API for European and remote tech postings with structured visa/salary signals."
+    },
+    {
+      "id": "jobicy",
+      "name": "Jobicy Remote Jobs API",
+      "channel": "aggregator",
+      "connector": "jobicy",
+      "regions": ["global", "americas", "europe"],
+      "capabilities": [
+        "search",
+        "location_filter",
+        "structured_remote",
+        "structured_salary"
+      ],
+      "authMode": "none",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 120,
+      "perDomainRps": 2.0,
+      "termsUrl": "https://jobicy.com/terms",
+      "attribution": {
+        "name": "Jobicy Ltd.",
+        "url": "https://jobicy.com/api/v2/remote-jobs"
+      },
+      "enabledByDefault": true,
+      "description": "Zero-key public API for global remote developer and engineering roles."
+    },
+    {
+      "id": "remotive",
+      "name": "Remotive Remote Jobs API",
+      "channel": "aggregator",
+      "connector": "remotive",
+      "regions": ["global", "americas", "europe"],
+      "capabilities": [
+        "search",
+        "location_filter",
+        "structured_remote",
+        "structured_salary",
+        "etag_caching"
+      ],
+      "authMode": "none",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 180,
+      "perDomainRps": 2.0,
+      "termsUrl": "https://remotive.com/terms-of-service",
+      "attribution": {
+        "name": "Remotive SAS",
+        "url": "https://remotive.com/api/remote-jobs"
+      },
+      "enabledByDefault": true,
+      "description": "Official public API for curated remote software engineering positions."
+    },
+    {
+      "id": "himalayas",
+      "name": "Himalayas Community API",
+      "channel": "aggregator",
+      "connector": "himalayas",
+      "regions": ["global", "americas", "europe"],
+      "capabilities": [
+        "search",
+        "location_filter",
+        "pagination",
+        "structured_remote",
+        "structured_salary"
+      ],
+      "authMode": "none",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 180,
+      "perDomainRps": 2.0,
+      "termsUrl": "https://himalayas.app/terms",
+      "attribution": {
+        "name": "Himalayas Inc.",
+        "url": "https://himalayas.app/jobs/api"
+      },
+      "enabledByDefault": true,
+      "description": "Public JSON feed of remote developer jobs with explicit salary bands."
+    },
+    {
+      "id": "reliefweb",
+      "name": "ReliefWeb Open Humanitarian API",
+      "channel": "aggregator",
+      "connector": "reliefweb",
+      "regions": ["global", "africa", "mena", "apac", "americas", "europe"],
+      "capabilities": ["search", "location_filter", "pagination", "etag_caching"],
+      "authMode": "none",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 360,
+      "perDomainRps": 3.0,
+      "termsUrl": "https://reliefweb.int/terms-conditions",
+      "attribution": {
+        "name": "UN OCHA ReliefWeb",
+        "url": "https://api.reliefweb.int/v1/jobs"
+      },
+      "enabledByDefault": true,
+      "description": "Open public humanitarian and technology jobs API spanning Africa, MENA, APAC, and Americas."
+    },
+    {
+      "id": "themuse",
+      "name": "The Muse Public API",
+      "channel": "aggregator",
+      "connector": "themuse",
+      "regions": ["americas", "global"],
+      "countryCodes": ["US", "CA"],
+      "capabilities": ["search", "location_filter", "pagination"],
+      "authMode": "optional_key",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 360,
+      "perDomainRps": 2.0,
+      "termsUrl": "https://www.themuse.com/terms",
+      "attribution": {
+        "name": "The Muse, Inc.",
+        "url": "https://www.themuse.com/api/public/jobs"
+      },
+      "enabledByDefault": false,
+      "description": "Aggregator feed for North American jobs with company culture and level metadata."
+    },
+    {
+      "id": "adzuna",
+      "name": "Adzuna Developer API",
+      "channel": "aggregator",
+      "connector": "adzuna",
+      "regions": ["europe", "americas", "apac", "global"],
+      "countryCodes": ["GB", "US", "DE", "FR", "AU"],
+      "capabilities": [
+        "search",
+        "location_filter",
+        "pagination",
+        "structured_salary"
+      ],
+      "authMode": "optional_key",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 360,
+      "perDomainRps": 2.0,
+      "termsUrl": "https://developer.adzuna.com/docs/terms",
+      "attribution": {
+        "name": "Adzuna Ltd.",
+        "url": "https://api.adzuna.com/v1/api/jobs"
+      },
+      "enabledByDefault": false,
+      "description": "Multi-country job search API with salary modeling and regional breakdowns."
+    },
+    {
+      "id": "jooble",
+      "name": "Jooble Search API",
+      "channel": "aggregator",
+      "connector": "jooble",
+      "regions": ["global", "americas", "europe", "mena", "africa", "apac"],
+      "capabilities": ["search", "location_filter", "pagination"],
+      "authMode": "optional_key",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 360,
+      "perDomainRps": 2.0,
+      "termsUrl": "https://jooble.org/api/terms",
+      "attribution": {
+        "name": "Jooble LLC",
+        "url": "https://jooble.org/api"
+      },
+      "enabledByDefault": false,
+      "description": "Global multi-region job aggregator API requiring operator API key."
+    },
+    {
+      "id": "findwork",
+      "name": "Findwork.dev API",
+      "channel": "aggregator",
+      "connector": "findwork",
+      "regions": ["global", "americas", "europe"],
+      "capabilities": [
+        "search",
+        "location_filter",
+        "pagination",
+        "structured_remote"
+      ],
+      "authMode": "optional_key",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 360,
+      "perDomainRps": 2.0,
+      "termsUrl": "https://findwork.dev/terms",
+      "attribution": {
+        "name": "Findwork.dev",
+        "url": "https://findwork.dev/api/jobs/"
+      },
+      "enabledByDefault": false,
+      "description": "Developer-centric job board API requiring authorization token."
+    },
+    {
+      "id": "usajobs",
+      "name": "USAJobs Open Data API",
+      "channel": "aggregator",
+      "connector": "usajobs",
+      "regions": ["americas"],
+      "countryCodes": ["US"],
+      "capabilities": [
+        "search",
+        "location_filter",
+        "pagination",
+        "structured_salary"
+      ],
+      "authMode": "optional_key",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 360,
+      "perDomainRps": 2.0,
+      "termsUrl": "https://developer.usajobs.gov/General/Terms",
+      "attribution": {
+        "name": "U.S. Office of Personnel Management",
+        "url": "https://developer.usajobs.gov"
+      },
+      "enabledByDefault": false,
+      "description": "Official US Federal government employment opportunities open data API."
+    },
+    {
+      "id": "tunisia_aneti",
+      "name": "ANETI Tunisia Official Portal",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["mena", "africa"],
+      "countryCodes": ["TN"],
+      "languages": ["ar", "fr"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "http://www.emploi.nat.tn",
+      "attribution": {
+        "name": "Agence Nationale pour l'Emploi et le Travail Indépendant (ANETI)",
+        "url": "http://www.emploi.nat.tn"
+      },
+      "enabledByDefault": false,
+      "description": "National employment agency portal in Tunisia."
+    },
+    {
+      "id": "tunisia_keejob",
       "name": "Keejob Tunisia",
-      "url": "https://www.keejob.com/offres-emploi/",
-      "type": "static",
-      "selectors": {
-        "item": ".block_recrutement",
-        "title": "a.title",
-        "company": ".company",
-        "location": "Tunisia",
-        "url": "a.title"
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["mena", "africa"],
+      "countryCodes": ["TN"],
+      "languages": ["fr", "ar"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.keejob.com/terms",
+      "attribution": {
+        "name": "Keejob SARL",
+        "url": "https://www.keejob.com"
       },
-      "_comment": "Tunisian job board — card markup changed recently; extraction is best-effort."
+      "enabledByDefault": false,
+      "description": "Leading job portal in Tunisia for technical and professional roles."
     },
     {
-      "id": "tanqeeb_mena",
-      "name": "Tanqeeb MENA & Qatar",
-      "url": "https://qatar.tanqeeb.com/en/jobs/search",
-      "type": "static",
-      "selectors": {
-        "item": ".job-box",
-        "title": "h2",
-        "company": ".company-name",
-        "location": "Qatar / MENA",
-        "url": "a"
+      "id": "tunisia_tanitjobs",
+      "name": "TanitJobs Tunisia",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["mena", "africa"],
+      "countryCodes": ["TN"],
+      "languages": ["fr"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.tanitjobs.com/terms",
+      "attribution": {
+        "name": "TanitJobs Tunisia",
+        "url": "https://www.tanitjobs.com"
       },
-      "_comment": "MENA/Qatar board; the search page currently returns few/no cards statically."
-    }
-  ],
-  "global": [
-    {
-      "id": "hacker_news_hiring",
-      "name": "HackerNews Who is Hiring",
-      "url": "https://news.ycombinator.com/submitted?id=whoishiring",
-      "type": "static",
-      "selectors": {
-        "item": "tr.athing",
-        "title": "span.titleline > a",
-        "company": "YCombinator Network",
-        "location": "Global",
-        "url": "span.titleline > a"
-      },
-      "_comment": "Directory of the monthly Who-is-Hiring threads; the real posts are parsed by the hacker_news_who_is_hiring posts board."
+      "enabledByDefault": false,
+      "description": "Tunisian job board for tech, engineering, and digital professions."
     },
     {
-      "id": "hacker_news_jobs",
-      "name": "HackerNews Jobs",
-      "url": "https://news.ycombinator.com/jobs",
-      "type": "static",
-      "selectors": {
-        "item": "tr.athing",
-        "title": "span.titleline > a",
-        "company": "YCombinator Network",
-        "location": "Global",
-        "url": "span.titleline > a"
+      "id": "tunisia_emploitunisie",
+      "name": "Emploi Tunisie",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["mena", "africa"],
+      "countryCodes": ["TN"],
+      "languages": ["fr"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.emploitunisie.com/conditions-generales-d-utilisation",
+      "attribution": {
+        "name": "Emploi.tn / Africawork",
+        "url": "https://www.emploitunisie.com"
       },
-      "_comment": "YC/HN jobs front page — server-rendered, 30 rows of startup roles linking to ycombinator.com careers pages."
-    }
-  ],
-  "posts": [
-    {
-      "id": "hacker_news_who_is_hiring",
-      "name": "HN Who is Hiring",
-      "url": "https://news.ycombinator.com/item?id=49156683",
-      "type": "posts",
-      "keyword": "developer",
-      "maxCards": 60,
-      "selectors": {
-        "item": "tr.athing.comtr",
-        "text": ".commtext",
-        "title": ".commtext",
-        "company": "text",
-        "location": "text",
-        "url": "href"
-      },
-      "_comment": "Ask HN: Who is hiring? (August 2026). Each comment is parsed for the leading '| Company | Role | Location | Salary' block. Update the ?id= to the current month's thread (see /submitted?id=whoishiring) as it is posted on the first weekday of each month."
+      "enabledByDefault": false,
+      "description": "Generalist career site for Tunisian employment."
     },
     {
-      "id": "hacker_news_remote_hiring",
-      "name": "HN Remote Who is Hiring",
-      "url": "https://news.ycombinator.com/item?id=49156683",
-      "type": "posts",
-      "keyword": "remote",
-      "maxCards": 60,
-      "selectors": {
-        "item": "tr.athing.comtr",
-        "text": ".commtext",
-        "title": ".commtext",
-        "company": "text",
-        "location": "text",
-        "url": "href"
+      "id": "mena_bayt",
+      "name": "Bayt MENA",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["mena"],
+      "languages": ["en", "ar"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.bayt.com/en/terms/",
+      "attribution": {
+        "name": "Bayt.com, Inc.",
+        "url": "https://www.bayt.com"
       },
-      "_comment": "Same monthly thread filtered to remote roles — a keyword-only variant of hacker_news_who_is_hiring that keeps the deck remote-focused."
+      "enabledByDefault": false,
+      "description": "Major job platform across Middle East and North Africa."
+    },
+    {
+      "id": "mena_wuzzuf",
+      "name": "Wuzzuf Egypt & MENA",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["mena", "africa"],
+      "countryCodes": ["EG"],
+      "languages": ["en", "ar"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://wuzzuf.net/terms-and-conditions",
+      "attribution": {
+        "name": "BasharSoft (WUZZUF)",
+        "url": "https://wuzzuf.net"
+      },
+      "enabledByDefault": false,
+      "description": "Leading tech and professional hiring platform in Egypt and MENA."
+    },
+    {
+      "id": "mena_gulftalent",
+      "name": "GulfTalent",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["mena"],
+      "countryCodes": ["AE", "SA", "QA", "KW"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.gulftalent.com/terms-and-conditions",
+      "attribution": {
+        "name": "GulfTalent Ltd.",
+        "url": "https://www.gulftalent.com"
+      },
+      "enabledByDefault": false,
+      "description": "Employment portal for professionals in Gulf Cooperation Council countries."
+    },
+    {
+      "id": "mena_naukrigulf",
+      "name": "Naukrigulf",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["mena"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.naukrigulf.com/termsconditions",
+      "attribution": {
+        "name": "Info Edge (India) Ltd.",
+        "url": "https://www.naukrigulf.com"
+      },
+      "enabledByDefault": false,
+      "description": "Gulf regional job portal covering UAE, Saudi Arabia, Qatar, and Oman."
+    },
+    {
+      "id": "africa_jobberman",
+      "name": "Jobberman West Africa",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["africa"],
+      "countryCodes": ["NG", "GH"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.jobberman.com/terms-and-conditions",
+      "attribution": {
+        "name": "The African Talent Company (Jobberman)",
+        "url": "https://www.jobberman.com"
+      },
+      "enabledByDefault": false,
+      "description": "Leading job marketplace in Nigeria and Ghana."
+    },
+    {
+      "id": "africa_brightermonday",
+      "name": "BrighterMonday East Africa",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["africa"],
+      "countryCodes": ["KE", "UG"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.brightermonday.co.ke/terms-and-conditions",
+      "attribution": {
+        "name": "The African Talent Company (BrighterMonday)",
+        "url": "https://www.brightermonday.co.ke"
+      },
+      "enabledByDefault": false,
+      "description": "Leading employment portal in Kenya and Uganda."
+    },
+    {
+      "id": "africa_careers24",
+      "name": "Careers24 South Africa",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["africa"],
+      "countryCodes": ["ZA"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.careers24.com/terms-and-conditions/",
+      "attribution": {
+        "name": "Media24 (Careers24)",
+        "url": "https://www.careers24.com"
+      },
+      "enabledByDefault": false,
+      "description": "South African employment platform for technical and corporate careers."
+    },
+    {
+      "id": "africa_myjobmag",
+      "name": "MyJobMag Africa",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["africa"],
+      "countryCodes": ["NG", "KE", "GH", "ZA"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.myjobmag.com/terms.php",
+      "attribution": {
+        "name": "MyJobMag",
+        "url": "https://www.myjobmag.com"
+      },
+      "enabledByDefault": false,
+      "description": "Pan-African employment opportunities and career updates."
+    },
+    {
+      "id": "africa_fuzu",
+      "name": "Fuzu Africa",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["africa"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.fuzu.com/terms",
+      "attribution": {
+        "name": "Fuzu Limited",
+        "url": "https://www.fuzu.com"
+      },
+      "enabledByDefault": false,
+      "description": "Career development and job search platform for East and West Africa."
+    },
+    {
+      "id": "europe_welcometothejungle",
+      "name": "Welcome to the Jungle (Europe)",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["europe"],
+      "countryCodes": ["FR", "ES", "GB", "DE", "CZ"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://www.welcometothejungle.com/en/pages/terms-and-conditions",
+      "attribution": {
+        "name": "Coruscant SAS (Welcome to the Jungle)",
+        "url": "https://www.welcometothejungle.com"
+      },
+      "enabledByDefault": false,
+      "description": "European tech recruitment and company discovery platform."
+    },
+    {
+      "id": "europe_eures",
+      "name": "EURES European Job Mobility",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["europe"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 720,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://eures.ec.europa.eu/terms_en",
+      "attribution": {
+        "name": "European Commission (EURES)",
+        "url": "https://eures.ec.europa.eu"
+      },
+      "enabledByDefault": false,
+      "description": "European cooperation network of employment services across EU/EEA."
+    },
+    {
+      "id": "apac_seek",
+      "name": "SEEK Australia & New Zealand",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["apac"],
+      "countryCodes": ["AU", "NZ"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "manual_only",
+      "cadenceMinutes": 720,
+      "perDomainRps": 0.5,
+      "termsUrl": "https://www.seek.com.au/terms",
+      "attribution": {
+        "name": "SEEK Limited",
+        "url": "https://www.seek.com.au"
+      },
+      "enabledByDefault": false,
+      "description": "Employment portal for Australia and New Zealand (manual browser assist)."
+    },
+    {
+      "id": "apac_jobstreet",
+      "name": "JobStreet SEA",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["apac"],
+      "countryCodes": ["SG", "MY", "PH", "ID"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "manual_only",
+      "cadenceMinutes": 720,
+      "perDomainRps": 0.5,
+      "termsUrl": "https://www.jobstreet.com/terms",
+      "attribution": {
+        "name": "SEEK Asia (JobStreet)",
+        "url": "https://www.jobstreet.com"
+      },
+      "enabledByDefault": false,
+      "description": "Southeast Asia job search platform (manual browser assist)."
+    },
+    {
+      "id": "apac_wantedly",
+      "name": "Wantedly APAC",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["apac"],
+      "countryCodes": ["JP", "SG"],
+      "capabilities": ["search"],
+      "authMode": "none",
+      "crawlPolicy": "manual_only",
+      "cadenceMinutes": 720,
+      "perDomainRps": 0.5,
+      "termsUrl": "https://www.wantedly.com/terms",
+      "attribution": {
+        "name": "Wantedly, Inc.",
+        "url": "https://www.wantedly.com"
+      },
+      "enabledByDefault": false,
+      "description": "Social recruiting platform in Japan and Singapore (manual browser assist)."
+    },
+    {
+      "id": "americas_remoteok",
+      "name": "RemoteOK Dev Jobs",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["americas", "global"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 360,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://remoteok.com/terms",
+      "attribution": {
+        "name": "RemoteOK",
+        "url": "https://remoteok.com"
+      },
+      "enabledByDefault": false,
+      "description": "Remote software developer listings."
+    },
+    {
+      "id": "americas_weworkremotely",
+      "name": "WeWorkRemotely Dev Feed",
+      "channel": "regional",
+      "connector": "html_static",
+      "regions": ["americas", "global"],
+      "capabilities": ["search", "location_filter"],
+      "authMode": "none",
+      "crawlPolicy": "disabled",
+      "cadenceMinutes": 360,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://weworkremotely.com/terms",
+      "attribution": {
+        "name": "We Work Remotely Inc.",
+        "url": "https://weworkremotely.com"
+      },
+      "enabledByDefault": false,
+      "description": "Curated remote programming job board."
+    },
+    {
+      "id": "hn_who_is_hiring",
+      "name": "Hacker News Who Is Hiring",
+      "channel": "community",
+      "connector": "html_posts",
+      "regions": ["global", "americas", "europe"],
+      "capabilities": ["search"],
+      "authMode": "none",
+      "crawlPolicy": "automatic",
+      "cadenceMinutes": 1440,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://news.ycombinator.com/newsguidelines.html",
+      "attribution": {
+        "name": "Y Combinator (Hacker News)",
+        "url": "https://news.ycombinator.com"
+      },
+      "enabledByDefault": true,
+      "description": "Monthly Hacker News hiring threads parsed for remote and regional tech posts."
+    },
+    {
+      "id": "directory_careerpanels",
+      "name": "CareerPanels ATS Directory",
+      "channel": "directory",
+      "connector": "directory_careerpanels",
+      "regions": ["global"],
+      "capabilities": ["search"],
+      "authMode": "none",
+      "crawlPolicy": "manual_only",
+      "cadenceMinutes": 1440,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://careerpanels.io/terms",
+      "attribution": {
+        "name": "CareerPanels",
+        "url": "https://careerpanels.io"
+      },
+      "enabledByDefault": false,
+      "description": "Public directory of company career portals for candidate board discovery."
+    },
+    {
+      "id": "directory_jobboardsearch",
+      "name": "JobBoardSearch Directory",
+      "channel": "directory",
+      "connector": "directory_jobboardsearch",
+      "regions": ["global"],
+      "capabilities": ["search"],
+      "authMode": "none",
+      "crawlPolicy": "manual_only",
+      "cadenceMinutes": 1440,
+      "perDomainRps": 1.0,
+      "termsUrl": "https://jobboardsearch.com/terms",
+      "attribution": {
+        "name": "JobBoardSearch",
+        "url": "https://jobboardsearch.com"
+      },
+      "enabledByDefault": false,
+      "description": "Curated directory of specialized and regional job boards for discovery review."
     }
   ]
 }

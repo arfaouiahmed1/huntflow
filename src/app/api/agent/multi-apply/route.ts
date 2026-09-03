@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runMultiAgentApp } from "@/agents/multiAgentAppGraph";
+import { runMultiAgentApp, streamMultiAgentApp, MultiAgentStreamEvent } from "@/agents/multiAgentAppGraph";
 import { RegionCode } from "@/lib/agents/regionalNorms";
 import { jobsRepo, settingsRepo } from "@/lib/db";
 import { JobApplication, UserProfile } from "@/types";
@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   let jobId: string | undefined;
   try {
     const body = await req.json();
-    const { jobId: id, targetRegion, submit, minMatch, threadId } = body;
+    const { jobId: id, targetRegion, submit, threadId, stream } = body;
     jobId = id;
 
     if (!jobId) {
@@ -42,17 +42,81 @@ export async function POST(req: NextRequest) {
       id: job.id,
       title: job.title,
       company: job.company,
+      location: job.location,
       url: job.url,
       jobDescription: job.jobDescription,
       matchScore: job.matchScore ?? undefined,
     };
+
+
+    if (stream) {
+      const encoder = new TextEncoder();
+      const currentJobId = jobId;
+
+      const readable = new ReadableStream({
+        async start(controller) {
+          try {
+            const { finalState, logs } = await streamMultiAgentApp(
+              {
+                job: jobInput,
+                profile,
+                targetRegion: (targetRegion as RegionCode) || "US",
+                submit: Boolean(submit),
+                threadId,
+              },
+              (event: MultiAgentStreamEvent) => {
+                const payload = `data: ${JSON.stringify(event)}\n\n`;
+                controller.enqueue(encoder.encode(payload));
+              }
+            );
+
+            // Stream path must persist like the JSON path or the tracker never sees the outcome.
+            try {
+              const freshJob = jobsRepo.get(currentJobId);
+              if (freshJob) {
+                jobsRepo.upsert({
+                  ...freshJob,
+                  autoApplyStatus: (finalState.autoApplyStatus || "manual_required") as JobApplication["autoApplyStatus"],
+                  autoApplyLogs: logs,
+                  multiAgentOutputs: {
+                    atsScore: finalState.atsScore,
+                    recommendedTemplate: finalState.recommendedTemplate,
+                    matchingSkills: finalState.matchingSkills,
+                    missingSkills: finalState.missingSkills,
+                    salaryEstimate: finalState.salaryEstimate,
+                    outreachSubject: finalState.outreachSubject,
+                    interviewPrepTopics: finalState.interviewPrepTopics,
+                    companyResearch: finalState.companyResearch ?? undefined,
+                  },
+                });
+              }
+            } catch {}
+
+            controller.close();
+          } catch (streamErr) {
+            const errPayload = `data: ${JSON.stringify({ kind: "error", message: String(streamErr) })}\n\n`;
+            controller.enqueue(encoder.encode(errPayload));
+            controller.close();
+          } finally {
+            if (currentJobId) inFlight.delete(currentJobId);
+          }
+        },
+      });
+
+      return new Response(readable, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+        },
+      });
+    }
 
     const result = await runMultiAgentApp({
       job: jobInput,
       profile,
       targetRegion: (targetRegion as RegionCode) || "US",
       submit: Boolean(submit),
-      minMatch: Number(minMatch) || 70,
       threadId,
     });
 
@@ -60,7 +124,6 @@ export async function POST(req: NextRequest) {
     // AutoApplyPanel see the same persisted analysis + terminal status.
     jobsRepo.upsert({
       ...job,
-      // Do not overwrite matchScore with atsScore; matchScore is the initial JD-profile fit.
       autoApplyStatus: result.status as JobApplication["autoApplyStatus"],
       autoApplyLogs: result.logs,
       multiAgentOutputs: {
@@ -71,6 +134,7 @@ export async function POST(req: NextRequest) {
         salaryEstimate: result.salaryEstimate,
         outreachSubject: result.outreachSubject,
         interviewPrepTopics: result.interviewPrepTopics,
+        companyResearch: result.companyResearch ?? undefined,
       },
     });
 
@@ -85,10 +149,10 @@ export async function POST(req: NextRequest) {
       salaryEstimate: result.salaryEstimate,
       outreachSubject: result.outreachSubject,
       interviewPrepTopics: result.interviewPrepTopics,
+      companyResearch: result.companyResearch,
       logs: result.logs,
     });
   } catch (err) {
-    // Log the real error server-side; never echo internals to the client.
     console.error("Multi-agent execution failed:", err);
     return NextResponse.json({ error: "Multi-agent execution failed" }, { status: 500 });
   } finally {

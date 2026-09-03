@@ -34,14 +34,40 @@ export function redactSettings(all: Record<string, string>): Record<string, stri
       } catch {
         out[k] = v;
       }
-    } else if (k === "gmail_oauth") {
+    } else if (k === "cloudinary_settings") {
+      try {
+        const cs = JSON.parse(v) as { cloudName?: string; apiKey?: string; apiSecret?: string; concurrency?: number };
+        out[k] = JSON.stringify({
+          ...cs,
+          apiKey: cs.apiKey ? maskSecret(cs.apiKey) : "",
+          apiSecret: cs.apiSecret ? maskSecret(cs.apiSecret) : "",
+        });
+      } catch {
+        out[k] = v;
+      }
+    } else if (k === "gmail_oauth" || k === "gmail_settings") {
       // Gmail OAuth tokens never round-trip through the browser — hand back
       // only a harmless status shape, never the access/refresh tokens.
       try {
-        const t = JSON.parse(v) as { email?: string; expiry?: number };
-        out[k] = JSON.stringify({ connected: true, email: t.email ?? "", expiry: t.expiry ?? 0 });
+        const t = JSON.parse(v) as { email?: string; expiry?: number; expiresAt?: number; connected?: boolean };
+        out[k] = JSON.stringify({
+          connected: Boolean(t.connected ?? true),
+          email: t.email ?? "",
+          expiry: t.expiry ?? t.expiresAt ?? 0,
+        });
       } catch {
         out[k] = v;
+      }
+    } else if (k === "crawler_connector_keys" || k.startsWith("connector_key:") || k === "crawler_keys") {
+      try {
+        const keys = JSON.parse(v) as Record<string, string>;
+        const masked: Record<string, string> = {};
+        for (const [ck, cv] of Object.entries(keys)) {
+          masked[ck] = typeof cv === "string" ? maskSecret(cv) : cv;
+        }
+        out[k] = JSON.stringify(masked);
+      } catch {
+        out[k] = maskSecret(v);
       }
     } else {
       out[k] = v;

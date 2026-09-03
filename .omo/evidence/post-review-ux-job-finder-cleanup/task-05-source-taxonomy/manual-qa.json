@@ -1,0 +1,49 @@
+{
+  "happy": {
+    "qa": "task-05 happy path - remote_board + europe + entry + remote",
+    "parsedOk": true,
+    "catalogOrderIds": [
+      "qa-alpha",
+      "qa-beta",
+      "qa-gamma",
+      "qa-delta"
+    ],
+    "filterSelection": {
+      "sourceType": "remote_board",
+      "market": "europe",
+      "experience": "entry",
+      "workMode": "remote"
+    },
+    "resultIds": [
+      "qa-beta"
+    ],
+    "expectedIds": [
+      "qa-beta"
+    ],
+    "pass": true
+  },
+  "failure": {
+    "qa": "task-05 failure path - unknown market",
+    "ok": false,
+    "trustedObjectCount": 0,
+    "failures": [
+      {
+        "index": 0,
+        "boardId": "qa-bad-market",
+        "path": "markets.0",
+        "message": "markets.0: Invalid option: expected one of \"global\"|\"europe\"|\"mena\"|\"americas\"|\"apac\""
+      }
+    ],
+    "pass": true
+  },
+  "fallback": {
+    "qa": "task-05 fallback options - 503 path exposes controls, never source cards",
+    "optionCounts": {
+      "sourceTypes": 4,
+      "markets": 6,
+      "experiences": 4,
+      "workModes": 4
+    },
+    "containsNoIdFields": true
+  }
+}

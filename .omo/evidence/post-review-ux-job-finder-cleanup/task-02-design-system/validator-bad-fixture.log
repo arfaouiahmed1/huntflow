@@ -1,0 +1,8 @@
+COMMAND: node scripts/validate-design-system.mjs --design C:/Users/ahmed/AppData/Local/Temp/opencode/DESIGN.bad-fixture-task1.md
+CAPTURED: 2026-08-23
+ENCODING: UTF-8
+EXIT_CODE: 1
+
+STDERR:
+✗ 1 unknown token(s) in C:\Users\ahmed\AppData\Local\Temp\opencode\DESIGN.bad-fixture-task1.md:
+  UNKNOWN [palette.key] unknown-ai-token

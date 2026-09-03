@@ -30,9 +30,14 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-
+# environment files
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+!.env.example
 # vercel
 .vercel
 
@@ -53,3 +58,23 @@ next-env.d.ts
 .claude/settings.local.json
 .claude/worktrees/
 session-export-*/
+
+# process artifacts — never commit
+.agents/
+ORIGINAL_REQUEST.md
+PROJECT.md
+TEST_INFRA.md
+TEST_READY.md
+tmp/
+output/
+tsc_errors.log
+# build/test logs at repo root
+tsc.log
+vitest*.log
+/task-19/
+/task-20/
+/task-*/
+# one-off helper scripts (local only)
+fix_*.py
+new_readme_snippet.txt
+old_readme_snippet.txt

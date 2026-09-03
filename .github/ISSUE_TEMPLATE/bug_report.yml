@@ -1,0 +1,31 @@
+name: "🐛 Bug Report"
+description: "Report an issue or unexpected behavior in HUNTFLOW"
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: "Thank you for reporting a bug! Please ensure you have run `npm run doctor`."
+  - type: textarea
+    id: description
+    attributes:
+      label: "Bug Description"
+      description: "A clear and concise description of what the bug is."
+      placeholder: "When doing X, Y occurs instead of Z..."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: "Steps to Reproduce"
+      description: "Step-by-step instructions to reproduce the issue."
+      placeholder: "1. Go to '/jobs'\n2. Click on '...'\n3. See error"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Environment Information"
+      description: "Output of `npm run doctor` or Node/OS versions."
+      placeholder: "Node v22.x, OS, Browser..."
+    validations:
+      required: false

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readBody, routeError } from "@/lib/errors";
 import { callLLMJSON, resolveChain } from "@/lib/llm/router";
-import { ResumeContent, ResumeDocKind } from "@/types";
+import { ResumeContent } from "@/types";
 import { cleanResumeContent } from "@/lib/llm/sanitize";
 import { searchVault } from "@/lib/vault";
 import { renderTemplate } from "@/lib/pdf/resumeTemplates";

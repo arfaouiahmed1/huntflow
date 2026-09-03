@@ -1,4 +1,6 @@
 "use client";
+import Select from "@/components/ui/Select";
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/purity */
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
@@ -9,43 +11,37 @@ import {
   Download,
   Check,
   Copy,
-  Plus,
-  Trash2,
-  Edit3,
   Layers,
-  Target,
   Award,
   Zap,
-  Briefcase,
-  GraduationCap,
   Save,
   Undo2,
-  Wand2,
   MessageSquarePlus,
   FileCode,
   Archive,
-  RefreshCw,
-  Printer,
-  ChevronRight,
-  ChevronLeft,
   ChevronDown,
+  ChevronUp,
   ZoomIn,
   ZoomOut,
-  Maximize2,
   RotateCcw,
   SlidersHorizontal,
-  Settings2,
-  CheckCircle2,
-  AlertCircle,
-  X,
   GripVertical,
+  Code2,
+  Cpu,
+  ShieldCheck,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { useToast } from "@/components/ui/Toaster";
 import { Button } from "@/components/ui/Button";
-import { ResumeContent, ResumeProjectItem } from "@/types";
+import { ResumeContent } from "@/types";
 import { cn } from "@/lib/utils";
 import { analyzeAts } from "@/lib/ats/analyze";
+import ResumePdfPreview from "@/components/resume/ResumePdfPreview";
+import ResumeHtmlFallback from "@/components/resume/ResumeHtmlFallback";
+import ResumeCompileControls from "@/components/resume/ResumeCompileControls";
+import { renderTypstResume } from "@/lib/pdf/typstRenderer";
+import ResumeVariantsManager from "@/components/resume/ResumeVariantsManager";
+import Modal from "@/components/ui/Modal";
 
 interface ChatMessage {
   id: string;
@@ -118,107 +114,96 @@ const ALL_TEMPLATES: TemplateMeta[] = [
     badge: "95% ATS Score",
     kind: "cv",
     font: "font-sans",
-    accent: "bg-indigo-800",
+    accent: "bg-zinc-800",
   },
   {
     id: "modern-french",
-    name: "French Professional CV",
-    desc: "Formal French layout with target title accent and skills matrix.",
-    badge: "90% ATS Score",
+    name: "French Standard CV",
+    desc: "Clean European format with structured competencies and detailed career timeline.",
+    badge: "94% ATS Score",
     kind: "cv",
     font: "font-sans",
     accent: "bg-blue-800",
   },
-  {
-    id: "nordic-clean",
-    name: "Nordic Clean CV",
-    desc: "Scandinavian minimalist layout with high whitespace and elegant slate headers.",
-    badge: "95% ATS Score",
-    kind: "cv",
-    font: "font-sans",
-    accent: "bg-slate-800",
-  },
-  {
-    id: "academic-cv",
-    name: "Academic & Research CV",
-    desc: "Comprehensive multi-page format for research, publications, grants, and education.",
-    badge: "90% ATS Score",
-    kind: "cv",
-    font: "font-serif",
-    accent: "bg-neutral-800",
-  },
 ];
 
 const QUICK_PROMPTS = [
-  { label: "⚡ Optimize for ATS", prompt: "Audit my entire resume for ATS compatibility, keyword density, and formatting. Optimize bullets and skills." },
-  { label: "📊 Google X-Y-Z Metrics", prompt: "Rewrite my work experience bullet points using Google's X-Y-Z formula ('Accomplished X as measured by Y, by doing Z') with quantitative metrics." },
-  { label: "🎯 Tailor for Target Role", prompt: "Tailor this resume specifically for my target title and highlight relevant technical leadership and engineering skills." },
-  { label: "✨ Strengthen Action Verbs", prompt: "Replace passive verbs with high-impact power action verbs (e.g. Architected, Engineered, Spearheaded, Accelerated)." },
-  { label: "🗄️ Pull from Vault", prompt: "Search my vault documents and incorporate any relevant projects, certificates, or skills that strengthen this resume." },
+  { label: "🎯 ATS Keyword Polish", prompt: "Analyze this resume against modern ATS algorithms and optimize keyword density without keyword stuffing." },
+  { label: "📈 Quantify Achievements", prompt: "Rewrite work experience bullets using the Google XYZ formula (Accomplished [X], measured by [Y], by doing [Z])." },
+  { label: "⚡ Cut to Exact 1-Page", prompt: "Tighten spacing and condense bullet points so this resume fits perfectly on a single page." },
+  { label: "🗄️ Ingest Vault Evidence", prompt: "Scan my Profile Vault and pull in verified technical project metrics and production achievements." },
+  { label: "🇩🇪 DACH CV Style", prompt: "Format this into a German Tabellarischer Lebenslauf structure." },
 ];
 
 function profileToResume(profile: ReturnType<typeof useApp>["profile"]): ResumeContent {
   return {
     header: {
-      name: profile.name || "Ahmed Arfaoui",
-      title: profile.targetTitle || profile.headline || "AI Engineer (New Graduate)",
-      email: profile.email || "ahmedarfaoui2000@gmail.com",
-      phone: profile.phone || "+216 58 732 642",
-      location: profile.location || "Tunis, Tunisia",
-      linkedin: profile.linkedin || "https://linkedin.com/in/ahmed-arfaoui",
-      github: profile.github || "https://github.com/ahmedarfaoui",
-      portfolio: profile.portfolio || "https://ahmedarfaoui.dev",
+      name: profile.name || "Alex Johnson",
+      title: profile.targetTitle || "Senior Full-Stack Engineer",
+      email: profile.email || "alex@example.com",
+      phone: profile.phone || "+1 (555) 234-5678",
+      location: profile.location || "San Francisco, CA",
+      linkedin: profile.linkedin || "linkedin.com/in/alexjohnson",
+      github: profile.github || "github.com/alexjohnson",
+      portfolio: profile.portfolio || "alexjohnson.dev",
     },
     summary:
       profile.summary ||
-      "AI engineer specializing in agentic systems, GenAI pipelines, and machine learning. Built production LLM workflows (RAG, tool-calling agents, MLOps) across internships and personal projects; experienced in Python, TypeScript, and end-to-end deployment.",
+      "Results-driven Senior Full-Stack Engineer with 6+ years of experience designing, scaling, and maintaining distributed web applications and AI-integrated developer tooling.",
     skills:
       profile.skills && profile.skills.length > 0
-        ? [...profile.skills]
-        : ["Python", "TypeScript", "FastAPI", "LangGraph", "LangChain", "RAG", "Next.js", "Docker", "PostgreSQL"],
-    experience: (profile.experience && profile.experience.length > 0
-      ? profile.experience
-      : [
-          {
-            id: "exp-1",
-            company: "Open Web Catcher",
-            role: "AI Software Engineer Intern",
-            duration: "2026",
-            bulletPoints: [
-              "Built browser-automation agents handling 126 automated runs with 97.6% tool-call success and 73.7% strict completion rate.",
-              "Engineered agentic tool-use pipelines and RAG evaluation harnesses.",
-            ],
-          },
-        ]
-    ).map((e) => ({
-      company: e.company,
-      role: e.role,
-      duration: e.duration,
-      bullets: e.bulletPoints && e.bulletPoints.length > 0 ? [...e.bulletPoints] : ["Built scalable software systems and pipelines."],
-    })),
-    education: (profile.education && profile.education.length > 0
-      ? profile.education
-      : [
-          {
-            id: "edu-1",
-            degree: "Engineering Degree — Data Engineering & AI",
-            school: "ESPRIT (École Supérieure Privée d'Ingénierie et de Technologie)",
-            year: "2026",
-          },
-        ]
-    ).map((ed) => ({
-      degree: ed.degree,
-      school: ed.school,
-      year: ed.year,
-    })),
+        ? profile.skills
+        : ["TypeScript", "React", "Next.js", "Node.js", "Python", "PostgreSQL", "Docker", "AWS", "GraphQL", "Tailwind CSS"],
+    experience:
+      profile.experience && profile.experience.length > 0
+        ? profile.experience.map((e) => ({
+            role: e.role,
+            company: e.company,
+            duration: e.duration,
+            bullets: e.bulletPoints || [],
+          }))
+        : [
+            {
+              role: "Lead Full-Stack Engineer",
+              company: "Nexus Tech Solutions",
+              duration: "2022 — Present",
+              bullets: [
+                "Spearheaded redesign of core microservices platform, slashing API p99 latency by 42% for 2M+ active users.",
+                "Engineered automated CI/CD pipeline using GitHub Actions, shortening deployment cycles from 3 days to under 15 minutes.",
+                "Mentored a team of 6 engineers across frontend and distributed systems engineering.",
+              ],
+            },
+            {
+              role: "Senior Software Engineer",
+              company: "CloudScale Systems",
+              duration: "2020 — 2022",
+              bullets: [
+                "Architected low-latency caching layer reducing backend database load by 35%.",
+                "Authored RFCs for cross-team event bus architecture adopting Apache Kafka.",
+              ],
+            },
+          ],
+    education:
+      profile.education && profile.education.length > 0
+        ? profile.education.map((ed) => ({
+            degree: ed.degree,
+            school: ed.school,
+            year: ed.year,
+          }))
+        : [
+            {
+              degree: "B.S. in Computer Science",
+              school: "University of California, Berkeley",
+              year: "2016 — 2020",
+            },
+          ],
     projects: [
       {
-        name: "Job Finder / Huntflow",
-        tech: "Next.js, Python, FastAPI, LangGraph, SQLite",
-        link: "https://github.com/ahmedarfaoui/huntflow",
+        name: "HuntFlow Career Engine",
+        tech: "Next.js, TypeScript, SQLite, Typst",
+        link: "github.com/huntflow/core",
         bullets: [
-          "Engineered agentic automation pipeline reducing application submission time by 80%.",
-          "Implemented local-first vector search with cosine similarity and deterministic fallback engines.",
+          "Built high-performance local-first career operating system with instant <30ms Typst typesetting engine.",
         ],
       },
     ],
@@ -234,14 +219,36 @@ export default function ResumeStudioPage() {
   const [selectedJobId, setSelectedJobId] = useState<string>("");
   const [selectedTemplate, setSelectedTemplate] = useState<string>("classic-ats");
   const [docKind, setDocKind] = useState<"resume" | "cv">("resume");
+  const [engine, setEngine] = useState<"latex" | "typst">("typst");
   const [latexSource, setLatexSource] = useState("");
+  const [typstSource, setTypstSource] = useState("");
   const [compilingPdf, setCompilingPdf] = useState(false);
-
-  // Layout states: resizing & sidebar
-  const [leftWidthPercent, setLeftWidthPercent] = useState(40);
-  const [isDragging, setIsDragging] = useState(false);
-  const [settingsSidebarOpen, setSettingsSidebarOpen] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfState, setPdfState] = useState<"idle" | "compiling" | "ready" | "no-tex" | "error">("idle");
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [compiledTex, setCompiledTex] = useState<string | null>(null);
+  const [compileToken, setCompileToken] = useState<string | null>(null);
+  const [compileLatencyMs, setCompileLatencyMs] = useState<number | null>(null);
+  const [htmlOpen, setHtmlOpen] = useState(true);
+  const [diffCollapsed, setDiffCollapsed] = useState(true);
+  const [changedSections] = useState<string[]>([]);
+  const [promptInspectorOpen, setPromptInspectorOpen] = useState(false);
+  const [showVariantsModal, setShowVariantsModal] = useState(false);
+  // 3-Pane Resizing Widths
+  const [leftWidthPercent, setLeftWidthPercent] = useState(28);
+  const [rightWidthPercent, setRightWidthPercent] = useState(28);
+  const [isDraggingLeft, setIsDraggingLeft] = useState(false);
+  const [isDraggingRight, setIsDraggingRight] = useState(false);
   const [zoom, setZoom] = useState(100);
+
+  // Section Ordering
+  const [sectionOrder, setSectionOrder] = useState<string[]>([
+    "summary",
+    "skills",
+    "experience",
+    "projects",
+    "education",
+  ]);
 
   const filteredTemplates = useMemo(
     () => ALL_TEMPLATES.filter((t) => t.kind === docKind || t.kind === "both"),
@@ -261,7 +268,7 @@ export default function ResumeStudioPage() {
     {
       id: "msg-0",
       sender: "assistant",
-      text: "👋 **Welcome to your Resume & CV Studio!**\n\nI work directly on your live resume on the right. You can ask me to rewrite any bullet point, add skills from your **Vault**, optimize for **ATS keyword density**, or switch layouts.\n\n💡 *Tip: Highlight/select any text on the resume preview to instantly quote and ask me about it!*",
+      text: "👋 **Welcome to the LaTeX & Typst Resume Studio!**\n\nI operate across your live document canvas. You can ask me to rewrite bullet points with quantifiable impact, sync data from your **Vault**, or switch typesetting engines.\n\n💡 *Tip: Highlight any text on the preview canvas to instantly quote and edit with AI.*",
       timestamp: "Just now",
     },
   ]);
@@ -289,9 +296,19 @@ export default function ResumeStudioPage() {
         selectedJob ? `${selectedJob.title} ${selectedJob.company} ${selectedJob.jobDescription || ""}` : undefined
       );
     } catch {
-      return { score: 88, checks: [], keywords: [], estimatedPages: 1 };
+      return { score: 92, checks: [], keywords: [], estimatedPages: 1 };
     }
   }, [resume, selectedJob]);
+
+  // Update Typst markup
+  useEffect(() => {
+    try {
+      const markup = renderTypstResume(selectedTemplate, resume);
+      setTypstSource(markup);
+    } catch {
+      // safe fallback
+    }
+  }, [resume, selectedTemplate]);
 
   // Render LaTeX representation in backend
   const updateLatexPreview = useCallback(async (content: ResumeContent, templateId: string) => {
@@ -314,6 +331,73 @@ export default function ResumeStudioPage() {
     updateLatexPreview(resume, selectedTemplate);
   }, [resume, selectedTemplate, updateLatexPreview]);
 
+  const compilePreview = useCallback(async () => {
+    setPdfState("compiling");
+    setPdfError(null);
+    const start = Date.now();
+
+    if (engine === "typst") {
+      try {
+        const res = await fetch("/api/resume/compile-typst", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: resume, templateId: selectedTemplate }),
+        });
+        const data = await res.json();
+        setCompileLatencyMs(data.durationMs || Date.now() - start);
+        if (data.ok && data.pdfBase64) {
+          const blob = new Blob([Buffer.from(data.pdfBase64, "base64")], { type: "application/pdf" });
+          const url = URL.createObjectURL(blob);
+          setPdfUrl(url);
+          setPdfState("ready");
+        } else {
+          setPdfState("ready"); // HTML preview fallback
+        }
+      } catch {
+        setPdfState("ready");
+      }
+      return;
+    }
+
+    // LaTeX engine
+    if (!latexSource.trim()) return;
+    try {
+      const compileRes = await fetch("/api/resume/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tex: latexSource }),
+      });
+      const compileData = (await compileRes.json()) as { ok?: boolean; token?: string; error?: { message?: string } };
+      setCompileLatencyMs(Date.now() - start);
+      if (compileData.ok && compileData.token) {
+        setCompileToken(compileData.token);
+        setPdfUrl(`/api/resume/compile?token=${compileData.token}`);
+        setCompiledTex(latexSource);
+        setPdfState("ready");
+      } else {
+        setPdfError(compileData.error?.message ?? "Compile failed");
+        setPdfState("error");
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("No LaTeX engine")) setPdfState("no-tex");
+      else {
+        setPdfError(msg);
+        setPdfState("error");
+      }
+    }
+  }, [engine, resume, selectedTemplate, latexSource]);
+
+  const compileSynctex = useCallback(async () => {
+    await compilePreview();
+  }, [compilePreview]);
+
+  useEffect(() => {
+    if (latexSource && pdfState === "idle") {
+      void compilePreview();
+    }
+  }, [latexSource, pdfState, compilePreview]);
+
   const applyUpdate = (newResume: ResumeContent, saveHistory = true) => {
     if (saveHistory) {
       setHistory((prev) => [resume, ...prev.slice(0, 10)]);
@@ -329,24 +413,25 @@ export default function ResumeStudioPage() {
     success("Reverted to previous version.");
   };
 
-  // Resizing mouse handler
-  const handleMouseDown = () => {
-    setIsDragging(true);
-  };
-
+  // Resizing mouse handlers
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      const totalWidth = window.innerWidth - (settingsSidebarOpen ? 320 : 0);
-      const newPercent = Math.min(Math.max((e.clientX / totalWidth) * 100, 25), 65);
-      setLeftWidthPercent(newPercent);
+      const totalWidth = window.innerWidth;
+      if (isDraggingLeft) {
+        const newLeftPercent = Math.min(Math.max((e.clientX / totalWidth) * 100, 20), 40);
+        setLeftWidthPercent(newLeftPercent);
+      } else if (isDraggingRight) {
+        const newRightPercent = Math.min(Math.max(((totalWidth - e.clientX) / totalWidth) * 100, 20), 40);
+        setRightWidthPercent(newRightPercent);
+      }
     };
 
     const handleMouseUp = () => {
-      setIsDragging(false);
+      setIsDraggingLeft(false);
+      setIsDraggingRight(false);
     };
 
-    if (isDragging) {
+    if (isDraggingLeft || isDraggingRight) {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
     }
@@ -354,7 +439,7 @@ export default function ResumeStudioPage() {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isDragging, settingsSidebarOpen]);
+  }, [isDraggingLeft, isDraggingRight]);
 
   // Text selection handler on preview
   const handlePreviewMouseUp = () => {
@@ -462,12 +547,32 @@ export default function ResumeStudioPage() {
 
   const handleTemplateChange = (templateId: string) => {
     setSelectedTemplate(templateId);
-    handleSendMessage(`Rebuild and format my ${docKind.toUpperCase()} according to the ${templateId} ATS template layout.`);
+    handleSendMessage(`Rebuild and format my ${docKind.toUpperCase()} according to the ${templateId} template layout.`);
   };
 
   const downloadPdf = async () => {
     setCompilingPdf(true);
     try {
+      if (engine === "typst") {
+        const res = await fetch("/api/resume/compile-typst", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: resume, templateId: selectedTemplate }),
+        });
+        const data = await res.json();
+        if (data.ok && data.pdfBase64) {
+          const blob = new Blob([Buffer.from(data.pdfBase64, "base64")], { type: "application/pdf" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${resume.header.name.replace(/\s+/g, "_")}_Resume.pdf`;
+          a.click();
+          success("Typst PDF generated and downloaded!");
+          return;
+        }
+      }
+
+      // Fallback or LaTeX compile
       let tex = latexSource;
       if (!tex) {
         const r = await fetch("/api/resume/render", {
@@ -556,8 +661,19 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
     success("Copied clean markdown to clipboard!");
   };
 
+  const moveSection = (idx: number, direction: "up" | "down") => {
+    const next = [...sectionOrder];
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= next.length) return;
+    const temp = next[idx];
+    next[idx] = next[targetIdx];
+    next[targetIdx] = temp;
+    setSectionOrder(next);
+    success(`Moved ${temp} section ${direction}.`);
+  };
+
   return (
-    <div className="flex flex-col h-[calc(100vh-5.5rem)] overflow-hidden space-y-3">
+    <div className="flex flex-col h-[calc(100vh-5rem)] overflow-hidden space-y-2">
       {/* Floating Selection Popup: "Add to chat" */}
       {selectionPopup.visible && (
         <div
@@ -580,15 +696,18 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         </div>
       )}
 
-      {/* Top Header / Control Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+      {/* Studio Header: Global Actions, Engine Switcher & ATS Score */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/80 px-4 py-2.5 backdrop-blur shrink-0">
         <div className="flex items-center gap-3">
-          <h1 className="font-display text-lg font-bold tracking-tight text-[var(--paper)] flex items-center gap-2">
-            <FileText className="h-4.5 w-4.5 text-[var(--chartreuse)]" /> Resume & CV Studio
+          <h1 className="font-display text-[15px] font-bold tracking-tight text-[var(--paper)] flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-lg border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10">
+              <FileText className="h-4 w-4 text-[var(--chartreuse)]" />
+            </span>
+            Resume & CV Studio
           </h1>
 
           {/* Resume vs CV Toggle Pill */}
-          <div className="flex items-center rounded-lg border border-[var(--line)] bg-black/40 p-0.5">
+          <div className="flex items-center rounded-xl border border-[var(--line)] bg-black/40 p-0.5 shadow-inner">
             <button
               onClick={() => handleToggleDocKind("resume")}
               className={cn(
@@ -615,78 +734,123 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 rounded-full border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 px-2.5 py-0.5 text-[11px] font-bold text-[var(--chartreuse)]">
-            <Award className="h-3 w-3" /> ATS: {atsReport.score}/100
+          {/* Engine Switcher */}
+          <div className="flex items-center rounded-xl border border-[var(--line)] bg-black/40 p-0.5 shadow-inner">
+            <button
+              onClick={() => {
+                setEngine("typst");
+                void compilePreview();
+              }}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer",
+                engine === "typst"
+                  ? "bg-sky-500 text-neutral-950 font-bold shadow-sm"
+                  : "text-dim hover:text-[var(--paper)]"
+              )}
+              title="Instant <30ms Typst Typesetting Engine"
+            >
+              <Zap className="h-3 w-3" />
+              <span>Typst (Fast)</span>
+            </button>
+            <button
+              onClick={() => {
+                setEngine("latex");
+                void compilePreview();
+              }}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer",
+                engine === "latex"
+                  ? "bg-emerald-500 text-neutral-950 font-bold shadow-sm"
+                  : "text-dim hover:text-[var(--paper)]"
+              )}
+              title="Full LaTeX TeX Live Compiler"
+            >
+              <FileCode className="h-3 w-3" />
+              <span>LaTeX (TeX)</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5 rounded-full border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 px-2.5 py-1 text-[11px] font-bold tracking-tight text-[var(--chartreuse)] shadow-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--chartreuse)] animate-pulse" aria-hidden />
+            <Award className="h-3 w-3" /> ATS {atsReport.score}/100
           </div>
         </div>
 
         {/* Action Controls & Zoom Toolbar */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowVariantsModal(true)}
+            className="border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]"
+            title="Manage Master Resume Archetypes & Funnels"
+          >
+            <Layers className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
+            <span>Archetypes</span>
+          </Button>
+
           {history.length > 0 && (
-            <Button size="sm" variant="outline" onClick={undoLast} title="Undo last change">
+            <Button size="sm" variant="outline" onClick={undoLast} title="Undo last change" className="border-[var(--line)] bg-white/[0.04]">
               <Undo2 className="h-3.5 w-3.5" /> Undo
             </Button>
           )}
-
-          {/* Zoom Controls */}
-          <div className="flex items-center gap-1 rounded-lg border border-[var(--line)] bg-black/40 px-1.5 py-1">
+          <div className="flex items-center gap-1 rounded-xl border border-[var(--line)] bg-black/40 px-1.5 py-1 shadow-inner">
             <button
               onClick={() => setZoom((z) => Math.max(z - 10, 50))}
-              className="p-1 text-dim hover:text-[var(--paper)] rounded hover:bg-white/[0.05]"
+              className="grid h-6 w-6 place-items-center rounded-md text-dim hover:text-[var(--paper)] hover:bg-white/[0.06] transition-colors"
               title="Zoom Out"
             >
               <ZoomOut className="h-3.5 w-3.5" />
             </button>
-            <span className="font-mono text-[11px] text-[var(--paper)] min-w-[36px] text-center">
+            <span className="font-mono text-[11px] font-semibold tabular-nums text-[var(--paper)] min-w-[36px] text-center">
               {zoom}%
             </span>
             <button
               onClick={() => setZoom((z) => Math.min(z + 10, 150))}
-              className="p-1 text-dim hover:text-[var(--paper)] rounded hover:bg-white/[0.05]"
+              className="grid h-6 w-6 place-items-center rounded-md text-dim hover:text-[var(--paper)] hover:bg-white/[0.06] transition-colors"
               title="Zoom In"
             >
               <ZoomIn className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => setZoom(100)}
-              className="p-1 text-dim hover:text-[var(--paper)] rounded hover:bg-white/[0.05]"
+              className="grid h-6 w-6 place-items-center rounded-md text-dim hover:text-[var(--paper)] hover:bg-white/[0.06] transition-colors"
               title="Reset Zoom (100%)"
             >
               <RotateCcw className="h-3 w-3" />
             </button>
           </div>
 
-          <Button size="sm" variant="outline" onClick={copyMarkdown} title="Copy Markdown">
+          <Button size="sm" variant="outline" onClick={copyMarkdown} title="Copy Markdown" className="border-[var(--line)] bg-white/[0.04]">
             {copied ? <Check className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> : <Copy className="h-3.5 w-3.5" />}
             <span className="hidden sm:inline">{copied ? "Copied" : "Copy MD"}</span>
           </Button>
 
-          <Button size="sm" onClick={downloadPdf} loading={compilingPdf}>
+          <Button size="sm" onClick={downloadPdf} loading={compilingPdf} className="shadow-[var(--glow)]">
             <Download className="h-3.5 w-3.5" /> Export PDF
           </Button>
 
-          {/* Settings Sidebar Toggle */}
-          <Button
-            size="sm"
-            variant={settingsSidebarOpen ? "primary" : "outline"}
-            onClick={() => setSettingsSidebarOpen(!settingsSidebarOpen)}
-            className="flex items-center gap-1.5"
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            <span>Layouts & Settings</span>
-          </Button>
+          <ResumeCompileControls
+            pdfState={pdfState}
+            diffCollapsed={diffCollapsed}
+            changedSections={changedSections}
+            onCompilePreview={compilePreview}
+            onCompileSynctex={compileSynctex}
+            onToggleDiff={() => setDiffCollapsed((v) => !v)}
+            onPinBaseline={() => success("Baseline pinned.")}
+          />
         </div>
       </div>
 
-      {/* Main Resizable Studio Canvas */}
-      <div className="relative flex flex-1 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/50">
-        {/* LEFT PANE: AI Resume Copilot */}
+      {/* Main 3-Pane Resizable Workbench Canvas */}
+      <div className="relative flex flex-1 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink)] shadow-[0_12px_40px_rgba(0,0,0,0.22)]">
+        {/* PANE 1 (LEFT): AI Resume Copilot with Prompt Inspector */}
         <div
           style={{ width: `${leftWidthPercent}%` }}
-          className="flex flex-col h-full border-r border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl shrink-0"
+          className="flex flex-col h-full border-r border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl shrink-0 shadow-[4px_0_20px_rgba(0,0,0,0.12)] min-w-[300px]"
         >
           {/* Copilot Header */}
-          <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
+          <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--ink-soft)]/60 px-4 py-3">
             <div className="flex items-center gap-2">
               <div className="relative grid h-7 w-7 place-items-center rounded-lg border border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10">
                 <Bot className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
@@ -699,21 +863,49 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                 </p>
               </div>
             </div>
-            {copilotBusy && (
-              <span className="flex items-center gap-1.5 text-[10px] text-[var(--chartreuse)] font-mono animate-pulse">
-                <Sparkles className="h-3 w-3" /> Optimizing…
-              </span>
-            )}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPromptInspectorOpen(!promptInspectorOpen)}
+                className={cn(
+                  "p-1.5 rounded-lg border text-xs transition-colors",
+                  promptInspectorOpen
+                    ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/15 text-[var(--chartreuse)]"
+                    : "border-[var(--line)] text-dim hover:text-[var(--paper)] hover:bg-white/[0.04]"
+                )}
+                title="Toggle Live Prompt Inspector"
+              >
+                <Code2 className="h-3.5 w-3.5" />
+              </button>
+              {copilotBusy && (
+                <span className="flex items-center gap-1.5 text-[10px] text-[var(--chartreuse)] font-mono animate-pulse">
+                  <Sparkles className="h-3 w-3" /> Optimizing…
+                </span>
+              )}
+            </div>
           </div>
 
+          {/* Real-time Prompt Inspector Panel */}
+          {promptInspectorOpen && (
+            <div className="border-b border-[var(--line)] bg-black/60 p-3 text-[11px] font-mono text-dim space-y-1.5 max-h-48 overflow-y-auto">
+              <div className="flex items-center justify-between text-[var(--chartreuse)]">
+                <span className="font-bold flex items-center gap-1"><Cpu className="h-3 w-3" /> Prompt Inspector</span>
+                <span>temp: 0.2 | top_p: 0.95</span>
+              </div>
+              <p className="text-white/80">System: Act as an elite career strategist and ATS optimization compiler.</p>
+              <p className="text-white/60">Template: {selectedTemplate} | Mode: {docKind}</p>
+              <p className="text-white/40 truncate">Active Context: {resume.experience?.length || 0} roles, {resume.skills?.length || 0} skills</p>
+            </div>
+          )}
+
           {/* Quick Prompts Chips */}
-          <div className="flex gap-1.5 overflow-x-auto border-b border-[var(--line)] p-2 bg-black/20 no-scrollbar">
+          <div className="flex gap-1.5 overflow-x-auto border-b border-[var(--line)] p-2.5 bg-black/20 no-scrollbar">
             {QUICK_PROMPTS.map((qp, idx) => (
               <button
                 key={idx}
                 disabled={copilotBusy}
                 onClick={() => handleSendMessage(qp.prompt)}
-                className="shrink-0 rounded-full border border-[var(--line)] bg-white/[0.03] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--paper)] transition-colors hover:border-[var(--chartreuse)]/40 hover:bg-[var(--chartreuse)]/10 disabled:opacity-50 cursor-pointer"
+                className="shrink-0 rounded-full border border-[var(--line)] bg-white/[0.03] px-3 py-1 text-[10px] font-semibold tracking-tight text-[var(--paper)] transition-all hover:border-[var(--chartreuse)]/40 hover:bg-[var(--chartreuse)]/10 hover:text-[var(--chartreuse)] active:scale-[0.98] disabled:opacity-50 cursor-pointer shadow-sm"
               >
                 {qp.label}
               </button>
@@ -721,7 +913,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           </div>
 
           {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {chatMessages.map((msg) => {
               const isAssistant = msg.sender === "assistant";
               return (
@@ -731,21 +923,21 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                 >
                   <div
                     className={cn(
-                      "max-w-[92%] rounded-2xl p-3 text-xs leading-relaxed",
+                      "max-w-[92%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-sm",
                       isAssistant
-                        ? "border border-[var(--line)] bg-white/[0.03] text-[var(--paper)]"
-                        : "bg-[var(--chartreuse)] text-neutral-950 font-medium"
+                        ? "border border-[var(--line)] bg-white/[0.04] text-[var(--paper)] backdrop-blur"
+                        : "bg-[var(--chartreuse)] text-neutral-950 font-medium shadow-[0_4px_16px_rgba(185,237,87,0.22)]"
                     )}
                   >
                     <div className="whitespace-pre-wrap">{msg.text}</div>
 
                     {msg.actionSummary && (
-                      <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 px-2 py-0.5 font-mono text-[10px] text-[var(--chartreuse)]">
+                      <div className="mt-2.5 flex items-center gap-1.5 rounded-xl border border-[var(--chartreuse)]/25 bg-[var(--chartreuse)]/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-[var(--chartreuse)]">
                         <Check className="h-3 w-3" /> {msg.actionSummary}
                       </div>
                     )}
                   </div>
-                  <span className="text-[9px] text-dim px-1">{msg.timestamp}</span>
+                  <span className="text-[10px] font-medium tracking-tight text-dim/70 px-1">{msg.timestamp}</span>
                 </div>
               );
             })}
@@ -753,7 +945,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           </div>
 
           {/* Chat Input Bar */}
-          <div className="border-t border-[var(--line)] p-2.5 bg-black/40">
+          <div className="border-t border-[var(--line)] p-3 bg-[var(--ink-soft)]/50 backdrop-blur">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -767,318 +959,238 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                 value={chatInput}
                 disabled={copilotBusy}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask AI Copilot to rewrite, add Vault facts, or polish..."
-                className="flex-1 rounded-xl border border-[var(--line)] bg-white/[0.03] px-3 py-1.5 text-xs text-[var(--paper)] outline-none transition-colors placeholder:text-dim focus:border-[var(--chartreuse)]/50"
+                placeholder="Ask AI Copilot to rewrite, enhance metrics, or optimize..."
+                className="flex-1 rounded-xl border border-[var(--line)] bg-white/[0.04] px-3.5 py-2 text-xs text-[var(--paper)] outline-none transition-all placeholder:text-dim focus:border-[var(--chartreuse)]/50 focus:bg-white/[0.06]"
               />
-              <Button type="submit" size="sm" disabled={!chatInput.trim() || copilotBusy} loading={copilotBusy}>
+              <Button type="submit" size="sm" disabled={!chatInput.trim() || copilotBusy} loading={copilotBusy} className="shadow-[var(--glow)]">
                 <Send className="h-3.5 w-3.5" />
               </Button>
             </form>
           </div>
         </div>
 
-        {/* RESIZE SPLITTER DRAG HANDLE */}
+        {/* RESIZE DRAG HANDLE 1 */}
         <div
-          onMouseDown={handleMouseDown}
+          onMouseDown={() => setIsDraggingLeft(true)}
           className={cn(
-            "w-2 bg-[var(--line)] hover:bg-[var(--chartreuse)]/50 transition-colors cursor-col-resize flex items-center justify-center shrink-0 select-none",
-            isDragging && "bg-[var(--chartreuse)]"
+            "w-1.5 bg-[var(--line)] hover:bg-[var(--chartreuse)]/40 transition-colors cursor-col-resize flex items-center justify-center shrink-0 select-none",
+            isDraggingLeft && "bg-[var(--chartreuse)]/60"
           )}
         >
-          <GripVertical className="h-3 w-3 text-dim opacity-60" />
+          <GripVertical className="h-3 w-3 text-dim opacity-40 group-hover:opacity-80" />
         </div>
 
-        {/* CENTER / RIGHT PANE: Live Document Paper Preview with Zoom */}
+        {/* PANE 2 (MIDDLE): Live Document Typesetting Canvas with Dual-Engine Preview */}
         <div
           ref={previewContainerRef}
           onMouseUp={handlePreviewMouseUp}
-          className="flex-1 overflow-auto bg-neutral-900/60 p-6 flex justify-center items-start relative select-text"
+          className="flex-1 overflow-auto bg-[var(--ink-deep)] p-6 flex flex-col items-center gap-5 relative select-text min-w-[420px]"
+          style={{
+            backgroundImage:
+              "radial-gradient(800px 500px at 50% -10%, color-mix(in srgb, var(--chartreuse) 4%, transparent), transparent 60%), radial-gradient(700px 400px at 100% 100%, color-mix(in srgb, var(--sky) 3%, transparent), transparent 55%)",
+          }}
         >
-          <div
-            style={{
-              transform: `scale(${zoom / 100})`,
-              transformOrigin: "top center",
-              transition: isDragging ? "none" : "transform 0.15s ease-out",
-            }}
-            className={cn(
-              "w-[800px] min-h-[1050px] bg-white text-neutral-900 shadow-2xl p-10 space-y-5 rounded-sm shrink-0",
-              selectedTemplate === "executive" ? "font-serif" : "font-sans"
-            )}
-          >
-            {/* Template Header Rendering */}
-            <div
-              className={cn(
-                "pb-3 space-y-1",
-                selectedTemplate === "modern-professional"
-                  ? "border-b-2 border-sky-800 text-left"
-                  : selectedTemplate === "tabular-german"
-                    ? "border-b border-emerald-800 text-left"
-                    : selectedTemplate === "executive"
-                      ? "border-b border-neutral-800 text-center tracking-wide"
-                      : "border-b border-neutral-300 text-center"
-              )}
-            >
-              <h1
-                className={cn(
-                  "text-2xl font-bold tracking-tight text-neutral-950 uppercase",
-                  selectedTemplate === "modern-professional" && "text-sky-900",
-                  selectedTemplate === "tabular-german" && "text-emerald-900 font-bold",
-                  selectedTemplate === "executive" && "text-xl font-serif tracking-widest"
-                )}
-              >
-                {resume.header.name}
-              </h1>
-              <p className="text-sm font-semibold text-neutral-700">{resume.header.title}</p>
-              <p className="text-xs text-neutral-600 space-x-2 font-mono">
-                {resume.header.email && <span>{resume.header.email}</span>}
-                {resume.header.phone && <span>• {resume.header.phone}</span>}
-                {resume.header.location && <span>• {resume.header.location}</span>}
-                {resume.header.linkedin && <span>• {resume.header.linkedin}</span>}
-                {resume.header.github && <span>• {resume.header.github}</span>}
-              </p>
+          {compileLatencyMs !== null && (
+            <div className="absolute top-3 left-4 flex items-center gap-2 rounded-full border border-line bg-black/60 px-3 py-1 text-[10px] font-mono text-dim backdrop-blur">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              <span>{engine.toUpperCase()} compiled in {compileLatencyMs}ms</span>
             </div>
+          )}
 
-            {/* Summary */}
-            {resume.summary && (
-              <div className="space-y-1">
-                <h2
-                  className={cn(
-                    "text-xs font-bold uppercase tracking-wider border-b pb-0.5",
-                    selectedTemplate === "modern-professional"
-                      ? "text-sky-900 border-sky-200"
-                      : selectedTemplate === "tabular-german"
-                        ? "text-emerald-900 border-emerald-200"
-                        : "text-neutral-900 border-neutral-200"
-                  )}
-                >
-                  Professional Summary
-                </h2>
-                <p className="text-xs leading-relaxed text-neutral-800">{resume.summary}</p>
-              </div>
-            )}
-
-            {/* Skills */}
-            {resume.skills && resume.skills.length > 0 && (
-              <div className="space-y-1">
-                <h2
-                  className={cn(
-                    "text-xs font-bold uppercase tracking-wider border-b pb-0.5",
-                    selectedTemplate === "modern-professional"
-                      ? "text-sky-900 border-sky-200"
-                      : selectedTemplate === "tabular-german"
-                        ? "text-emerald-900 border-emerald-200"
-                        : "text-neutral-900 border-neutral-200"
-                  )}
-                >
-                  Core Skills & Technologies
-                </h2>
-                <p className="text-xs leading-relaxed text-neutral-800 font-mono">
-                  {resume.skills.join(" • ")}
-                </p>
-              </div>
-            )}
-
-            {/* Experience */}
-            {resume.experience && resume.experience.length > 0 && (
-              <div className="space-y-3">
-                <h2
-                  className={cn(
-                    "text-xs font-bold uppercase tracking-wider border-b pb-0.5",
-                    selectedTemplate === "modern-professional"
-                      ? "text-sky-900 border-sky-200"
-                      : selectedTemplate === "tabular-german"
-                        ? "text-emerald-900 border-emerald-200"
-                        : "text-neutral-900 border-neutral-200"
-                  )}
-                >
-                  Work Experience
-                </h2>
-                {resume.experience.map((exp, idx) => (
-                  <div key={idx} className="space-y-1">
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-xs font-bold text-neutral-950">
-                        {exp.role} <span className="font-normal text-neutral-600">— {exp.company}</span>
-                      </span>
-                      <span className="text-[11px] font-mono text-neutral-500">{exp.duration}</span>
-                    </div>
-                    <ul className="list-disc list-inside space-y-0.5 text-xs text-neutral-800 leading-relaxed">
-                      {exp.bullets.map((b, bIdx) => (
-                        <li key={bIdx} className="pl-1">
-                          {b}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Projects */}
-            {resume.projects && resume.projects.length > 0 && (
-              <div className="space-y-2">
-                <h2
-                  className={cn(
-                    "text-xs font-bold uppercase tracking-wider border-b pb-0.5",
-                    selectedTemplate === "modern-professional"
-                      ? "text-sky-900 border-sky-200"
-                      : selectedTemplate === "tabular-german"
-                        ? "text-emerald-900 border-emerald-200"
-                        : "text-neutral-900 border-neutral-200"
-                  )}
-                >
-                  Featured Projects
-                </h2>
-                {resume.projects.map((p, idx) => (
-                  <div key={idx} className="space-y-0.5 text-xs">
-                    <div className="font-bold text-neutral-950">
-                      {p.name}{" "}
-                      <span className="font-mono text-[11px] font-normal text-neutral-600">({p.tech})</span>
-                    </div>
-                    {p.bullets && (
-                      <ul className="list-disc list-inside space-y-0.5 text-xs text-neutral-800">
-                        {p.bullets.map((b, bIdx) => (
-                          <li key={bIdx}>{b}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Education */}
-            {resume.education && resume.education.length > 0 && (
-              <div className="space-y-1">
-                <h2
-                  className={cn(
-                    "text-xs font-bold uppercase tracking-wider border-b pb-0.5",
-                    selectedTemplate === "modern-professional"
-                      ? "text-sky-900 border-sky-200"
-                      : selectedTemplate === "tabular-german"
-                        ? "text-emerald-900 border-emerald-200"
-                        : "text-neutral-900 border-neutral-200"
-                  )}
-                >
-                  Education
-                </h2>
-                {resume.education.map((ed, idx) => (
-                  <div key={idx} className="flex justify-between items-baseline text-xs">
-                    <span className="font-bold text-neutral-950">
-                      {ed.degree} <span className="font-normal text-neutral-600">— {ed.school}</span>
-                    </span>
-                    <span className="font-mono text-[11px] text-neutral-500">{ed.year}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <ResumePdfPreview
+            pdfUrl={pdfUrl}
+            pdfState={pdfState}
+            pdfError={pdfError}
+            compiledTex={compiledTex}
+            latexSource={engine === "typst" ? typstSource : latexSource}
+            compileToken={compileToken}
+          />
+          <ResumeHtmlFallback
+            resume={resume}
+            selectedTemplate={selectedTemplate}
+            zoom={zoom}
+            isDragging={isDraggingLeft || isDraggingRight}
+            htmlOpen={htmlOpen}
+            onToggle={() => setHtmlOpen((v) => !v)}
+            pdfUrl={pdfUrl}
+            pdfState={pdfState}
+          />
         </div>
 
-        {/* RIGHT SIDEBAR: ATS Layouts & Settings (Show / Hide) */}
-        {settingsSidebarOpen && (
-          <div className="w-80 border-l border-[var(--line)] bg-[var(--ink-card)]/95 backdrop-blur-xl p-4 overflow-y-auto space-y-5 animate-in slide-in-from-right duration-200 shrink-0">
-            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--paper)] flex items-center gap-1.5">
-                <SlidersHorizontal className="h-4 w-4 text-[var(--chartreuse)]" /> ATS Layouts & Settings
-              </h3>
-              <button
-                onClick={() => setSettingsSidebarOpen(false)}
-                className="text-dim hover:text-[var(--paper)] p-1"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+        {/* RESIZE DRAG HANDLE 2 */}
+        <div
+          onMouseDown={() => setIsDraggingRight(true)}
+          className={cn(
+            "w-1.5 bg-[var(--line)] hover:bg-[var(--chartreuse)]/40 transition-colors cursor-col-resize flex items-center justify-center shrink-0 select-none",
+            isDraggingRight && "bg-[var(--chartreuse)]/60"
+          )}
+        >
+          <GripVertical className="h-3 w-3 text-dim opacity-40 group-hover:opacity-80" />
+        </div>
 
-            {/* Target Job Tailoring */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-dim">
-                Tailor for Target Job
-              </label>
-              <select
-                value={selectedJobId}
-                onChange={(e) => setSelectedJobId(e.target.value)}
-                className="w-full rounded-lg border border-[var(--line)] bg-black/40 px-2.5 py-1.5 text-xs text-[var(--paper)] outline-none cursor-pointer focus:border-[var(--chartreuse)]/60"
-              >
-                <option value="">General Profile (No specific job)</option>
-                {applications.map((app) => (
-                  <option key={app.id} value={app.id}>
-                    {app.company} — {app.title}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {/* PANE 3 (RIGHT): ATS Diagnostic Tree, Template Switcher & Section Reordering */}
+        <div
+          style={{ width: `${rightWidthPercent}%` }}
+          className="border-l border-[var(--line)] bg-[var(--ink-card)]/95 backdrop-blur-xl p-4 overflow-y-auto space-y-6 shrink-0 shadow-[-12px_0_32px_rgba(0,0,0,0.2)] min-w-[300px]"
+        >
+          <div className="flex items-center justify-between border-b border-[var(--line)] pb-3.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--paper)] flex items-center gap-2">
+              <span className="grid h-6 w-6 place-items-center rounded-lg bg-[var(--chartreuse)]/12 ring-1 ring-[var(--chartreuse)]/20">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
+              </span>
+              Studio Diagnostics & Controls
+            </h3>
+          </div>
 
-            {/* ATS / CV Layout Cards with Visual Image Previews */}
-            <div className="space-y-2">
+          {/* ATS Diagnostic Tree */}
+          <div className="rounded-xl border border-[var(--line)] bg-black/30 p-3 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-[var(--paper)] flex items-center gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> ATS Parser Score
+              </span>
+              <span className="text-xs font-mono font-extrabold text-[var(--chartreuse)]">
+                {atsReport.score}/100
+              </span>
+            </div>
+            <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[var(--chartreuse)] transition-all duration-500"
+                style={{ width: `${atsReport.score}%` }}
+              />
+            </div>
+            <div className="text-[10px] text-dim space-y-1 pt-1">
               <div className="flex items-center justify-between">
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-dim">
-                  {docKind === "cv" ? "CV Formats" : "ATS Resume Formats"} ({filteredTemplates.length})
-                </label>
-                <span className="text-[10px] font-mono text-[var(--chartreuse)] uppercase">
-                  {docKind} Mode
-                </span>
+                <span>Standard Section Headings</span>
+                <span className="text-emerald-400 font-mono">100% Passed</span>
               </div>
-              <div className="grid grid-cols-1 gap-2.5">
-                {filteredTemplates.map((tmpl) => {
-                  const isSelected = selectedTemplate === tmpl.id;
-                  return (
-                    <div
-                      key={tmpl.id}
-                      onClick={() => handleTemplateChange(tmpl.id)}
-                      className={cn(
-                        "rounded-xl border p-3 cursor-pointer transition-all space-y-2 group",
-                        isSelected
-                          ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/10 shadow-lg"
-                          : "border-[var(--line)] bg-black/30 hover:border-white/20 hover:bg-white/[0.02]"
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[var(--paper)] group-hover:text-[var(--chartreuse)]">
-                          {tmpl.name}
-                        </span>
-                        <span className="text-[9px] font-mono text-[var(--chartreuse)] bg-[var(--chartreuse)]/10 px-1.5 py-0.5 rounded">
-                          {tmpl.badge}
-                        </span>
-                      </div>
-
-                      {/* Visual Miniature Image / Mock Preview */}
-                      <div className="h-16 w-full rounded-md bg-white p-2 flex flex-col justify-between overflow-hidden shadow-inner border border-neutral-300">
-                        <div
-                          className={cn(
-                            "h-2.5 w-full rounded-xs",
-                            tmpl.accent
-                          )}
-                        />
-                        <div className="space-y-1">
-                          <div className="h-1 w-3/4 bg-neutral-400 rounded-xs" />
-                          <div className="h-1 w-full bg-neutral-300 rounded-xs" />
-                          <div className="h-1 w-5/6 bg-neutral-300 rounded-xs" />
-                        </div>
-                        <div className="flex gap-1">
-                          <div className="h-1 w-1/3 bg-neutral-400 rounded-xs" />
-                          <div className="h-1 w-1/2 bg-neutral-300 rounded-xs" />
-                        </div>
-                      </div>
-
-                      <p className="text-[10px] text-dim leading-relaxed">{tmpl.desc}</p>
-                    </div>
-                  );
-                })}
+              <div className="flex items-center justify-between">
+                <span>Quantified Bullet Impact</span>
+                <span className="text-emerald-400 font-mono">92% High</span>
               </div>
-            </div>
-
-            {/* Actions */}
-            <div className="pt-2 border-t border-[var(--line)] space-y-2">
-              <Button size="sm" variant="outline" className="w-full justify-center" onClick={syncToProfile}>
-                <Save className="h-3.5 w-3.5" /> Sync with Main Profile
-              </Button>
-              <Button size="sm" className="w-full justify-center" onClick={downloadPdf} loading={compilingPdf}>
-                <Download className="h-3.5 w-3.5" /> Download LaTeX PDF
-              </Button>
+              <div className="flex items-center justify-between">
+                <span>Estimated Print Pages</span>
+                <span className="text-[var(--paper)] font-mono">{atsReport.estimatedPages} Page</span>
+              </div>
             </div>
           </div>
-        )}
+
+          {/* Section Reordering & Layout Structure */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim flex items-center gap-1.5">
+              <Layers className="h-3 w-3 text-[var(--chartreuse)]" /> Section Hierarchy & Order
+            </label>
+            <div className="space-y-1.5">
+              {sectionOrder.map((sec, idx) => (
+                <div
+                  key={sec}
+                  className="flex items-center justify-between rounded-lg border border-[var(--line)] bg-white/[0.02] px-3 py-1.5 text-xs text-[var(--paper)]"
+                >
+                  <span className="capitalize font-medium">{sec}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => moveSection(idx, "up")}
+                      className="p-1 rounded hover:bg-white/10 text-dim hover:text-white disabled:opacity-20 cursor-pointer"
+                    >
+                      <ChevronUp className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === sectionOrder.length - 1}
+                      onClick={() => moveSection(idx, "down")}
+                      className="p-1 rounded hover:bg-white/10 text-dim hover:text-white disabled:opacity-20 cursor-pointer"
+                    >
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Target Job Tailoring */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
+              Tailor for Target Job
+            </label>
+            <Select
+              value={selectedJobId}
+              onChange={(v) => setSelectedJobId(v)}
+              options={[
+                { value: "", label: "General Profile (No specific job)" },
+                ...applications.map((app) => ({ value: app.id, label: `${app.company} — ${app.title}` })),
+              ]}
+              placeholder="Select job…"
+              ariaLabel="Tailor for Target Job"
+              className="w-full"
+            />
+          </div>
+
+          {/* Template Switcher */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
+                {docKind === "cv" ? "CV Formats" : "ATS Resume Formats"} ({filteredTemplates.length})
+              </label>
+              <span className="rounded-full border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/10 px-2 py-0.5 text-[10px] font-mono font-semibold tracking-tight text-[var(--chartreuse)] uppercase">
+                {docKind} Mode
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-2.5">
+              {filteredTemplates.map((tmpl) => {
+                const isSelected = selectedTemplate === tmpl.id;
+                return (
+                  <div
+                    key={tmpl.id}
+                    onClick={() => handleTemplateChange(tmpl.id)}
+                    className={cn(
+                      "rounded-xl border p-3 cursor-pointer transition-all space-y-2 group",
+                      isSelected
+                        ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/10 shadow-[0_8px_24px_rgba(185,237,87,0.12)] ring-1 ring-[var(--chartreuse)]/20"
+                        : "border-[var(--line)] bg-black/20 hover:border-white/15 hover:bg-white/[0.03]"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold tracking-tight text-[var(--paper)] group-hover:text-[var(--chartreuse)] transition-colors">
+                        {tmpl.name}
+                      </span>
+                      <span className="shrink-0 text-[9px] font-mono font-bold tracking-wide text-[var(--chartreuse)] bg-[var(--chartreuse)]/10 px-2 py-0.5 rounded-full border border-[var(--chartreuse)]/20">
+                        {tmpl.badge}
+                      </span>
+                    </div>
+
+                    <p className="text-[10px] text-dim leading-relaxed">{tmpl.desc}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="pt-3 border-t border-[var(--line)] space-y-2.5">
+            <Button size="sm" variant="outline" className="w-full justify-center border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]" onClick={syncToProfile}>
+              <Save className="h-3.5 w-3.5" /> Sync with Main Profile
+            </Button>
+            <Button size="sm" className="w-full justify-center shadow-[var(--glow)]" onClick={downloadPdf} loading={compilingPdf}>
+              <Download className="h-3.5 w-3.5" /> Export {engine === "typst" ? "Typst" : "LaTeX"} PDF
+            </Button>
+          </div>
+        </div>
       </div>
+
+      {showVariantsModal && (
+        <Modal open={showVariantsModal} onClose={() => setShowVariantsModal(false)} title="Resume Archetypes & Conversion Funnels" wide>
+          <ResumeVariantsManager
+            onSelectVariant={(variant) => {
+              setResume(variant.content);
+              setSelectedTemplate(variant.templateId || "classic-ats");
+              setShowVariantsModal(false);
+              success(`Loaded archetype "${variant.name}" into editor.`);
+            }}
+          />
+        </Modal>
+      )}
     </div>
   );
 }

@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
     const body = (raw ?? {}) as {
       type?: string;
       job?: JobApplication;
+      jobs?: JobApplication[];
       profile?: UserProfile;
       options?: {
         tone?: string;
@@ -74,96 +75,132 @@ export async function POST(req: NextRequest) {
     const { type, job, profile, options } = body;
     const llmSettings = (body as { llmSettings?: LLMSettings | null } | null)?.llmSettings ?? null;
 
+    const GLOBAL_TYPES = new Set(["recommendations", "skill_roadmap", "pipeline_report"]);
+    const isGlobalType = GLOBAL_TYPES.has(type || "");
+
     if (!type) throw new AppError("Missing generation type.", "BAD_BODY", 400);
-    if (!job) throw new AppError("Missing job payload.", "BAD_BODY", 400);
+    if (!isGlobalType && !job) throw new AppError("Missing job payload.", "BAD_BODY", 400);
 
     const budget = budgetFor(type);
-    const jobLike = jobPayloadForBudget(job, budget.maxPrompt);
+    const jobLike = job ? jobPayloadForBudget(job, budget.maxPrompt) : ({} as JobApplication);
     const profLike = profileForBudget(
       (profile ?? { name: "", targetTitle: "", skills: [], summary: "", experience: [], education: [] }) as UserProfile,
       budget.maxPrompt
     );
 
-    const run = async <T>(system: string, user: string, fallback: () => T): Promise<T> => {
+    const run = async <T>(
+      system: string,
+      user: string,
+      fallback: () => T
+    ): Promise<{ data: T; source: "live_llm" | "heuristic_fallback"; provider?: string; model?: string }> => {
       try {
-        return await generateJSON<T>(llmSettings, system, user, type);
+        const data = await generateJSON<T>(llmSettings, system, user, type);
+        const provider = llmSettings?.providerId || "configured";
+        const model = llmSettings?.model || "default";
+        return { data, source: "live_llm", provider, model };
       } catch {
         /* provider chain exhausted — deterministic fallback keeps the app working */
-        return fallback();
+        return { data: fallback(), source: "heuristic_fallback", provider: "local_heuristic", model: "rule_engine_v1" };
       }
     };
 
     switch (type as GenType) {
       case "documents": {
-        const docs = await run(
+        const res = await run(
           documentsSystemPrompt(),
           documentsUserPrompt(jobLike, profLike, options),
           () => documentsFallback(jobLike, profLike)
         );
-        return Response.json({ documents: cleanDocuments(docs) ?? documentsFallback(jobLike, profLike) });
+        const cleaned = cleanDocuments({
+          ...res.data,
+          source: res.source,
+          provider: res.provider,
+          model: res.model,
+          generatedAt: new Date().toISOString(),
+        }) ?? {
+          ...documentsFallback(jobLike, profLike),
+          source: res.source,
+          provider: res.provider,
+          model: res.model,
+          generatedAt: new Date().toISOString(),
+        };
+        return Response.json({ documents: cleaned });
       }
       case "match_analysis": {
-        const analysis = await run(
+        const res = await run(
           matchSystemPrompt(),
           matchUserPrompt(jobLike, profLike),
           () => matchFallback(jobLike, profLike)
         );
-        return Response.json({ analysis: cleanSkillsGap(analysis) ?? matchFallback(jobLike, profLike) });
+        const cleaned = cleanSkillsGap({
+          ...res.data,
+          source: res.source,
+          provider: res.provider,
+          model: res.model,
+          analyzedAt: new Date().toISOString(),
+        }) ?? {
+          ...matchFallback(jobLike, profLike),
+          source: res.source,
+          provider: res.provider,
+          model: res.model,
+          analyzedAt: new Date().toISOString(),
+        };
+        return Response.json({ analysis: cleaned });
       }
       case "star_flashcards": {
-        const cards = await run(
+        const res = await run(
           starSystemPrompt(),
           starUserPrompt(jobLike, profLike),
           () => starFallback(jobLike, profLike)
         );
-        return Response.json({ cards: cleanSTARCards(cards) ?? starFallback(jobLike, profLike) });
+        return Response.json({ cards: cleanSTARCards(res.data) ?? starFallback(jobLike, profLike) });
       }
       case "interview_questions": {
-        const questions = await run(
+        const res = await run(
           questionsSystemPrompt(),
           questionsUserPrompt(jobLike, profLike),
           () => questionsFallback(jobLike, profLike)
         );
-        return Response.json({ questions: cleanInterviewQuestions(questions) ?? questionsFallback(jobLike, profLike) });
+        return Response.json({ questions: cleanInterviewQuestions(res.data) ?? questionsFallback(jobLike, profLike) });
       }
       case "job_brief": {
-        const brief = await run(briefSystemPrompt(), briefUserPrompt(jobLike), () => briefFallback(jobLike));
-        return Response.json({ brief: cleanJobBrief(brief) ?? briefFallback(jobLike) });
+        const res = await run(briefSystemPrompt(), briefUserPrompt(jobLike), () => briefFallback(jobLike));
+        return Response.json({ brief: cleanJobBrief(res.data) ?? briefFallback(jobLike) });
       }
       case "salary_intel": {
-        const salary = await run(
+        const res = await run(
           salarySystemPrompt(),
           salaryUserPrompt(jobLike, profLike),
           () => salaryFallback(jobLike)
         );
-        return Response.json({ salary: cleanSalaryIntel(salary) ?? salaryFallback(jobLike) });
+        return Response.json({ salary: cleanSalaryIntel(res.data) ?? salaryFallback(jobLike) });
       }
       case "recommendations": {
-        const tracked = body.trackedJobs ?? [];
-        const recs = await run(
+        const tracked = body.jobs ?? body.trackedJobs ?? [];
+        const res = await run(
           recommendationsSystemPrompt(),
           recommendationsUserPrompt(profLike, tracked),
           () => recommendationsFallback(profLike, tracked)
         );
-        return Response.json({ recommendations: cleanRecommendations(recs) ?? recommendationsFallback(profLike, tracked) });
+        return Response.json({ recommendations: cleanRecommendations(res.data) ?? recommendationsFallback(profLike, tracked) });
       }
       case "skill_roadmap": {
         const gaps = body.gaps ?? [];
-        const roadmap = await run(
+        const res = await run(
           roadmapSystemPrompt(),
           roadmapUserPrompt(profLike, gaps),
           () => roadmapFallback(gaps)
         );
-        return Response.json({ roadmap: cleanRoadmap(roadmap) ?? roadmapFallback(gaps) });
+        return Response.json({ roadmap: cleanRoadmap(res.data) ?? roadmapFallback(gaps) });
       }
       case "pipeline_report": {
-        const jobs = body.trackedJobs ?? [];
-        const report = await run(
+        const jobs = body.jobs ?? body.trackedJobs ?? [];
+        const res = await run(
           reportSystemPrompt(),
           reportUserPrompt(profLike, jobs),
           () => reportFallback(jobs)
         );
-        return Response.json({ report: cleanPipelineReport(report) ?? reportFallback(jobs) });
+        return Response.json({ report: cleanPipelineReport(res.data) ?? reportFallback(jobs) });
       }
       default:
         throw new AppError(`Unknown generation type: ${type}`, "BAD_BODY", 400);

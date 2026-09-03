@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://huntflow.dev/schemas/source-registry.v2.json",
+  "title": "HuntflowSourceRegistryV2",
+  "description": "JSON Schema for HUNTFLOW crawler source definitions (v2)",
+  "type": "object",
+  "required": ["schemaVersion", "sources"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 2
+    },
+    "$schema": {
+      "type": "string"
+    },
+    "_meta": {
+      "type": "object",
+      "description": "Optional human notes or documentation metadata"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceDefinition"
+      }
+    }
+  },
+  "$defs": {
+    "CrawlerChannel": {
+      "type": "string",
+      "enum": ["ats", "aggregator", "regional", "community", "directory"]
+    },
+    "CrawlerRegion": {
+      "type": "string",
+      "enum": ["global", "americas", "europe", "mena", "africa", "apac"]
+    },
+    "SourceAuthMode": {
+      "type": "string",
+      "enum": ["none", "optional_key", "required_key", "user_session"]
+    },
+    "SourceCrawlPolicy": {
+      "type": "string",
+      "enum": ["automatic", "manual_only", "disabled"]
+    },
+    "SourceCapability": {
+      "type": "string",
+      "enum": [
+        "search",
+        "location_filter",
+        "pagination",
+        "structured_salary",
+        "structured_remote",
+        "rss_feed",
+        "rate_limit_headers",
+        "etag_caching"
+      ]
+    },
+    "SourceAttribution": {
+      "type": "object",
+      "required": ["name", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" },
+        "licenseNotice": { "type": "string" },
+        "termsUrl": { "type": "string" }
+      }
+    },
+    "SourceDefinition": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "channel",
+        "connector",
+        "regions",
+        "capabilities",
+        "authMode",
+        "crawlPolicy",
+        "cadenceMinutes",
+        "perDomainRps",
+        "termsUrl",
+        "attribution"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "channel": {
+          "$ref": "#/$defs/CrawlerChannel"
+        },
+        "connector": {
+          "type": "string",
+          "minLength": 1
+        },
+        "regions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/CrawlerRegion"
+          }
+        },
+        "countryCodes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          }
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceCapability"
+          }
+        },
+        "authMode": {
+          "$ref": "#/$defs/SourceAuthMode"
+        },
+        "crawlPolicy": {
+          "$ref": "#/$defs/SourceCrawlPolicy"
+        },
+        "cadenceMinutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "perDomainRps": {
+          "type": "number",
+          "minimum": 0.1
+        },
+        "termsUrl": {
+          "type": "string"
+        },
+        "attribution": {
+          "$ref": "#/$defs/SourceAttribution"
+        },
+        "config": {
+          "type": "object"
+        },
+        "enabledByDefault": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "_comment": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

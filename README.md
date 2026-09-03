@@ -1,240 +1,145 @@
-<p align="center">
-  <img src="docs/screenshots/banner.svg" alt="HUNTFLOW — Job Search OS" width="100%"/>
-</p>
+# HUNTFLOW
 
-<h1 align="center">HUNTFLOW</h1>
-<h3 align="center">The AI-Powered Job Search OS — <em>Bring Your Own Keys, Own Your Data</em></h3>
+### A private AI career workspace for finding, evaluating, tailoring, and tracking opportunities.
 
-<p align="center">
-  <a href="https://github.com/arfaouiahmed1/huntflow"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/></a>
-  <img src="https://img.shields.io/badge/Next.js-15-black?logo=next.js" alt="Next.js"/>
-  <img src="https://img.shields.io/badge/local--first-SQLite-green?logo=sqlite" alt="SQLite"/>
-  <img src="https://img.shields.io/badge/BYOK-8_providers-orange" alt="BYOK"/>
-  <img src="https://img.shields.io/badge/self--hosted-no%20cloud-purple" alt="Self-hosted"/>
-</p>
+[![CI](https://github.com/arfaouiahmed1/huntflow/actions/workflows/ci.yml/badge.svg)](https://github.com/arfaouiahmed1/huntflow/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+![Next.js](https://img.shields.io/badge/Next.js-16-111827?logo=nextdotjs)
+![React](https://img.shields.io/badge/React-19-61dafb?logo=react)
+![Agents](https://img.shields.io/badge/Agents-LangGraph-b9ed57)
+![Storage](https://img.shields.io/badge/Storage-local%20SQLite-7dd3fc)
+![Runtime](https://img.shields.io/badge/Runtime-Docker-2496ed?logo=docker)
 
-<br/>
+HUNTFLOW turns the fragmented job-search workflow into one auditable, local-first system: collect opportunities from a global crawler network, compare them against a real candidate profile, produce role-specific application material, and keep every important action under human control.
 
-> **Stop paying for job-search SaaS subscriptions. Run the whole stack on your machine with your own AI keys.**
-> HUNTFLOW is a local-first, self-hosted job search platform that brings enterprise-grade AI to your job hunt —
-> without subscriptions, cloud lock-in, or anyone reading your resume.
+It is designed as a single-user, local-first product and an engineering showcase—not as a hosted multi-tenant SaaS.
 
-<p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="HUNTFLOW Command Deck" width="900"/>
-</p>
+> **Trust boundary:** local records and uploaded source files are stored on your machine in `data/huntflow.db`. Content is sent outside the app only when you configure and invoke an external model, Gmail, scraping, or job-source provider. Run HUNTFLOW on a trusted machine and do not expose it directly to the public internet.
 
 ---
 
-## 🔑 BYOK — Bring Your Own Keys
+## Product Surfaces
 
-HUNTFLOW is built around a **Bring Your Own Key** model. You connect the AI providers you already have — no middleman, no markup.
-
-| Provider | Models | Cost |
-|---|---|---|
-| **OpenAI** | GPT-4o, GPT-4.1, o3-mini | Your API pricing |
-| **Anthropic** | Claude Sonnet, Claude Opus | Your API pricing |
-| **Google Gemini** | Gemini 2.5 Pro/Flash | Your API pricing |
-| **OpenRouter** | 200+ models from one key | Your API pricing |
-| **Groq** | Llama 3, Mixtral (ultra-fast) | Your API pricing |
-| **DeepSeek** | DeepSeek V3, R1 | Your API pricing |
-| **Ollama** | Any local model (Llama, Mistral…) | **Free — runs offline** |
-| **Custom** | Any OpenAI-compatible endpoint | Your API pricing |
-
-**Stack providers in priority order.** HUNTFLOW's LLM router tries them in sequence with automatic fallback and a circuit breaker — if one fails, the next kicks in instantly.
-
-> 💡 **Run entirely free**: configure Ollama with a local model and pay $0 for every generation.
+- **Global Crawler Network** — demand-driven multi-channel discovery across direct public ATS feeds (Greenhouse, Lever, Ashby, SmartRecruiters, Personio, Recruitee, Workable), open aggregators (Arbeitnow, Jobicy, Remotive, Himalayas, ReliefWeb), regional feeds (Americas, Europe, MENA including Tunisia, Africa, APAC), and curated non-whiteboard companies.
+- **Channels & Faceted Filters** — uncluttered mental model: select plain-language channels (`All public feeds`, `Company career systems`, `Remote & global boards`, `Interview-friendly`), apply rich multi-select facets (region, work mode, seniority, tech tags, visa sponsorship, salary minimums), and inspect live source health in the Source Health Drawer.
+- **Deterministic Field Extraction & Bucketed Deduplication** — extracts seniority, work modes, salary bands, and visa signals deterministically without an LLM. Scale-tested bucketed deduplication merges multiple sources and tracks provenance edges in SQLite.
+- **Resume Studio** — LaTeX PDF is the **typography source of truth** (`ResumePdfPreview`, `SynctexViewer`), with structure preview fallback and diff preview.
+- **Evidence Vault** — upload PDF, DOCX, TXT, and Markdown evidence; inspect chunks; and search with hybrid lexical (BM25) + vector retrieval.
+- **Supervised Agent Workflows** — run research, profile analysis, document drafting, and browser preparation through LangGraph-backed orchestration with field, click, screenshot, and run-history evidence.
+- **Human-Controlled Actions** — keep consequential external actions separate from autonomous research and drafting.
 
 ---
 
-## ✨ What HUNTFLOW Does
+## Architecture
 
-### 📋 Pipeline Tracker
-Full Kanban-style job board — Wishlist → Applied → Interviewing → Offer / Rejected. Track match scores, salary, notes, follow-up due dates, and per-job activity logs.
+```mermaid
+flowchart TD
+    UI[Next.js 16 SPA Workspace] -->|POST /api/crawl| API[Unified Crawler API Route]
+    API --> DB[(Local SQLite: huntflow.db)]
+    API -->|Async HTTP| SIDE[Python Sidecar FastAPI :8001]
+    
+    subgraph Python Connector SDK
+        SIDE --> RL[Per-Host Rate Limiter & Circuit Breaker]
+        RL --> ATS[ATS Adapters: Greenhouse / Lever / Ashby / Personio]
+        RL --> AGG[Aggregators: Arbeitnow / Jobicy / Remotive / Himalayas / ReliefWeb]
+        RL --> REG[Regional Portals & Forum Posts]
+    end
 
-<p align="center">
-  <img src="docs/screenshots/tracker.png" alt="Pipeline Tracker" width="900"/>
-</p>
-
----
-
-### 🤖 AI Generation Suite
-Generate everything a job application needs, tailored to each role:
-
-- **Tailored Resume & Cover Letter** — personalized to the job description
-- **ATS Match Analysis** — skills gap report vs. the JD
-- **STAR Flashcards** — behavioural interview prep from your experience
-- **Interview Questions** — predicted questions + model answers
-- **Job Brief** — company snapshot, role context, salary intel
-- **Global Insights** — pipeline health report, skill roadmap, recommendations
-
-Every generation is **budget-clamped** and **cost-tracked** in the usage ledger.
-
-<p align="center">
-  <img src="docs/screenshots/jobs.png" alt="Job Detail & AI Generation" width="900"/>
-</p>
-
----
-
-### 💬 Command Assistant
-An AI chat agent (LangGraph) that knows your entire pipeline. Ask it to:
-- Summarize your job search status
-- Find jobs by keyword or company
-- Search your document vault semantically
-- Remember facts across sessions
-
-Works with **or without** an API key (heuristic fallbacks).
-
-<p align="center">
-  <img src="docs/screenshots/assistant.png" alt="AI Assistant" width="900"/>
-</p>
-
----
-
-### 📄 Resume Copilot & Document Vault
-Upload your resumes, cover letters, and references (PDF, DOCX, plain text). They are chunked, embedded, and semantically searchable. The Resume Copilot generates and iterates on tailored resumes in-app.
-
-<p align="center">
-  <img src="docs/screenshots/resume.png" alt="Resume Copilot" width="900"/>
-</p>
-
----
-
-### ⚙️ AI Engine Settings — BYOK Made Simple
-Add, reorder, enable/disable, and test providers from one clean UI. Keys are stored **encrypted in your local SQLite DB** and never sent to any server.
-
-<p align="center">
-  <img src="docs/screenshots/settings.png" alt="AI Engine Settings" width="900"/>
-</p>
-
----
-
-### 🕷️ Auto-Apply Agent
-A LangGraph agent that scores the job against your profile, writes a pitch, then drives the **Scrapling browser agent** to prefill or submit application forms — fully autonomous.
-
-```
-analyze → decide → prepare → execute → verify
+    API --> NORM[Deterministic Field Extraction]
+    NORM --> DEDUP[Bucketed Deduplication O-n-k]
+    DEDUP --> RANK[Multi-Component 0-100 Ranker]
+    
+    UI --> RAG[Hybrid Vault: BM25 + Vector RRF]
+    UI --> LATEX[LaTeX PDF Resume Compiler]
+    UI --> AGENTS[LangGraph Supervised Workflows]
 ```
 
-Falls back to a guided simulation if the Scrapling agent is offline.
-
 ---
 
-## 🏗️ Architecture — Local-First by Design
+## Quickstart
 
-```
-┌─────────────────────────────────────────────────┐
-│              Your Browser (Next.js 15)           │
-│   Dashboard · Tracker · Assistant · Vault · ...  │
-└─────────────────┬───────────────────────────────┘
-                  │ API Routes (Next.js)
-┌─────────────────▼───────────────────────────────┐
-│                LLM Router                        │
-│  Provider Chain → Retry → Fallback → Breaker     │
-│  OpenAI · Gemini · Anthropic · Ollama · ...      │
-└─────────┬──────────────────────┬────────────────┘
-          │                      │
-┌─────────▼──────┐   ┌──────────▼──────────────┐
-│  SQLite DB     │   │  Scrapling Browser Agent │
-│  huntflow.db   │   │  (Python / port 8001)    │
-│  (your machine)│   │  Scraping · Auto-Apply   │
-└────────────────┘   └──────────────────────────┘
-```
+### Prerequisites
 
-**No cloud. No accounts. No vendor lock-in.** Everything lives in `data/huntflow.db`.
+- **Node.js**: `>=22.0.0 <23.0.0`
+- **npm**: `v10+`
+- **Python**: `>=3.10`
+- **uv**: `v0.4+` (for Python sidecar)
 
----
-
-## 🚀 Quickstart
-
-**Prerequisites**: Node.js 18+, npm
+### Native Setup (Development)
 
 ```bash
+# 1. Clone repository
 git clone https://github.com/arfaouiahmed1/huntflow.git
 cd huntflow
-npm install
+
+# 2. Install Node dependencies
+npm ci
+
+# 3. Setup Python sidecar environment
+cd scrapling-agent
+uv sync --group dev
+uv run scrapling install   # installs browser binaries (once)
+cd ..
+
+# 4. Create environment configuration
+cp .env.example .env
+
+# 5. Run diagnostic check
+npm run doctor
+
+# 6. Start development servers concurrently (Next.js :3000 + Sidecar :8001)
 npm run dev
 ```
 
-Open **http://localhost:3000** — the app seeds itself on first load.
+Open [http://localhost:3000](http://localhost:3000).
 
-### Production Build
-
-```bash
-npm run build
-npm run start
-```
-
-### Optional: Scrapling Browser Agent (auto-apply + LinkedIn scraping)
+### Docker Setup
 
 ```bash
-cd scrapling-agent
-uv sync                        # install Python deps
-uv run scrapling install       # download browsers (once)
-uv run uvicorn server:app --port 8001
+# 1. Clone and copy environment template
+git clone https://github.com/arfaouiahmed1/huntflow.git
+cd huntflow
+cp .env.example .env
+
+# 2. Build and start web workspace
+docker compose up --build
+
+# 3. (Optional) Start with Python sidecar agent
+docker compose --profile agent up --build
 ```
 
-If offline, scraping and auto-apply fall back gracefully.
-
 ---
 
-## 🔧 Configuration
+## Repository Commands & Quality Gates
 
-### Via Settings UI (recommended)
-Go to **Settings → AI Engine**, add your API keys, pick models, and drag to reorder provider priority.
-
-### Via Environment Variables
-Copy `.env.local.example` to `.env.local` and fill in your keys:
-
-```env
-OPENROUTER_API_KEY=sk-or-...
-OPENAI_API_KEY=sk-...
-GEMINI_API_KEY=AIza...
-ANTHROPIC_API_KEY=sk-ant-...
-GROQ_API_KEY=gsk_...
-DEEPSEEK_API_KEY=sk-...
-# Ollama runs locally — no key needed
-OLLAMA_BASE_URL=http://localhost:11434
-```
-
-Keys set via env are auto-detected on startup. Model overrides: `OPENAI_MODEL=gpt-4o`, etc.
-
+| Command | Description |
+| --- | --- |
+| `npm run check` | Runs ESLint and full TypeScript compilation (`tsc --noEmit`). |
+| `npm run doctor` | Runs repository diagnostics (Node, npm, uv, SQLite, sources schema, sidecar status). |
+| `npm run test:crawler` | Runs deterministic Vitest suite for crawler contracts, normalization, deduplication, and SQLite. |
+| `npm run test:sidecar` | Runs Python pytest suite for all connector adapters and rate limiters. |
+| `npm run test` | Runs the full Vitest test suite. |
+| `npm run eval:agents:benchmark` | Runs 50-case empirical multi-agent evaluation on real toolchains with isolated SQLite. |
+| `npm run sources:validate` | Validates `scrapling-agent/sources.json` against `source-registry.schema.json`. |
+| `npm run check:env` | Verifies parity between codebase `process.env` references and `.env.example`. |
+| `npm run enrichment:sync` | Synchronizes cited knowledge from licensed repositories into SQLite. |
+| `npm run clean:local` | Safely clears compiler caches, temporary logs, and build artifacts. |
 ---
 
-## 📊 Usage & Cost Tracking
+## Documentation Index
 
-Every LLM call is logged — provider, model, token counts, latency, and estimated cost. View the full ledger in **Settings → Usage**. Budget clamps prevent runaway spend.
-
----
-
-## 🛡️ Privacy & Security
-
-- ✅ **All data stays on your machine** — SQLite file at `data/huntflow.db`
-- ✅ **API keys stored locally** — masked in DB, never returned to the browser unmasked
-- ✅ **No telemetry** — zero analytics or tracking
-- ✅ **No accounts** — no sign-up, no email, no cloud sync
-- ✅ **Offline capable** — heuristic fallbacks work without any API key
-
----
-
-## 📁 Scripts
-
-| Script | Description |
-|---|---|
-| `npm run dev` | Start dev server (port 3000) |
-| `npm run build` | Production build |
-| `npm run start` | Serve production build |
-| `npm run lint` | Run ESLint |
-| `npm run test` | Run Vitest unit tests |
-
----
-
-## 📚 Documentation
-
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — System context, data model, LLM router, agent graphs, vault/RAG pipeline, security and limitations.
-
----
-
-<p align="center">
-  Built with ❤️ for job seekers who value privacy and control.<br/>
-  <strong>Your job search. Your data. Your keys.</strong>
-</p>
+- [Crawler Architecture Guide](docs/CRAWLER-ARCHITECTURE.md)
+- [Source Registry & Connector Guide](docs/SOURCE-REGISTRY.md)
+- [Environment & Configuration Guide](docs/ENVIRONMENT.md)
+- [Legal, Source Policy & Compliance Guide](docs/LEGAL-AND-SOURCE-POLICY.md)
+- [Agent & Crawler Operations](docs/AGENT-OPERATIONS.md)
+- [System Architecture](docs/ARCHITECTURE.md)
+- [Deployment & Docker Guide](docs/DEPLOYMENT.md)
+- [Privacy & Trust Boundaries](docs/TRUST-BOUNDARIES.md)
+- [Resume Engine & LaTeX Typography](docs/RESUME-ENGINE.md)
+- [RAG & Document Vault](docs/RAG-AND-DOCUMENT-VAULT.md)
+- [Third-Party Notices & Attributions](THIRD_PARTY_NOTICES.md)
+- [Contributing Guidelines](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Apache 2.0 License](LICENSE)

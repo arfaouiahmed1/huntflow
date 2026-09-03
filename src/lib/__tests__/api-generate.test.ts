@@ -125,27 +125,27 @@ describe("POST /api/generate — response contract per feature (AppContext shape
     expect(typeof salary).toBe("object");
   });
 
-  it("recommendations returns an array under data.recommendations", async () => {
+  it("recommendations returns an array under data.recommendations without requiring job", async () => {
     mockGenerateJSON.mockRejectedValue(new Error("no provider"));
     const res = await POST(
-      post({ type: "recommendations", job, profile: testProfile, trackedJobs: [job] })
+      post({ type: "recommendations", profile: testProfile, jobs: [job] })
     );
     expect(res.status).toBe(200);
     const { recommendations } = await res.json();
     expect(Array.isArray(recommendations)).toBe(true);
   });
 
-  it("skill_roadmap returns an array under data.roadmap", async () => {
+  it("skill_roadmap returns an array under data.roadmap without requiring job", async () => {
     mockGenerateJSON.mockRejectedValue(new Error("no provider"));
-    const res = await POST(post({ type: "skill_roadmap", job, profile: testProfile, gaps: ["K8s"] }));
+    const res = await POST(post({ type: "skill_roadmap", profile: testProfile, gaps: ["K8s"] }));
     expect(res.status).toBe(200);
     const { roadmap } = await res.json();
     expect(Array.isArray(roadmap)).toBe(true);
   });
 
-  it("pipeline_report returns data.report", async () => {
+  it("pipeline_report returns data.report without requiring job", async () => {
     mockGenerateJSON.mockRejectedValue(new Error("no provider"));
-    const res = await POST(post({ type: "pipeline_report", job, profile: testProfile, trackedJobs: [job] }));
+    const res = await POST(post({ type: "pipeline_report", profile: testProfile, jobs: [job] }));
     expect(res.status).toBe(200);
     const { report } = await res.json();
     expect(report).toBeTruthy();

@@ -1,0 +1,60 @@
+name: huntflow
+
+services:
+  web:
+    build:
+      context: .
+      target: runner
+    image: huntflow-web:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      HUNTFLOW_DATA_DIR: /app/data
+      SCRAPLING_AGENT_URL: http://agent:8001
+      HUNTFLOW_AGENT_TOKEN: ${HUNTFLOW_AGENT_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 25s
+      retries: 3
+    volumes:
+      - huntflow-data:/app/data
+
+  agent:
+    profiles: ["agent"]
+    build:
+      context: ./scrapling-agent
+    image: huntflow-agent:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8001"
+    environment:
+      HUNTFLOW_AGENT_TOKEN: ${HUNTFLOW_AGENT_TOKEN:-}
+      HUNTFLOW_CRAWL_CONCURRENCY: ${HUNTFLOW_CRAWL_CONCURRENCY:-1}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+    healthcheck:
+      test: ["CMD", "uv", "run", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    volumes:
+      - huntflow-agent-runs:/app/.agent_runs
+
+volumes:
+  huntflow-data:
+  huntflow-agent-runs:

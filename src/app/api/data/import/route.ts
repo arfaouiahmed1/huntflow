@@ -4,10 +4,10 @@ import { importAllData, BackupData } from "@/lib/db";
 import { settingsRepo } from "@/lib/db";
 import { isMasked } from "@/lib/masking";
 
-const UNSAFE_SETTING_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+const SAFE_SETTING_KEY = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
 
 function writeSetting(out: Record<string, string>, key: string, value: string): void {
-  if (UNSAFE_SETTING_KEYS.has(key)) return;
+  if (!SAFE_SETTING_KEY.test(key)) return;
   Object.defineProperty(out, key, { value, enumerable: true, writable: true, configurable: true });
 }
 
@@ -24,7 +24,7 @@ function restoreMaskedSecrets(settings: Record<string, string>): Record<string, 
   const keyById = new Map(storedProviders.map((p) => [p.id, p.apiKey ?? ""]));
 
   for (const [key, value] of Object.entries(settings)) {
-    if (UNSAFE_SETTING_KEYS.has(key)) continue;
+    if (!SAFE_SETTING_KEY.test(key)) continue;
     if (key === "llm_providers") {
       try {
         const chain = JSON.parse(value) as { id: string; apiKey?: string }[];

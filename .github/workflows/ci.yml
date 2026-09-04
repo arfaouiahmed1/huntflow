@@ -120,3 +120,24 @@ jobs:
 
       - name: Build Next.js Standalone
         run: npm run build
+
+  gate:
+    name: CI / Gate
+    if: ${{ always() }}
+    needs: [secret-scan, quality-node, quality-python, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all CI jobs to pass
+        env:
+          SECRET_SCAN_RESULT: ${{ needs['secret-scan'].result }}
+          QUALITY_NODE_RESULT: ${{ needs.quality-node.result }}
+          QUALITY_PYTHON_RESULT: ${{ needs.quality-python.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          for result in "$SECRET_SCAN_RESULT" "$QUALITY_NODE_RESULT" "$QUALITY_PYTHON_RESULT" "$BUILD_RESULT"; do
+            if [ "$result" != "success" ]; then
+              echo "::error::CI prerequisite finished with: $result"
+              exit 1
+            fi
+          done
+          echo "CI gate passed."

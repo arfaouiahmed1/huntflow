@@ -20,3 +20,14 @@
 - [ ] Connector uses public ATS API, open RSS/XML feed, or approved terms
 - [ ] Source attribution and termsUrl are provided
 - [ ] No unauthorized authenticated scraping or CAPTCHA/WAF bypass logic introduced
+
+## Verification Evidence
+<!-- Include exact commands and their results. Link to CI checks when available. -->
+- Commands run:
+- Results:
+- Runtime or browser smoke test:
+
+## Branch and Merge Readiness
+- [ ] Branch name uses the feat/* convention (or an approved fix/* / docs/* exception)
+- [ ] This PR targets main and contains only one coherent change set
+- [ ] No force-push or merge commit is needed to land this PR

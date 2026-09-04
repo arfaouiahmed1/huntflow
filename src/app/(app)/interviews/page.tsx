@@ -202,7 +202,7 @@ export default function InterviewsPage() {
           <div key={label} className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5">
             <Icon className="h-5 w-5" style={{ color }} />
             <p className="mt-3 font-mono text-3xl font-bold tabular-nums" style={{ color }}>
-              {String(value).padStart(2, "0")}
+              {value}
             </p>
             <p className="mt-1 text-xs text-dim">{label}</p>
           </div>

@@ -180,7 +180,7 @@ export default function OutreachPage() {
               <Unplug className="h-3.5 w-3.5" /> Email not connected
             </span>
           )}
-          <Button variant="outline" onClick={sync} loading={syncing}>
+          <Button variant="outline" onClick={sync} loading={syncing} disabled={!connected || syncing} title={!connected ? "Connect email in Settings before syncing the inbox." : undefined}>
             {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Sync inbox
           </Button>
         </div>

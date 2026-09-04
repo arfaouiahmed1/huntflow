@@ -673,7 +673,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-5rem)] overflow-hidden space-y-2">
+    <div className="flex min-h-0 flex-col h-[calc(100vh-5rem)] overflow-hidden space-y-2">
       {/* Floating Selection Popup: "Add to chat" */}
       {selectionPopup.visible && (
         <div
@@ -843,11 +843,11 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
       </div>
 
       {/* Main 3-Pane Resizable Workbench Canvas */}
-      <div className="relative flex flex-1 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink)] shadow-[0_12px_40px_rgba(0,0,0,0.22)]">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-auto rounded-2xl border border-[var(--line)] bg-[var(--ink)] shadow-[0_12px_40px_rgba(0,0,0,0.22)] lg:flex-row lg:overflow-hidden">
         {/* PANE 1 (LEFT): AI Resume Copilot with Prompt Inspector */}
         <div
-          style={{ width: `${leftWidthPercent}%` }}
-          className="flex flex-col h-full border-r border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl shrink-0 shadow-[4px_0_20px_rgba(0,0,0,0.12)] min-w-[300px]"
+          style={{ "--pane-width": String(leftWidthPercent) + "%" } as React.CSSProperties}
+          className="flex h-[420px] min-h-0 min-w-0 w-full flex-col border-r border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl shrink-0 shadow-[4px_0_20px_rgba(0,0,0,0.12)] lg:h-full lg:w-[var(--pane-width)] lg:min-w-[300px]"
         >
           {/* Copilot Header */}
           <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--ink-soft)]/60 px-4 py-3">
@@ -973,7 +973,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         <div
           onMouseDown={() => setIsDraggingLeft(true)}
           className={cn(
-            "w-1.5 bg-[var(--line)] hover:bg-[var(--chartreuse)]/40 transition-colors cursor-col-resize flex items-center justify-center shrink-0 select-none",
+            "hidden lg:flex w-1.5 bg-[var(--line)] hover:bg-[var(--chartreuse)]/40 transition-colors cursor-col-resize items-center justify-center shrink-0 select-none",
             isDraggingLeft && "bg-[var(--chartreuse)]/60"
           )}
         >
@@ -984,7 +984,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         <div
           ref={previewContainerRef}
           onMouseUp={handlePreviewMouseUp}
-          className="flex-1 overflow-auto bg-[var(--ink-deep)] p-6 flex flex-col items-center gap-5 relative select-text min-w-[420px]"
+          className="relative flex min-h-[420px] min-w-0 w-full flex-1 flex-col items-center gap-5 overflow-auto bg-[var(--ink-deep)] p-6 select-text lg:min-h-0 lg:min-w-[420px] lg:w-auto"
           style={{
             backgroundImage:
               "radial-gradient(800px 500px at 50% -10%, color-mix(in srgb, var(--chartreuse) 4%, transparent), transparent 60%), radial-gradient(700px 400px at 100% 100%, color-mix(in srgb, var(--sky) 3%, transparent), transparent 55%)",
@@ -1021,7 +1021,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         <div
           onMouseDown={() => setIsDraggingRight(true)}
           className={cn(
-            "w-1.5 bg-[var(--line)] hover:bg-[var(--chartreuse)]/40 transition-colors cursor-col-resize flex items-center justify-center shrink-0 select-none",
+            "hidden lg:flex w-1.5 bg-[var(--line)] hover:bg-[var(--chartreuse)]/40 transition-colors cursor-col-resize items-center justify-center shrink-0 select-none",
             isDraggingRight && "bg-[var(--chartreuse)]/60"
           )}
         >
@@ -1030,8 +1030,8 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
 
         {/* PANE 3 (RIGHT): ATS Diagnostic Tree, Template Switcher & Section Reordering */}
         <div
-          style={{ width: `${rightWidthPercent}%` }}
-          className="border-l border-[var(--line)] bg-[var(--ink-card)]/95 backdrop-blur-xl p-4 overflow-y-auto space-y-6 shrink-0 shadow-[-12px_0_32px_rgba(0,0,0,0.2)] min-w-[300px]"
+          style={{ "--pane-width": String(rightWidthPercent) + "%" } as React.CSSProperties}
+          className="flex h-[420px] min-h-0 min-w-0 w-full flex-col border-l border-[var(--line)] bg-[var(--ink-card)]/95 backdrop-blur-xl p-4 overflow-y-auto space-y-6 shrink-0 shadow-[-12px_0_32px_rgba(0,0,0,0.2)] lg:h-full lg:w-[var(--pane-width)] lg:min-w-[300px]"
         >
           <div className="flex items-center justify-between border-b border-[var(--line)] pb-3.5">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--paper)] flex items-center gap-2">

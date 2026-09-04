@@ -6,6 +6,8 @@ import {
   Zap,
   Radio,
   FilterX,
+  CheckCircle2,
+  CircleAlert,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { JobApplication, EmployerReview } from "@/types";
@@ -22,10 +24,13 @@ import CrawlerDiscoveryControls from "@/components/crawler/CrawlerDiscoveryContr
 import type { ChannelKey } from "@/components/crawler/CrawlerChannelBar";
 import type { CrawlerFacetFilters, CrawlerSourcePublic } from "@/lib/crawler/contracts";
 import { persistNotification } from "@/lib/notificationsClient";
+import { readJsonResponse } from "@/lib/errors";
 
 interface CrawlSourceResult {
-  source_id: string;
-  source_name: string;
+  id?: string;
+  name?: string;
+  source_id?: string;
+  source_name?: string;
   status: "success" | "warning" | "failed" | "skipped";
   found?: number;
   matched?: number;
@@ -43,8 +48,24 @@ interface CrawlSummary {
   sources: CrawlSourceResult[];
 }
 
-const DECISIONS_MAX = 500;
+interface CrawlApiResponse {
+  success?: boolean;
+  offline?: boolean;
+  error?: string;
+  runId?: string | null;
+  count?: number;
+  jobs?: JobApplication[];
+  concurrency?: number;
+  boardsCrawled?: number;
+  sourceResults?: CrawlSourceResult[];
+}
+interface CrawlNotice {
+  tone: "success" | "info" | "warning" | "error";
+  title: string;
+  detail: string;
+}
 
+const DECISIONS_MAX = 500;
 export default function JobsPage() {
   const {
     applications,
@@ -72,7 +93,7 @@ export default function JobsPage() {
   const [sources, setSources] = useState<CrawlerSourcePublic[]>([]);
   const [lastCrawl, setLastCrawl] = useState<CrawlSummary | null>(null);
   const [liveRunId, setLiveRunId] = useState<string | null>(null);
-
+  const [crawlNotice, setCrawlNotice] = useState<CrawlNotice | null>(null);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewJob, setReviewJob] = useState<JobApplication | null>(null);
   const [reviewData, setReviewData] = useState<EmployerReview | null>(null);
@@ -112,9 +133,11 @@ export default function JobsPage() {
 
   const runCrawl = useCallback(async () => {
     const startedAt = new Date().toISOString();
+    const searchTerm = keyword.trim() || "developer";
     setCrawling(true);
     setOffline(false);
     setLiveRunId(null);
+    setCrawlNotice(null);
     try {
       const concurrency = cloudinarySettings.concurrency || 1;
       const res = await fetch("/api/crawl", {
@@ -122,7 +145,7 @@ export default function JobsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           channel: channel === "without_whiteboards" ? "ats" : channel,
-          keyword: keyword.trim() || "developer",
+          keyword: searchTerm,
           filters: {
             ...facets,
             interviewStyle: channel === "without_whiteboards" ? "without_whiteboards" : undefined,
@@ -131,43 +154,71 @@ export default function JobsPage() {
           concurrency,
         }),
       });
-      const data = await res.json();
-      if (!res.ok || data.offline) {
-        setOffline(true);
-        setJobs([]);
-        return;
-      }
-      const collapsed = collapseDuplicateJobs(data.jobs || []);
-      setJobs(collapsed);
-      if (data.runId) setLiveRunId(data.runId);
+      const data = await readJsonResponse<CrawlApiResponse>(res);
+      if (!data) throw new Error(`Crawler returned an empty response (HTTP ${res.status}).`);
+      if (!res.ok) throw new Error(data.error || `Crawl failed (HTTP ${res.status}).`);
+
+      const sourceResults = data.sourceResults || [];
+      const count = Number(data.count || 0);
+      const failedSources = sourceResults.filter((source) => source.status === "failed" || source.status === "warning");
       setLastCrawl({
         runId: data.runId || null,
         startedAt,
         finishedAt: new Date().toISOString(),
-        boardsCrawled: data.boardsCrawled || 0,
-        found: data.count || 0,
-        keyword: keyword.trim() || "developer",
-        concurrency: data.concurrency || concurrency,
-        sources: data.sourceResults || [],
+        boardsCrawled: Number(data.boardsCrawled || 0),
+        found: count,
+        keyword: searchTerm,
+        concurrency: Number(data.concurrency || concurrency),
+        sources: sourceResults,
       });
-      if (data.count > 0) {
-        success(`Discovered and ranked ${data.count} fresh job opportunity(ies).`);
+      if (data.runId) setLiveRunId(data.runId);
+
+      if (data.offline) {
+        setOffline(true);
+        setJobs([]);
+        const message = data.error || "Start the local crawler agent and retry discovery.";
+        setCrawlNotice({ tone: "error", title: "Crawler agent unavailable", detail: message });
+        error(message);
+        return;
+      }
+
+      setOffline(false);
+      setJobs(collapseDuplicateJobs(data.jobs || []));
+      if (count > 0) {
+        setCrawlNotice({
+          tone: "success",
+          title: `Discovery complete — ${count} role${count === 1 ? "" : "s"} found`,
+          detail: `Searched ${data.boardsCrawled || 0} enabled sources for “${searchTerm}”.`,
+        });
+        success(`Discovered and ranked ${count} fresh job opportunity(ies).`);
         void persistNotification({
           title: "Crawl complete",
-          message: `Found ${data.count} fresh roles for "${keyword.trim() || "developer"}"`,
+          message: `Found ${count} fresh roles for "${searchTerm}"`,
           kind: "success",
           link: "/jobs",
         });
+      } else {
+        const sourceNames = failedSources
+          .slice(0, 3)
+          .map((source) => source.name || source.source_name || source.id || source.source_id || "source")
+          .join(", ");
+        const detail = failedSources.length
+          ? `${failedSources.length} source${failedSources.length === 1 ? "" : "s"} reported an error${failedSources.length === 1 ? "" : "s"}${sourceNames ? `: ${sourceNames}` : ""}.`
+          : `No enabled source returned a role matching “${searchTerm}”.`;
+        setCrawlNotice({ tone: failedSources.length ? "warning" : "info", title: "Discovery finished with no matches", detail });
+        warn(detail);
       }
       void refreshData();
     } catch (err) {
-      error(err instanceof Error ? err.message : "Crawl failed — agent offline.");
+      const message = err instanceof Error ? err.message : "Crawl failed — agent offline.";
+      setCrawlNotice({ tone: "error", title: "Discovery failed", detail: message });
+      error(message);
       setOffline(true);
       setJobs([]);
     } finally {
       setCrawling(false);
     }
-  }, [channel, facets, keyword, crawlLimit, cloudinarySettings.concurrency, success, error, refreshData]);
+  }, [channel, facets, keyword, crawlLimit, cloudinarySettings.concurrency, success, error, warn, refreshData]);
 
   const handleToggleSource = useCallback(async (id: string, enabled: boolean) => {
     try {
@@ -480,6 +531,47 @@ export default function JobsPage() {
         offline={offline}
         onOpenCompanyDiscovery={() => setDiscoveryModalOpen(true)}
       />
+      {crawlNotice && (
+        <section
+          role="status"
+          aria-live="polite"
+          data-testid="crawl-feedback"
+          className={`rounded-2xl border p-4 ${crawlNotice.tone === "success"
+            ? "border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/[0.06]"
+            : crawlNotice.tone === "error"
+              ? "border-[var(--coral)]/30 bg-[var(--coral)]/[0.06]"
+              : "border-[var(--amber)]/30 bg-[var(--amber)]/[0.06]"}`}
+        >
+          <div className="flex items-start gap-3">
+            {crawlNotice.tone === "success" ? (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--chartreuse)]" />
+            ) : (
+              <CircleAlert className={`mt-0.5 h-4 w-4 shrink-0 ${crawlNotice.tone === "error" ? "text-[var(--coral)]" : "text-[var(--amber)]"}`} />
+            )}
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-[var(--paper)]">{crawlNotice.title}</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-dim">{crawlNotice.detail}</p>
+              {lastCrawl && (
+                <p className="mt-2 font-mono text-[10px] text-dim">
+                  Last run: {lastCrawl.keyword} · {lastCrawl.boardsCrawled} sources · {lastCrawl.found} roles · {lastCrawl.concurrency} worker{lastCrawl.concurrency === 1 ? "" : "s"}
+                </p>
+              )}
+              {lastCrawl?.sources.some((source) => source.status === "failed" || source.status === "warning") && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {lastCrawl.sources
+                    .filter((source) => source.status === "failed" || source.status === "warning")
+                    .slice(0, 4)
+                    .map((source) => (
+                      <span key={source.id || source.source_id || source.name || source.source_name} className="rounded-full border border-[var(--coral)]/20 bg-[var(--coral)]/10 px-2 py-0.5 text-[10px] text-[var(--coral)]">
+                        {source.name || source.source_name || source.id || source.source_id || "Source"}
+                      </span>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {crawling && (
         <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/40 p-5">

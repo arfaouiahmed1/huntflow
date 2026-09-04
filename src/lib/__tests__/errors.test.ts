@@ -1,5 +1,27 @@
 import { describe, it, expect } from "vitest";
-import { AppError, toErrorMessage, routeError, readBody } from "@/lib/errors";
+import { AppError, toErrorMessage, routeError, readBody, readJsonResponse } from "@/lib/errors";
+
+
+describe("readJsonResponse", () => {
+  it("returns null for an empty response body", async () => {
+    expect(await readJsonResponse(new Response(""))).toBeNull();
+  });
+
+  it("parses a valid JSON response", async () => {
+    expect(await readJsonResponse<{ ok: boolean }>(new Response('{"ok":true}'))).toEqual({ ok: true });
+  });
+
+  it("reports malformed JSON with the upstream HTTP status", async () => {
+    try {
+      await readJsonResponse(new Response("not json", { status: 502 }));
+      expect.unreachable();
+    } catch (e) {
+      expect(e).toBeInstanceOf(AppError);
+      expect((e as AppError).status).toBe(502);
+      expect((e as AppError).code).toBe("INVALID_JSON_RESPONSE");
+    }
+  });
+});
 
 describe("AppError", () => {
   it("defaults to 500 / UNKNOWN", () => {

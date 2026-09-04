@@ -60,6 +60,17 @@ const ROUTABLE_WORKFLOWS = [
   { id: "atsAudit", label: "ATS audit", hint: "Keyword and formatting review" },
 ] as const;
 
+const SETTINGS_TABS = [
+  { id: "workspace", label: "Workspace", description: "Theme and navigation" },
+  { id: "agents", label: "Agents", description: "Models and workflow routing" },
+  { id: "crawler", label: "Crawler", description: "Concurrency and visual feeds" },
+  { id: "connections", label: "Connections", description: "LinkedIn, Gmail, and mail" },
+  { id: "data", label: "Data", description: "Backup and reset controls" },
+] as const;
+
+type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
+const SETTINGS_TAB_ICONS = { workspace: Sun, agents: Cpu, crawler: Layers, connections: Link2, data: Download } as const;
+
 export default function SettingsPage() {
   const {
     providers,
@@ -124,7 +135,7 @@ export default function SettingsPage() {
   const [backupBusy, setBackupBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-
+  const [activeTab, setActiveTab] = useState<SettingsTab>("workspace");
   const chain = providers;
 
   const resetAllData = async () => {
@@ -582,8 +593,45 @@ export default function SettingsPage() {
           Configure providers, integrations, automation services, and local data controls.
         </p>
       </div>
+      <nav className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.08)]" aria-label="Settings sections">
+        <div className="flex gap-2 overflow-x-auto" role="tablist" aria-label="Settings sections">
+          {SETTINGS_TABS.map((tab) => {
+            const Icon = SETTINGS_TAB_ICONS[tab.id];
+            const selected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                id={`settings-tab-${tab.id}`}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                aria-controls="settings-content"
+                data-testid={`settings-tab-${tab.id}`}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "group min-h-14 min-w-[150px] flex-1 rounded-xl border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chartreuse)]",
+                  selected
+                    ? "border-[var(--chartreuse)]/45 bg-[var(--chartreuse)]/10 text-[var(--paper)]"
+                    : "border-transparent text-dim hover:border-[var(--line)] hover:bg-white/[0.03] hover:text-[var(--paper)]",
+                )}
+              >
+                <span className="flex items-center gap-2 text-xs font-semibold">
+                  <Icon className={cn("h-3.5 w-3.5", selected ? "text-[var(--chartreuse)]" : "text-dim group-hover:text-[var(--paper)]")} />
+                  {tab.label}
+                </span>
+                <span className="mt-1 block whitespace-nowrap text-[10px] text-dim">{tab.description}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="px-2 pt-2 text-[10px] font-mono uppercase tracking-[0.16em] text-dim" aria-live="polite">
+          Editing {SETTINGS_TABS.find((tab) => tab.id === activeTab)?.label} settings
+        </p>
+      </nav>
 
-      <section className="grid gap-5 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-center">
+      <div id="settings-content" role="tabpanel" aria-labelledby={`settings-tab-${activeTab}`} className="space-y-6">
+      {activeTab === "workspace" && (
+        <section className="grid gap-5 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-center">
         <div>
           <h2 className="font-display text-sm font-semibold text-[var(--paper)]">Appearance & navigation</h2>
           <p className="mt-1 text-xs leading-relaxed text-dim">
@@ -646,8 +694,10 @@ export default function SettingsPage() {
           </div>
         </div>
       </section>
+      )}
 
-      <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
+      {activeTab === "agents" && (
+        <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
       {/* LLM Engine */}
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
         <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
@@ -822,10 +872,11 @@ export default function SettingsPage() {
         )}
       </section>
       </div>
+      )}
 
-      <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
+      <div className={activeTab === "connections" ? "grid gap-6 xl:grid-cols-2 xl:items-start" : activeTab === "crawler" ? "space-y-6" : "hidden"}>
       {/* LinkedIn */}
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
+      <section className={cn("rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6", activeTab === "connections" ? "" : "hidden")}>
         <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
           <Link2 className="h-4 w-4 text-[var(--chartreuse)]" /> LinkedIn
         </h2>
@@ -926,7 +977,7 @@ export default function SettingsPage() {
       </section>
 
       {/* Cloudinary & Parallelism */}
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
+      <section className={cn("rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6", activeTab === "crawler" ? "" : "hidden")}>
         <div className="flex items-center justify-between mb-1">
           <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
             <ImageIcon className="h-4 w-4 text-[var(--chartreuse)]" /> Cloudinary Streaming & Parallel Crawler
@@ -1021,7 +1072,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Email */}
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
+      <section className={cn("rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6", activeTab === "connections" ? "" : "hidden")}>
         <div className="flex items-center justify-between mb-1">
           <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
             <Mail className="h-4 w-4 text-[var(--chartreuse)]" /> Email & Gmail Integration
@@ -1278,7 +1329,7 @@ export default function SettingsPage() {
       </section>
 
       {/* Backup & restore */}
-      <section className="rounded-2xl border border-[var(--line)]/70 bg-white/[0.02] p-6">
+      <section className={cn("rounded-2xl border border-[var(--line)]/70 bg-white/[0.02] p-6", activeTab === "data" ? "" : "hidden")}>
         <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
           <Download className="h-4 w-4" /> Backup & Restore
         </h2>
@@ -1318,7 +1369,7 @@ export default function SettingsPage() {
       </section>
 
       {/* Danger zone */}
-      <section className="rounded-2xl border border-[var(--coral)]/25 bg-[var(--coral)]/[0.04] p-6">
+      <section className={cn("rounded-2xl border border-[var(--coral)]/25 bg-[var(--coral)]/[0.04] p-6", activeTab === "data" ? "" : "hidden")}>
         <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--coral)]">
           <Trash2 className="h-4 w-4" /> Danger Zone
         </h2>
@@ -1338,6 +1389,7 @@ export default function SettingsPage() {
           {armReset ? "Click again to confirm — this wipes everything" : "Reset all data"}
         </button>
       </section>
+      </div>
     </div>
   );
 }

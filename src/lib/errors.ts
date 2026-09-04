@@ -52,6 +52,16 @@ export async function readBody(req: Request): Promise<unknown> {
   }
 }
 
+export async function readJsonResponse<T>(response: Response): Promise<T | null> {
+  const body = await response.text();
+  if (!body.trim()) return null;
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    throw new AppError(`Invalid JSON response (HTTP ${response.status}).`, "INVALID_JSON_RESPONSE", response.status);
+  }
+}
+
 /** Normalize an error thrown inside an API route into a JSON response. */
 export function routeError(err: unknown) {
   if (err instanceof AppError) {

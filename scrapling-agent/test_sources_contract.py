@@ -155,6 +155,14 @@ class CatalogContractTests(unittest.TestCase):
     def test_every_source_has_valid_channel_regions_and_contracts(self) -> None:
         errors = validate_catalog(self.data)
         self.assertEqual(errors, [], "\n".join(errors))
+    def test_crawl_iterator_resolves_registry_attribution_urls(self) -> None:
+        sources = server._iter_sources(self.data)
+        self.assertGreaterEqual(len(sources), 20)
+        for source in sources:
+            self.assertIn("url", source)
+            attribution = source.get("attribution")
+            if isinstance(attribution, dict) and attribution.get("url"):
+                self.assertEqual(source["url"], attribution["url"], source.get("id"))
 
     def test_serialized_catalog_has_zero_forbidden_brand_matches(self) -> None:
         forbidden_brand = "fm" + "hy"

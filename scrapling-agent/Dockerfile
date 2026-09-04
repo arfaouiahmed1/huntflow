@@ -49,7 +49,8 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 RUN uv run scrapling install
 
-COPY server.py sources.json source-registry.schema.json rate_limiter.py adblock.py ./
+COPY server.py sources.json source-registry.schema.json rate_limiter.py adblock.py sync_filterlists.py stealth.py cookies.py ./
+COPY filterlists/ ./filterlists/
 COPY connectors/ ./connectors/
 
 EXPOSE 8001

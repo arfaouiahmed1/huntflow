@@ -40,7 +40,7 @@ import {
   AGENT_ROUTING_STORAGE_KEY,
   llmSettingsFrom,
 } from '../lib/llm/providers';
-import { toErrorMessage } from '../lib/errors';
+import { readJsonResponse, toErrorMessage } from '../lib/errors';
 import { useToast } from '@/components/ui/Toaster';
 import { fetchStats } from '@/lib/api/stats';
 
@@ -1130,9 +1130,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
     });
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || 'Failed to scrape job offer.');
-    return data;
+    const data = await readJsonResponse<Partial<ScrapedJob> & { error?: unknown }>(res);
+    if (!res.ok) {
+      const detail = typeof data?.error === 'string' ? data.error : `Scrape failed (HTTP ${res.status}).`;
+      throw new Error(detail);
+    }
+    if (!data || typeof data.title !== 'string' || typeof data.company !== 'string' || typeof data.description !== 'string') {
+      throw new Error('Scrape returned no structured job data. Try Manual Entry or paste the job description.');
+    }
+    return {
+      title: data.title.trim() || 'Software Engineer',
+      company: data.company.trim() || 'Unknown Company',
+      location: typeof data.location === 'string' && data.location.trim() ? data.location : 'Remote / Flexible',
+      salary: typeof data.salary === 'string' && data.salary.trim() ? data.salary : 'Competitive Salary',
+      description: data.description.trim(),
+    };
   }, []);
 
   /* ------------------------- AI generation ------------------------- */

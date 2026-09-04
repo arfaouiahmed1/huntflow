@@ -5,6 +5,7 @@ Run with: uv run uvicorn server:app --port 8001
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -264,21 +265,38 @@ class ConfigPayload(BaseModel):
     sources_enabled: Optional[dict[str, bool]] = None
 
 
+def _source_url(source: dict[str, Any]) -> str:
+    direct = source.get("url")
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+    attribution = source.get("attribution")
+    if isinstance(attribution, dict):
+        attributed = attribution.get("url")
+        if isinstance(attributed, str):
+            return attributed.strip()
+    return ""
+
+
+def _normalize_source(source: dict[str, Any], category: str | None = None) -> dict[str, Any]:
+    normalized = dict(source)
+    if category and not normalized.get("category"):
+        normalized["category"] = category
+    normalized["url"] = _source_url(normalized)
+    return normalized
+
+
 def _iter_sources(data: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(data, dict):
         return []
     if "sources" in data and isinstance(data["sources"], list):
-        return [s for s in data["sources"] if isinstance(s, dict)]
+        return [_normalize_source(s) for s in data["sources"] if isinstance(s, dict)]
     out: list[dict[str, Any]] = []
     for cat, boards in data.items():
         if cat.startswith("_") or not isinstance(boards, list):
             continue
         for b in boards:
             if isinstance(b, dict):
-                b_copy = dict(b)
-                if "category" not in b_copy:
-                    b_copy["category"] = cat
-                out.append(b_copy)
+                out.append(_normalize_source(b, cat))
     return out
 
 
@@ -861,6 +879,41 @@ def _extract_hiring_posts(page, board, base_url: str, per_board_limit: int) -> l
     return jobs
 
 
+def _fetch_connector_jobs(board: dict[str, Any], keyword: str) -> list[dict[str, Any]] | None:
+    connector_id = str(board.get("connector") or "").strip()
+    if not connector_id:
+        return None
+    connector = get_connector(connector_id)
+    if connector is None:
+        return None
+
+    async def fetch_page():
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            query = {"keyword": keyword} if keyword else None
+            return await connector.fetch_page(board, {}, query, client)
+
+    page = asyncio.run(fetch_page())
+    if page.status not in ("success", "not_modified"):
+        raise RuntimeError(page.error_message or f"{connector_id} returned {page.status}")
+    return [
+        {
+            "id": f"{connector_id}_{item.external_id}",
+            "title": item.title,
+            "company": item.company,
+            "location": item.location,
+            "salary": item.salary or "",
+            "url": item.url,
+            "jobDescription": item.description,
+            "source": board.get("name", connector_id),
+            "category": board.get("category", "general"),
+            "board_id": board.get("id", connector_id),
+            "posted_at": item.posted_at,
+            "tags": item.tags,
+        }
+        for item in page.items
+    ]
+
+
 @app.post("/crawl")
 def crawl(req: CrawlRequest, _auth: None = Depends(require_token if AGENT_TOKEN else lambda: None)):
     max_workers = max(1, min(req.concurrency or config.max_concurrency, 16))
@@ -876,9 +929,13 @@ def crawl(req: CrawlRequest, _auth: None = Depends(require_token if AGENT_TOKEN 
     all_sources = _iter_sources(sources_data)
     tasks: list[dict[str, Any]] = []
     for raw_board in all_sources:
-        cat = raw_board.get("category") or raw_board.get("channel") or "general"
-        if req.category != "all" and req.category not in (cat, raw_board.get("channel")):
+        board_id = str(raw_board.get("id") or "")
+        default_enabled = bool(raw_board.get("enabledByDefault", True))
+        if not board_id or not _enabled_overrides.get(board_id, default_enabled):
             continue
+        if raw_board.get("crawlPolicy") in ("disabled", "manual_only"):
+            continue
+        cat = raw_board.get("category") or raw_board.get("channel") or "general"
         b = dict(raw_board)
         b["category"] = cat
         tasks.append(b)
@@ -942,18 +999,25 @@ def crawl(req: CrawlRequest, _auth: None = Depends(require_token if AGENT_TOKEN 
         try:
             board_type = board.get("type", "static")
             board_shot = None
-            if board_type == "posts":
-                page = _fetch_static(board["url"])
-                found = _extract_hiring_posts(page, board, board["url"], per_board_limit)
-            elif board_type == "stealth":
-                if req.capture_screenshot:
-                    page, board_shot = _fetch_dynamic_with_shot(board["url"], run_id, f"{board_name} results")
-                else:
-                    page, board_shot = _fetch_dynamic(board["url"]), None
-                found = _extract_cards(page, board, board["url"], per_board_limit)
+            connector_jobs = _fetch_connector_jobs(board, kw)
+            if connector_jobs is not None:
+                found = connector_jobs[:per_board_limit]
             else:
-                page = _fetch_static(board["url"])
-                found = _extract_cards(page, board, board["url"], per_board_limit)
+                board_url = str(board.get("url") or _source_url(board)).strip()
+                if not board_url:
+                    raise ValueError(f"Source '{board_name}' has no crawl URL")
+                if board_type == "posts":
+                    page = _fetch_static(board_url)
+                    found = _extract_hiring_posts(page, board, board_url, per_board_limit)
+                elif board_type == "stealth":
+                    if req.capture_screenshot:
+                        page, board_shot = _fetch_dynamic_with_shot(board_url, run_id, f"{board_name} results")
+                    else:
+                        page, board_shot = _fetch_dynamic(board_url), None
+                    found = _extract_cards(page, board, board_url, per_board_limit)
+                else:
+                    page = _fetch_static(board_url)
+                    found = _extract_cards(page, board, board_url, per_board_limit)
 
             board_kw = ((board.get("keyword") or kw) or "").strip().lower()
             matched_cards: list[dict[str, Any]] = []

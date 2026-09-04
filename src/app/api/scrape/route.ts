@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 import { isIP } from 'node:net';
+import { readJsonResponse } from '@/lib/errors';
 import { AGENT_BASE_URL as AGENT_URL, agentHeaders } from '@/lib/agentClient';
 
 /** Block SSRF targets: localhost, loopback, link-local, private + reserved IPs.
@@ -86,8 +87,8 @@ export async function POST(req: NextRequest) {
       clearTimeout(timer);
 
       if (res.ok) {
-        const data = await res.json();
-        if (data?.title || data?.description) {
+        const data = await readJsonResponse<Record<string, unknown>>(res);
+        if (data && (typeof data.title === 'string' || typeof data.description === 'string')) {
           return NextResponse.json(data);
         }
       }

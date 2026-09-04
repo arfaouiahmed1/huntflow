@@ -1,5 +1,3 @@
-import { PDFParse } from "pdf-parse";
-import mammoth from "mammoth";
 
 const MAX_EXTRACT = 400_000;
 
@@ -7,6 +5,7 @@ const MAX_EXTRACT = 400_000;
 export async function extractText(buffer: Buffer, mime: string, filename: string): Promise<string> {
   const lower = filename.toLowerCase();
   if (mime === "application/pdf" || lower.endsWith(".pdf")) {
+    const { PDFParse } = await import("pdf-parse");
     const parser = new PDFParse({ data: buffer });
     try {
       const result = await parser.getText();
@@ -19,6 +18,7 @@ export async function extractText(buffer: Buffer, mime: string, filename: string
     mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     lower.endsWith(".docx")
   ) {
+    const { default: mammoth } = await import("mammoth");
     const result = await mammoth.extractRawText({ buffer });
     return result.value ?? "";
   }

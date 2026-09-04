@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 import { isIP } from 'node:net';
 import { readJsonResponse } from '@/lib/errors';
+import { stripNonContent, htmlToText, sanitizeDescription, sanitizeScrapeResponse } from '@/lib/scrapeSanitize';
 import { AGENT_BASE_URL as AGENT_URL, agentHeaders } from '@/lib/agentClient';
 
 /** Block SSRF targets: localhost, loopback, link-local, private + reserved IPs.
@@ -89,7 +90,9 @@ export async function POST(req: NextRequest) {
       if (res.ok) {
         const data = await readJsonResponse<Record<string, unknown>>(res);
         if (data && (typeof data.title === 'string' || typeof data.description === 'string')) {
-          return NextResponse.json(data);
+          // Quality gate: a client-rendered shell can pass the sidecar through
+          // with React Flight JS (self.__next_f.push...) as the "description".
+          return NextResponse.json(sanitizeScrapeResponse(data));
         }
       }
     } catch {
@@ -152,7 +155,8 @@ async function scrapeWithCheerio(url: string) {
   let salary = '';
   let description = '';
 
-  // Strategy 1: Check Schema.org JobPosting JSON-LD
+  // Strategy 1: Check Schema.org JobPosting JSON-LD. Runs before the DOM is
+  // stripped so its <script type="application/ld+json"> payloads are intact.
   $('script[type="application/ld+json"]').each((_, elem) => {
     try {
       const json = JSON.parse($(elem).html() || '{}');
@@ -168,13 +172,18 @@ async function scrapeWithCheerio(url: string) {
           salary = `${jobData.baseSalary.value?.minValue || ''} - ${jobData.baseSalary.value?.maxValue || ''} ${jobData.baseSalary.currency || ''}`.trim();
         }
         if (jobData.description) {
-          description = cheerio.load(jobData.description).text().trim();
+          description = htmlToText(jobData.description);
         }
       }
     } catch {
       // Ignore JSON parse errors
     }
   });
+
+  // Remove scripts/styles/etc. from the DOM before any .text() extraction so
+  // inline JS bundles (e.g. Next.js self.__next_f.push flight payloads) can't
+  // leak into the visible job copy.
+  stripNonContent($);
 
   // Strategy 2: Meta tags & OpenGraph
   if (!title) {
@@ -220,7 +229,7 @@ async function scrapeWithCheerio(url: string) {
     }
 
     if (!description) {
-      description = $('body').text().replace(/\s+/g, ' ').substring(0, 3000);
+      description = $('body').text();
     }
   }
 
@@ -231,6 +240,6 @@ async function scrapeWithCheerio(url: string) {
     company: company || 'Tech Company',
     location: location || 'Remote / Flexible',
     salary: salary || 'Competitive Salary',
-    description: description.substring(0, 4000) || 'Job description extracted from link.'
+    description: sanitizeDescription(description)
   };
 }

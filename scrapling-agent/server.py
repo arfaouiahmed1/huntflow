@@ -419,14 +419,78 @@ def _parse_json_ld(page) -> Optional[dict]:
     return None
 
 
+_NON_COPY_TAGS = frozenset({"script", "style", "noscript", "template"})
+
+# Signatures of client-rendered JS bundles that indicate a SPA shell rather
+# than real job copy (e.g. Next.js React Flight payloads). Stored lowercase;
+# matching is case-insensitive because source builds can emit these markers in
+# mixed case (__next_f, __NEXT_DATA__, /_next/static).
+_JS_BUNDLE_SIGNATURES = ("__next_f", "__next_data__", "_next/static")
+
+_JOB_DESCRIPTION_FALLBACK = "Job description extracted from link."
+
+# Keep these thresholds aligned with src/lib/scrapeSanitize.ts.
+_MIN_STATISTICAL_LENGTH = 100
+_MAX_SYNTAX_DENSITY = 0.08
+_MIN_WORD_TOKENS = 10
+_MIN_WORD_RATIO = 0.3
+
+
+def _is_copy_node(node) -> bool:
+    """True when a `::text` selector node holds visible copy (not JS/CSS)."""
+    parent = getattr(node, "parent", None)
+    while parent is not None:
+        tag = getattr(parent, "tag", "")
+        tag = tag() if callable(tag) else tag
+        if str(tag or "").lower() in _NON_COPY_TAGS:
+            return False
+        parent = getattr(parent, "parent", None)
+    return True
+
+
+def _is_usable_description(text: str) -> bool:
+    """Mirror the client gate so both extraction paths reject the same junk."""
+    if not text or not text.strip():
+        return False
+    lower = text.lower()
+    if any(sig in lower for sig in _JS_BUNDLE_SIGNATURES):
+        return False
+
+    normalized = text.strip()
+    if normalized == _JOB_DESCRIPTION_FALLBACK:
+        return False
+    if len(normalized.split()) < 3:
+        return False
+    if len(normalized) < _MIN_STATISTICAL_LENGTH:
+        return True
+    syntax_chars = len(re.findall(r"[{}()[\]]", normalized))
+    if syntax_chars / len(normalized) > _MAX_SYNTAX_DENSITY:
+        return False
+    tokens = normalized.split()
+    if len(tokens) >= _MIN_WORD_TOKENS:
+        word_tokens = sum(1 for token in tokens if re.search(r"[A-Za-z]{2,}", token))
+        if word_tokens / len(tokens) < _MIN_WORD_RATIO:
+            return False
+    return True
+
+
 def _body_text(page) -> str:
     parts = []
-    for text in page.css("body *::text").getall():
-        t = str(text).strip()
+    for node in page.css("body *::text"):
+        if not _is_copy_node(node):
+            continue
+        t = str(getattr(node, "text", node)).strip()
         if len(t) > 1:
             parts.append(t)
     text = " ".join(parts)
     return re.sub(r"\s+", " ", text)[:4000]
+
+
+def _jsonld_copy(value: object) -> str:
+    """Convert JSON-LD HTML descriptions to the same safe plain text as body copy."""
+    from scrapling.parser import Adaptor
+
+    return _body_text(Adaptor(f"<body><div>{str(value)}</div></body>", url=""))
 
 
 def _extract_job(page, url: str) -> dict[str, str]:
@@ -434,9 +498,12 @@ def _extract_job(page, url: str) -> dict[str, str]:
     company = ""
     location = ""
     salary = ""
+    description = ""
 
     ld = _parse_json_ld(page)
     if ld:
+        if isinstance(ld.get("description"), str):
+            description = _jsonld_copy(ld["description"])
         title = ld.get("title") or ""
         company = (ld.get("hiringOrganization") or {}).get("name") or ""
         jl = ld.get("jobLocation") or {}
@@ -474,12 +541,17 @@ def _extract_job(page, url: str) -> dict[str, str]:
 
     title = re.sub(r"\b(apply|hiring|job|careers)\b", "", title, flags=re.I).strip() or "Software Engineer"
 
+    if not _is_usable_description(description):
+        description = _body_text(page)
+    if not _is_usable_description(description):
+        description = _JOB_DESCRIPTION_FALLBACK
+
     return {
         "title": title,
         "company": company,
         "location": location or "Remote / Flexible",
         "salary": salary or "Competitive Salary",
-        "description": _body_text(page) or "Job description extracted from link.",
+        "description": description,
     }
 
 
@@ -559,6 +631,19 @@ def scrape(req: ScrapeRequest, _auth: None = Depends(require_token if AGENT_TOKE
     try:
         record(run_id, "⚡ Static fetch via TLS impersonation…", "info")
         result = _scrape_static(req.url)
+        if not _is_usable_description(result.get("description", "")):
+            # Static copy was rejected by the quality gate — typically a SPA
+            # shell whose only "copy" was a React Flight / __NEXT_DATA__ JS
+            # bundle. Give the real-browser path one bounded shot at actual
+            # rendered copy before accepting the neutral fallback.
+            log.info("Static copy rejected by quality gate (%s), retrying in stealth browser…", req.url)
+            record(run_id, "⚠ Static copy looked like a JS shell — retrying in a real browser…", "warning")
+            try:
+                result = _scrape_dynamic(req.url, run_id=run_id)
+            except Exception as retry_err:  # noqa: BLE001
+                # Static scrape genuinely succeeded; keep its (fallback) result
+                # rather than surfacing a dynamic-fetch failure.
+                log.info("Dynamic retry failed (%s); keeping static result.", retry_err)
         end_run(run_id, "success", f"✅ Scraped in {result['company']} — {result['title']}")
         return result
     except Exception as e:  # noqa: BLE001

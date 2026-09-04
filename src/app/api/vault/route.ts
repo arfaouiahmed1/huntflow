@@ -5,6 +5,8 @@ import { ingestDocument, listDocuments, deleteDocument, vaultStats, setDocLabel,
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 const MAX_LABEL_LENGTH = 40;
 
+export const runtime = "nodejs";
+
 export async function GET() {
   try {
     return Response.json({ docs: listDocuments(), stats: vaultStats() });

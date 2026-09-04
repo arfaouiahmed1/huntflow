@@ -648,6 +648,18 @@ export default function JobsPage() {
           </div>
         </div>
       </div>
+      {visibleJobs.length === 0 && !hasZeroFilterResult && !crawling && (
+        <section
+          data-testid="crawl-empty-state"
+          className="rounded-3xl border border-dashed border-[var(--line)] bg-white/[0.015] p-8 text-center"
+        >
+          <FilterX className="mx-auto h-8 w-8 text-dim" />
+          <h3 className="mt-3 text-sm font-semibold text-[var(--paper)]">No crawl results yet</h3>
+          <p className="mx-auto mt-2 max-w-lg text-xs leading-relaxed text-dim">
+            Run Discovery above to query the selected sources. Zero results is valid before a crawl completes, or when no enabled source matches the keyword and filters — HUNTFLOW never invents postings.
+          </p>
+        </section>
+      )}
 
       {visibleJobs.length > 0 && viewMode === "deck" && (
         <JobSwipeDeck

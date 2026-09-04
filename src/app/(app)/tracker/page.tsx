@@ -892,19 +892,26 @@ export default function TrackerPage() {
                 </div>
                 <p className="mb-3 px-0.5 text-[10px] leading-snug text-dim/70">{col.hint}</p>
                 <div className="flex flex-col gap-3">
-                  <AnimatePresence mode="popLayout">
+                  <AnimatePresence initial={false} mode="popLayout">
                     {jobs.map((job, i) => (
-                      <div key={job.id} className="space-y-1.5">
+                      <motion.div
+                        key={job.id}
+                        initial={false}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0, overflow: "hidden" }}
+                        transition={{ duration: 0.16 }}
+                        className="space-y-1.5"
+                      >
                         <JobCard job={job} index={i} onOpen={(id) => openJob(id)} />
                         <button
                           onClick={() => { setExplainJobId(job.id); handleExplainFit(job); }}
                           disabled={explainLoading}
                           className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--line)] bg-white/[0.02] px-2.5 py-1.5 text-[11px] font-semibold text-dim hover:border-[var(--chartreuse)]/30 hover:text-[var(--chartreuse)] disabled:opacity-40"
-                          data-testid={`explain-fit-inline-${job.id}`}
+                          data-testid={"explain-fit-inline-" + job.id}
                         >
                           <FileSearch className="h-3 w-3" /> Explain fit
                         </button>
-                      </div>
+                      </motion.div>
                     ))}
                   </AnimatePresence>
                   {jobs.length === 0 && (

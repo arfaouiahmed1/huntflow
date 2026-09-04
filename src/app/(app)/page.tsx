@@ -132,7 +132,7 @@ export default function DashboardPage() {
   const received = emails.filter((email) => email.direction === "received").length;
 
   return (
-    <div className="space-y-7">
+    <div className="min-w-0 space-y-7">
       <section className="relative overflow-hidden rounded-3xl border border-[var(--line)] bg-[var(--ink-card)] p-7 sm:p-8">
         <div className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-[var(--chartreuse)]/8 blur-3xl" />
         <div className="relative flex flex-wrap items-end justify-between gap-6">
@@ -171,8 +171,8 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--paper)]"><Activity className="h-4 w-4 text-[var(--chartreuse)]" /> Live operations</h2>
@@ -218,8 +218,8 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-        <section>
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="min-w-0">
           <div className="mb-3 flex items-center justify-between"><h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--paper)]"><Target className="h-4 w-4 text-[var(--sky)]" /> Best matches</h2><Link href="/tracker" className="text-[11px] text-dim hover:text-[var(--paper)]">View tracker →</Link></div>
           <div className="space-y-2">
             {bestMatches.length === 0 ? <div className="rounded-2xl border border-dashed border-[var(--line)] p-7 text-center text-xs text-dim">Score tracked jobs to surface your strongest targets.</div> : bestMatches.map((job) => (
@@ -232,7 +232,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section>
+        <section className="min-w-0">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--paper)]"><Clock3 className="h-4 w-4 text-[var(--amber)]" /> Recent roles</h2>
           <div className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-2">
             {recent.length === 0 ? <p className="p-6 text-center text-xs text-dim">No roles tracked yet.</p> : recent.map((job) => (

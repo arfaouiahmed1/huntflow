@@ -31,7 +31,9 @@ import {
   Moon,
   Monitor,
   PanelLeftClose,
+  ArrowRight,
 } from "lucide-react";
+import Link from "next/link";
 import { useApp } from "@/context/AppContext";
 import { useAppearance } from "@/context/AppearanceContext";
 import { Button } from "@/components/ui/Button";
@@ -70,6 +72,57 @@ const SETTINGS_TABS = [
 
 type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
 const SETTINGS_TAB_ICONS = { workspace: Sun, agents: Cpu, crawler: Layers, connections: Link2, data: Download } as const;
+
+type GuidePoint = { label: string; body: string };
+type TabGuideData = {
+  heading: string;
+  points: GuidePoint[];
+  next: string;
+  cta?: { label: string; href: string };
+};
+const TAB_GUIDES: Record<SettingsTab, TabGuideData> = {
+  workspace: {
+    heading: "Workspace appearance",
+    points: [
+      { label: "What it controls", body: "Theme mode (light, dark, or follow system) and desktop navigation density." },
+      { label: "When to use", body: "Personalize the look of the workspace, or free up horizontal space on wide monitors with compact navigation." },
+    ],
+    next: "Pick a mode below; it applies instantly. Compact navigation is also toggleable from the sidebar.",
+  },
+  agents: {
+    heading: "AI engine & routing",
+    points: [
+      { label: "What it controls", body: "Which LLM providers power the app (a fallback chain) and which provider plus model each workflow prefers." },
+      { label: "When to use", body: "First run to add provider keys, after a provider gets rate-limited, or to route heavy workflows to a specific model." },
+    ],
+    next: "Add a provider, import its models, and test the connection. Then assign per-agent routes below.",
+  },
+  crawler: {
+    heading: "Media streaming & crawling",
+    points: [
+      { label: "What it controls", body: "Cloudinary media (live screenshot feeds in the console and job deck) and crawler worker concurrency." },
+      { label: "When to use", body: "Enable live visual feeds, or tune how many boards crawl in parallel when discovery feels slow." },
+    ],
+    next: "Enter Cloudinary credentials (or rely on .env), then Test & Sync to Agent, then Save.",
+  },
+  connections: {
+    heading: "Accounts & mail",
+    points: [
+      { label: "What it controls", body: "LinkedIn sign-in for auto-apply, Gmail OAuth for sending and syncing, plus IMAP/SMTP mail as a fallback." },
+      { label: "When to use", body: "Before applying to jobs, or to send recruiter emails and receive replies from inside the app." },
+    ],
+    next: "Sign in to LinkedIn, then connect Gmail via OAuth. Keep career facts in the Evidence Vault.",
+    cta: { label: "Open Evidence Vault", href: "/vault" },
+  },
+  data: {
+    heading: "Backup & reset",
+    points: [
+      { label: "What it controls", body: "Full JSON export, restore from a backup, and a complete database reset." },
+      { label: "When to use", body: "Before switching machines or after heavy cleanup, and only when you intend to wipe everything." },
+    ],
+    next: "Export a backup first, then restore to bring it back, or reset to begin clean.",
+  },
+};
 
 export default function SettingsPage() {
   const {
@@ -594,7 +647,7 @@ export default function SettingsPage() {
         </p>
       </div>
       <nav className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.08)]" aria-label="Settings sections">
-        <div className="flex gap-2 overflow-x-auto" role="tablist" aria-label="Settings sections">
+        <div className="grid grid-cols-2 gap-2 md:flex md:overflow-x-auto" role="tablist" aria-label="Settings sections">
           {SETTINGS_TABS.map((tab) => {
             const Icon = SETTINGS_TAB_ICONS[tab.id];
             const selected = activeTab === tab.id;
@@ -609,7 +662,7 @@ export default function SettingsPage() {
                 data-testid={`settings-tab-${tab.id}`}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "group min-h-14 min-w-[150px] flex-1 rounded-xl border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chartreuse)]",
+                  "group min-h-14 w-full rounded-xl border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chartreuse)] md:min-w-[150px] md:flex-1",
                   selected
                     ? "border-[var(--chartreuse)]/45 bg-[var(--chartreuse)]/10 text-[var(--paper)]"
                     : "border-transparent text-dim hover:border-[var(--line)] hover:bg-white/[0.03] hover:text-[var(--paper)]",
@@ -630,6 +683,7 @@ export default function SettingsPage() {
       </nav>
 
       <div id="settings-content" role="tabpanel" aria-labelledby={`settings-tab-${activeTab}`} className="space-y-6">
+      <TabGuide key={`guide-${activeTab}`} data={TAB_GUIDES[activeTab]} />
       {activeTab === "workspace" && (
         <section className="grid gap-5 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-center">
         <div>
@@ -697,7 +751,7 @@ export default function SettingsPage() {
       )}
 
       {activeTab === "agents" && (
-        <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
+        <div className="space-y-6">
       {/* LLM Engine */}
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
         <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
@@ -874,7 +928,7 @@ export default function SettingsPage() {
       </div>
       )}
 
-      <div className={activeTab === "connections" ? "grid gap-6 xl:grid-cols-2 xl:items-start" : activeTab === "crawler" ? "space-y-6" : "hidden"}>
+      <div className={activeTab === "connections" || activeTab === "crawler" ? "space-y-6" : "hidden"}>
       {/* LinkedIn */}
       <section className={cn("rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6", activeTab === "connections" ? "" : "hidden")}>
         <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
@@ -1213,12 +1267,14 @@ export default function SettingsPage() {
             <div className="grid grid-cols-2 gap-2">
               <input
                 className={field}
+                aria-label="IMAP host"
                 placeholder="imap.gmail.com"
                 value={mailForm.imapHost}
                 onChange={(e) => setMailForm({ ...mailForm, imapHost: e.target.value })}
               />
               <input
                 className={field}
+                aria-label="IMAP port"
                 placeholder="993"
                 type="number"
                 value={mailForm.imapPort}
@@ -1228,12 +1284,14 @@ export default function SettingsPage() {
             <div className="mt-2 grid grid-cols-2 gap-2">
               <input
                 className={field}
+                aria-label="IMAP user"
                 placeholder="you@gmail.com"
                 value={mailForm.imapUser}
                 onChange={(e) => setMailForm({ ...mailForm, imapUser: e.target.value })}
               />
               <input
                 className={field}
+                aria-label="IMAP app password"
                 placeholder="app password"
                 type="password"
                 value={mailForm.imapPass}
@@ -1247,12 +1305,14 @@ export default function SettingsPage() {
             <div className="grid grid-cols-2 gap-2">
               <input
                 className={field}
+                aria-label="SMTP host"
                 placeholder="smtp.gmail.com"
                 value={mailForm.smtpHost}
                 onChange={(e) => setMailForm({ ...mailForm, smtpHost: e.target.value })}
               />
               <input
                 className={field}
+                aria-label="SMTP port"
                 placeholder="587"
                 type="number"
                 value={mailForm.smtpPort}
@@ -1262,12 +1322,14 @@ export default function SettingsPage() {
             <div className="mt-2 grid grid-cols-2 gap-2">
               <input
                 className={field}
+                aria-label="SMTP user"
                 placeholder="you@gmail.com"
                 value={mailForm.smtpUser}
                 onChange={(e) => setMailForm({ ...mailForm, smtpUser: e.target.value })}
               />
               <input
                 className={field}
+                aria-label="SMTP app password"
                 placeholder="app password"
                 type="password"
                 value={mailForm.smtpPass}
@@ -1279,12 +1341,14 @@ export default function SettingsPage() {
           <div className="sm:col-span-2 grid grid-cols-2 gap-2">
             <input
               className={field}
+              aria-label="From name"
               placeholder="From name"
               value={mailForm.fromName}
               onChange={(e) => setMailForm({ ...mailForm, fromName: e.target.value })}
             />
             <input
               className={field}
+              aria-label="From email"
               placeholder="From email"
               value={mailForm.fromEmail}
               onChange={(e) => setMailForm({ ...mailForm, fromEmail: e.target.value })}
@@ -1407,6 +1471,38 @@ const iconBtn =
 
 const miniField =
   "rounded-lg border border-[var(--line)] bg-[var(--ink-card)] px-2.5 py-1.5 text-[11px] text-[var(--paper)] outline-none placeholder:text-dim/60 focus:border-[var(--chartreuse)]/50";
+
+function TabGuide({ data }: { data: TabGuideData }) {
+  return (
+    <aside className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/40 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-2 font-display text-xs font-semibold text-[var(--paper)]">
+          <Sparkles className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> {data.heading}
+        </p>
+        {data.cta && (
+          <Link
+            href={data.cta.href}
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[var(--chartreuse)] transition-colors hover:text-[var(--paper)] hover:underline"
+          >
+            {data.cta.label} <ArrowRight className="h-3 w-3" />
+          </Link>
+        )}
+      </div>
+      <dl className="mt-3 grid gap-x-6 gap-y-2 text-[11px] leading-relaxed md:grid-cols-3">
+        {data.points.map((point) => (
+          <div key={point.label}>
+            <dt className="font-semibold uppercase tracking-[0.1em] text-dim">{point.label}</dt>
+            <dd className="mt-1 text-[var(--paper)]/85">{point.body}</dd>
+          </div>
+        ))}
+        <div>
+          <dt className="font-semibold uppercase tracking-[0.1em] text-dim">What to do next</dt>
+          <dd className="mt-1 text-[var(--paper)]/85">{data.next}</dd>
+        </div>
+      </dl>
+    </aside>
+  );
+}
 
 function ProviderRow({
   provider: p,

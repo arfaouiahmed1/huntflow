@@ -698,7 +698,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
 
       {/* Studio Header: Global Actions, Engine Switcher & ATS Score */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/80 px-4 py-2.5 backdrop-blur shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="font-display text-[15px] font-bold tracking-tight text-[var(--paper)] flex items-center gap-2">
             <span className="grid h-7 w-7 place-items-center rounded-lg border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10">
               <FileText className="h-4 w-4 text-[var(--chartreuse)]" />

@@ -1,7 +1,7 @@
 "use client";
 import Select from "@/components/ui/Select";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useDeferredValue, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -74,7 +74,7 @@ const SORT_OPTIONS: { id: SortKey; label: string }[] = [
 export default function TrackerPage() {
   const { applications, profile, interviews, emails, searchLinkedInJobs, saveLinkedInJob, addApplication, updateApplication, triggerAutoApply } = useApp();
   const router = useRouter();
-  const openJob = (id: string) => router.push(`/jobs/${id}`);
+  const openJob = useCallback((id: string) => router.push(`/jobs/${id}`), [router]);
   const { success, error } = useToast();
   // AppProvider has deterministic server defaults, so the tracker can render
   // useful pipeline content before client-side persistence reconciliation.
@@ -83,6 +83,7 @@ export default function TrackerPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [coachingOpen, setCoachingOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   const [filter, setFilter] = useState<ApplicationStatus | "all">("all");
   const [sortKey, setSortKey] = useState<SortKey>("newest");
   const [dragTarget, setDragTarget] = useState<string | null>(null);
@@ -342,20 +343,22 @@ export default function TrackerPage() {
   };
 
   const filtered = useMemo(
-    () =>
-      applications.filter((a) => {
+    () => {
+      const q = deferredQuery.trim().toLowerCase();
+      return applications.filter((a) => {
         const matchesQuery =
-          !query ||
-          a.title.toLowerCase().includes(query.toLowerCase()) ||
-          a.company.toLowerCase().includes(query.toLowerCase());
+          !q ||
+          a.title.toLowerCase().includes(q) ||
+          a.company.toLowerCase().includes(q);
         const matchesFilter = filter === "all" || a.status === filter;
         const matchesMatch = minMatch === 0 || (a.matchScore ?? 0) >= minMatch;
         const matchesUrl = !hasUrlOnly || Boolean(a.url);
         const matchesAuto = !autoAppliedOnly || a.autoApplyStatus === "applied";
         const matchesCrawled = !crawledOnly || Boolean(a.source);
         return matchesQuery && matchesFilter && matchesMatch && matchesUrl && matchesAuto && matchesCrawled;
-      }),
-    [applications, query, filter, minMatch, hasUrlOnly, autoAppliedOnly, crawledOnly]
+      });
+    },
+    [applications, deferredQuery, filter, minMatch, hasUrlOnly, autoAppliedOnly, crawledOnly]
   );
 
   const sorted = useMemo(() => {
@@ -383,6 +386,22 @@ export default function TrackerPage() {
     });
     return arr;
   }, [filtered, sortKey]);
+
+  const sortedJobsByColumn = useMemo(() => {
+    const map: Record<ApplicationStatus, JobApplication[]> = {
+      wishlist: [],
+      applied: [],
+      interviewing: [],
+      offer: [],
+      rejected: [],
+    };
+    for (const job of sorted) {
+      if (map[job.status]) {
+        map[job.status].push(job);
+      }
+    }
+    return map;
+  }, [sorted]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {
@@ -850,7 +869,7 @@ export default function TrackerPage() {
       {view === "board" ? (
         <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory xl:grid xl:grid-cols-5 xl:overflow-x-visible no-scrollbar">
           {columns.map((col) => {
-            const jobs = sorted.filter((a) => a.status === col.id);
+            const jobs = sortedJobsByColumn[col.id] ?? [];
             return (
               <div
                 key={col.id}

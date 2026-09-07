@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { motion } from "framer-motion";
 import { MapPin, Bot, Clock, ArrowUpRight, Bell, GripVertical, Globe, Award, Tag, DollarSign, AlertTriangle, ImageIcon, History, Sparkles, FileText } from "lucide-react";
 import { agentScreenshotUrl } from "@/lib/agentScreenshot";
@@ -16,7 +16,7 @@ import { displayJobCompany, displayJobTitle } from "@/lib/jobDisplay";
 
 const AVATAR_TONES = [palette.chartreuse, palette.sky, palette.violet, palette.amber, palette.coral];
 
-export default function JobCard({
+function JobCardComponent({
   job,
   onOpen,
   index,
@@ -247,3 +247,5 @@ export default function JobCard({
     </motion.div>
   );
 }
+
+export default memo(JobCardComponent);

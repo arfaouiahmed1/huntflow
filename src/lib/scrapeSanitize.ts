@@ -1,14 +1,20 @@
 import * as cheerio from 'cheerio';
 import type { CheerioAPI } from 'cheerio';
 
-/** Block-level tags that separate tokens, so adjacent ones don't glue together. */
-const BLOCK_TAGS: Record<string, true> = {
+/** Elements that never carry human-readable job copy (also stripped up front). */
+const NON_CONTENT_TAGS: Record<string, true> = {
+  script: true,
+  style: true,
+  noscript: true,
+  template: true,
+};
+
+/** Block containers rendered as Markdown paragraphs (blank-line separated). */
+const PARAGRAPH_TAGS: Record<string, true> = {
   address: true,
   article: true,
   aside: true,
   blockquote: true,
-  br: true,
-  caption: true,
   dd: true,
   details: true,
   div: true,
@@ -19,49 +25,169 @@ const BLOCK_TAGS: Record<string, true> = {
   figure: true,
   footer: true,
   form: true,
-  h1: true,
-  h2: true,
-  h3: true,
-  h4: true,
-  h5: true,
-  h6: true,
   header: true,
-  hr: true,
-  legend: true,
-  li: true,
   main: true,
   nav: true,
-  ol: true,
   p: true,
   pre: true,
   section: true,
   summary: true,
-  table: true,
-  tbody: true,
-  td: true,
-  tfoot: true,
-  th: true,
-  thead: true,
-  tr: true,
-  ul: true,
 };
 
+type DomNode = {
+  nodeType?: number;
+  data?: unknown;
+  tagName?: unknown;
+  attribs?: Record<string, string>;
+  children?: DomNode[];
+};
+
+function nodeTag(node: DomNode): string {
+  return typeof node.tagName === 'string' ? node.tagName.toLowerCase() : '';
+}
+
+function renderChildren(node: DomNode): string {
+  if (!Array.isArray(node.children)) return '';
+  return node.children.map((child) => renderNode(child)).join('');
+}
+
 /**
- * Walk the raw (already script-stripped) node tree, joining each element's
- * text with word boundaries at block-level tags. Plain `.text()` glues
- * adjacent block tags together ("para onePara two"); this keeps them readable
- * without importing further DOM-type machinery. domhandler nodeType: 3 =
- * text, 1 = element, 9 = document — other node kinds are ignored.
+ * Inline Markdown for an element's content: nested blocks collapse to spaces
+ * so headings, links, and table cells stay on one readable line.
  */
-function collectText(node: unknown): string {
+function renderInline(node: DomNode): string {
+  return renderChildren(node).replace(/\s+/g, ' ').trim();
+}
+
+function wrapInline(node: DomNode, before: string, after: string): string {
+  const inner = renderInline(node);
+  return inner ? `${before}${inner}${after}` : '';
+}
+
+/** Render one `<li>` — first line takes the marker, continuations indent. */
+function renderListItem(li: DomNode, marker: string): string {
+  const lines = renderChildren(li)
+    .split('\n')
+    .map((line) => line.replace(/[ \t\u00a0]+/g, ' ').trim())
+    .filter((line) => line !== '');
+  if (lines.length === 0) return '';
+  const [first, ...rest] = lines;
+  return [`${marker} ${first}`, ...rest.map((line) => `  ${line}`)].join('\n');
+}
+
+function renderList(node: DomNode, ordered: boolean): string {
+  if (!Array.isArray(node.children)) return '';
+  const items = node.children
+    .filter((child) => nodeTag(child) === 'li')
+    .map((li, index) => renderListItem(li, ordered ? `${index + 1}.` : '-'))
+    .filter((item) => item !== '');
+  return items.length > 0 ? `\n${items.join('\n')}\n` : '';
+}
+
+function collectTableRows(table: DomNode): DomNode[][] {
+  const rows: DomNode[][] = [];
+  const walk = (node: DomNode): void => {
+    if (!Array.isArray(node.children)) return;
+    for (const child of node.children) {
+      const tag = nodeTag(child);
+      if (tag === 'tr') {
+        const cells = (child.children ?? []).filter((cell) => {
+          const cellTag = nodeTag(cell);
+          return cellTag === 'th' || cellTag === 'td';
+        });
+        rows.push(cells);
+      } else if (tag !== 'table') {
+        walk(child);
+      }
+    }
+  };
+  walk(table);
+  return rows;
+}
+
+function renderTable(node: DomNode): string {
+  const rows = collectTableRows(node)
+    .map((cells) => cells.map((cell) => renderInline(cell)))
+    .filter((cells) => cells.some((cell) => cell !== ''));
+  if (rows.length === 0) return renderInline(node);
+  const toRow = (cells: string[]): string => `| ${cells.join(' | ')} |`;
+  const separator = `| ${rows[0].map(() => '---').join(' | ')} |`;
+  return `\n${[toRow(rows[0]), separator, ...rows.slice(1).map(toRow)].join('\n')}\n`;
+}
+
+/**
+ * Walk the raw (already script-stripped) node tree, emitting clean Markdown:
+ * headings, paragraphs, `- ` bullets / `1. ` steps, `**bold**`, tables.
+ * Unknown tags fall through to their children so no copy is lost. Plain
+ * `.text()` glues adjacent block tags together ("para onePara two"); the
+ * explicit blank lines here keep them readable without further DOM machinery.
+ * domhandler nodeType: 3 = text — other leaf node kinds are ignored.
+ */
+function renderNode(node: DomNode): string {
   if (typeof node !== 'object' || node === null) return '';
-  if ('nodeType' in node && node.nodeType === 3 && 'data' in node) {
+  if (node.nodeType === 3) {
     return typeof node.data === 'string' ? node.data : '';
   }
-  if (!('children' in node) || !Array.isArray(node.children)) return '';
-  const tag = 'tagName' in node && typeof node.tagName === 'string' ? node.tagName : '';
-  const inner = node.children.map(collectText).join('');
-  return tag !== '' && BLOCK_TAGS[tag.toLowerCase()] ? ` ${inner} ` : inner;
+  if (!Array.isArray(node.children)) return '';
+  const tag = nodeTag(node);
+  if (tag !== '' && NON_CONTENT_TAGS[tag]) return '';
+  if (tag === 'br') return '\n';
+  if (tag === 'hr') return '\n\n---\n\n';
+  const heading = tag.match(/^h([1-6])$/);
+  if (heading) {
+    const inner = renderInline(node);
+    return inner ? `\n\n${'#'.repeat(Math.min(Number(heading[1]), 3))} ${inner}\n\n` : '';
+  }
+  if (tag === 'ul') return renderList(node, false);
+  if (tag === 'ol') return renderList(node, true);
+  if (tag === 'li') {
+    const item = renderListItem(node, '-');
+    return item ? `\n${item}\n` : '';
+  }
+  if (tag === 'table') return renderTable(node);
+  if (tag === 'thead' || tag === 'tbody' || tag === 'tfoot') return renderChildren(node);
+  if (tag === 'tr') {
+    const inner = renderInline(node);
+    return inner ? `\n\n${inner}\n\n` : '';
+  }
+  if (tag === 'th' || tag === 'td') return renderInline(node);
+  if (tag === 'strong' || tag === 'b') return wrapInline(node, '**', '**');
+  if (tag === 'em' || tag === 'i') return wrapInline(node, '*', '*');
+  if (tag === 'code') return wrapInline(node, '`', '`');
+  if (tag === 'img') {
+    const alt = node.attribs?.alt?.trim() ?? '';
+    return alt ? ` ${alt} ` : '';
+  }
+  if (tag === 'a') return renderInline(node);
+  if (tag !== '' && PARAGRAPH_TAGS[tag]) {
+    const inner = renderChildren(node).replace(/[ \t\u00a0]+/g, ' ');
+    return inner.trim() ? `\n\n${inner.trim()}\n\n` : '';
+  }
+  return renderChildren(node);
+}
+
+/**
+ * Final whitespace/entity cleanup for converted Markdown: decode leftover
+ * entities (`&amp;`, `&nbsp;`, double-escaped JSON-LD copy), drop empty
+ * bullets and empty bold markers, collapse 3+ newlines to a paragraph break.
+ */
+function cleanMarkdown(raw: string): string {
+  const decoded = raw
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;/gi, "'")
+    .replace(/&apos;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&amp;/gi, '&');
+  const withoutEmptyMarks = decoded.replace(/\*\*\*\*+/g, '').replace(/``/g, '');
+  const lines = withoutEmptyMarks
+    .replace(/\r\n?/g, '\n')
+    .replace(/\u00a0/g, ' ')
+    .split('\n')
+    .map((line) => line.replace(/[ \t\f\v]+/g, ' ').replace(/\s+$/g, ''));
+  const withoutEmptyBullets = lines.map((line) => (/^\s*(-|\d+\.)\s*$/.test(line) ? '' : line));
+  return withoutEmptyBullets.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /**
@@ -87,15 +213,30 @@ export function stripNonContent($: CheerioAPI): void {
 }
 
 /**
- * Extract readable text from an HTML snippet — e.g. a JSON-LD JobPosting
- * description with embedded tags. Strips non-content elements first so
- * `<script>` payloads never surface as visible copy.
+ * Convert any HTML job description — JSON-LD descriptions with embedded tags,
+ * cheerio extracts, or sidecar outputs — into clean human-readable Markdown:
+ * paragraphs with spacing, `- ` / `1. ` list items, `#`..`###` headings,
+ * `**bold**`, and `|` tables. Scripts, styles, attributes, and leftover
+ * entities (`&amp;`, `&nbsp;`) are stripped/decoded; extra whitespace folds to
+ * paragraph breaks. Plain text without tags passes through normalized.
  */
-export function htmlToText(html: string): string {
-  if (!html) return '';
+export function htmlToMarkdown(html: string): string {
+  if (!html || typeof html !== 'string') return '';
+  if (!/<[a-zA-Z/!]/.test(html)) {
+    return html.replace(/\u00a0/g, ' ').replace(/[ \t\f\v]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  }
   const $snippet = cheerio.load(html);
   stripNonContent($snippet);
-  return collectText($snippet.root()[0]).replace(/\s+/g, ' ').trim();
+  $snippet('head').remove();
+  return cleanMarkdown(renderChildren($snippet.root()[0] as unknown as DomNode));
+}
+
+/**
+ * Historical name for {@link htmlToMarkdown} — kept so existing extraction
+ * paths keep working. Returns clean Markdown, not single-line plain text.
+ */
+export function htmlToText(html: string): string {
+  return htmlToMarkdown(html);
 }
 
 // Markers matched case-insensitively — Next.js can emit `__next_f`,
@@ -135,12 +276,19 @@ export function isLowQualityDescription(value: string): boolean {
 }
 
 /**
- * Normalize + gate a cheerio-extracted candidate: collapse whitespace,
- * fall back to the default when the copy is empty or bundle-like, and
- * enforce the 4000-char cap.
+ * Normalize + gate a cheerio-extracted candidate: fold horizontal whitespace
+ * and 3+ newlines (Markdown paragraph breaks survive), fall back to the
+ * default when the copy is empty or bundle-like, and enforce the 4000-char
+ * cap.
  */
 export function sanitizeDescription(candidate: string): string {
-  const normalized = candidate.replace(/\s+/g, ' ').trim();
+  const normalized = candidate
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t\u00a0]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
   if (!normalized || isLowQualityDescription(normalized)) {
     return DEFAULT_SCRAPE_DESCRIPTION;
   }

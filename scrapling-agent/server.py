@@ -474,23 +474,161 @@ def _is_usable_description(text: str) -> bool:
     return True
 
 
+def _tag_name(node) -> str:
+    """Lowercase tag name for a Scrapling node (``tag`` may be a method)."""
+    tag = getattr(node, "tag", "")
+    tag = tag() if callable(tag) else tag
+    return str(tag or "").lower()
+
+
+# Block containers whose first copy node starts a new Markdown paragraph.
+_BODY_BLOCK_TAGS = frozenset({
+    "p", "div", "section", "article", "main", "aside", "header", "footer",
+    "blockquote", "figure", "figcaption", "details", "summary", "li",
+    "tr", "dl", "dt", "dd", "pre", "form", "fieldset", "address", "nav",
+    "h1", "h2", "h3", "h4", "h5", "h6",
+})
+
+# Block tags folded to paragraph breaks when converting raw HTML.
+_HTML_BLOCK_TAGS_PATTERN = (
+    r"p|div|section|article|main|aside|header|footer|blockquote|figure|"
+    r"figcaption|details|summary|form|fieldset|address|pre|nav|dl|dt|dd|"
+    r"thead|tbody|tfoot|table"
+)
+
+
+def _html_to_markdown(html_value: object) -> str:
+    """Convert an HTML job description to clean human-readable Markdown.
+
+    Mirrors ``src/lib/scrapeSanitize.ts`` ``htmlToMarkdown``: paragraphs with
+    spacing, ``- `` / ``1. `` list items, ``#``..``###`` headings, ``**bold**``,
+    simple ``|`` tables. Scripts, styles, tags, attributes, and entities
+    (``&amp;``, ``&nbsp;``) are stripped/decoded; blank lines fold to one.
+    """
+    import html as _html_module
+
+    if html_value is None:
+        return ""
+    text = str(html_value)
+    if not text.strip():
+        return ""
+    # Drop non-content elements entirely — JS/CSS must never leak into copy.
+    text = re.sub(r"(?is)<(script|style|noscript|template)[^>]*>.*?</\1\s*>", "\n", text)
+    text = re.sub(r"(?i)<\s*br\s*/?\s*>", "\n", text)
+    text = re.sub(r"(?i)<\s*hr\s*/?\s*>", "\n---\n", text)
+
+    def _heading(match: re.Match) -> str:
+        inner = re.sub(r"(?is)<[^>]+>", "", match.group(2))
+        inner = re.sub(r"\s+", " ", inner).strip()
+        if not inner:
+            return "\n"
+        return "\n\n%s %s\n\n" % ("#" * min(int(match.group(1)), 3), inner)
+
+    text = re.sub(r"(?is)<\s*h([1-6])[^>]*>(.*?)</\s*h\1\s*>", _heading, text)
+    text = re.sub(r"(?is)<\s*(strong|b)[^>]*>(.*?)</\s*\1\s*>", r"**\2**", text)
+    text = re.sub(r"(?is)<\s*(em|i)[^>]*>(.*?)</\s*\1\s*>", r"*\2*", text)
+    text = re.sub(r"(?is)<\s*code[^>]*>(.*?)</\s*code\s*>", r"`\1`", text)
+
+    def _ordered_list(match: re.Match) -> str:
+        items = re.findall(r"(?is)<\s*li[^>]*>(.*?)</\s*li\s*>", match.group(1))
+        lines = []
+        for index, item in enumerate(items, 1):
+            inner = re.sub(r"(?is)<[^>]+>", "", item)
+            inner = re.sub(r"\s+", " ", inner).strip()
+            if inner:
+                lines.append("%d. %s" % (index, inner))
+        return "\n" + "\n".join(lines) + "\n" if lines else "\n"
+
+    text = re.sub(r"(?is)<\s*ol[^>]*>(.*?)</\s*ol\s*>", _ordered_list, text)
+    text = re.sub(r"(?is)<\s*li[^>]*>", "\n- ", text)
+    text = re.sub(r"(?is)</\s*li\s*>", "", text)
+    text = re.sub(r"(?is)</?\s*(?:ul|ol)(?:\s[^>]*)?>", "\n", text)
+
+    def _table(match: re.Match) -> str:
+        rows = re.findall(r"(?is)<\s*tr[^>]*>(.*?)</\s*tr\s*>", match.group(1))
+        parsed = []
+        for row in rows:
+            cells = re.findall(r"(?is)<\s*(?:td|th)[^>]*>(.*?)</\s*(?:td|th)\s*>", row)
+            cells = [
+                re.sub(r"\s+", " ", re.sub(r"(?is)<[^>]+>", "", cell)).strip()
+                for cell in cells
+            ]
+            if any(cells):
+                parsed.append(cells)
+        if not parsed:
+            return "\n"
+        width = len(parsed[0])
+        lines = ["| " + " | ".join(row) + " |" for row in parsed]
+        lines.insert(1, "| " + " | ".join(["---"] * width) + " |")
+        return "\n" + "\n".join(lines) + "\n"
+
+    text = re.sub(r"(?is)<\s*table[^>]*>(.*?)</\s*table\s*>", _table, text)
+    # Fallback for malformed fragments without a closing </table>.
+    text = re.sub(r"(?is)<\s*(?:td|th)[^>]*>", " | ", text)
+    text = re.sub(r"(?is)<\s*tr[^>]*>", "\n| ", text)
+    text = re.sub(r"(?is)</\s*tr\s*>", " |", text)
+    text = re.sub(r"(?is)</?\s*(?:%s)(?:\s[^>]*)?>" % _HTML_BLOCK_TAGS_PATTERN, "\n\n", text)
+    # Images contribute their alt text; links keep their visible text.
+    text = re.sub(r"(?is)<\s*img[^>]*?alt\s*=\s*\"([^\"]*)\"[^>]*>", r" \1 ", text)
+    text = re.sub(r"(?is)<\s*img[^>]*?alt\s*=\s*'([^']*)'[^>]*>", r" \1 ", text)
+    text = re.sub(r"(?is)<[^>]+>", "", text)
+    text = _html_module.unescape(text).replace("\xa0", " ")
+    text = re.sub(r"[^\S\n]+", " ", text)
+    text = text.replace("****", "")
+    lines = [line.strip() for line in text.split("\n")]
+    lines = ["" if re.fullmatch(r"(?:-|\d+\.)\s*", line) else line for line in lines]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()[:4000]
+
+
 def _body_text(page) -> str:
-    parts = []
+    parts: list[str] = []
+    seen: set[int] = set()
     for node in page.css("body *::text"):
         if not _is_copy_node(node):
             continue
         t = str(getattr(node, "text", node)).strip()
-        if len(t) > 1:
-            parts.append(t)
+        if len(t) <= 1:
+            continue
+        # Nearest block container (paragraph break / heading) and nearest <li>
+        # (bullet) on the ancestor chain — same clean shape as _html_to_markdown.
+        block_name = ""
+        block_node = None
+        bullet_node = None
+        ancestor = getattr(node, "parent", None)
+        for _ in range(8):
+            if ancestor is None:
+                break
+            name = _tag_name(ancestor)
+            if not block_name and name in _BODY_BLOCK_TAGS:
+                block_name, block_node = name, ancestor
+            if bullet_node is None and name == "li":
+                bullet_node = ancestor
+            if block_name and bullet_node:
+                break
+            ancestor = getattr(ancestor, "parent", None)
+        prefix = ""
+        bullet = bullet_node is not None and id(bullet_node) not in seen
+        if bullet:
+            seen.add(id(bullet_node))
+        if block_node is not None and block_node is not bullet_node and id(block_node) not in seen:
+            seen.add(id(block_node))
+            heading = re.fullmatch(r"h([1-6])", block_name)
+            if heading:
+                prefix += "\n\n%s " % ("#" * min(int(heading.group(1)), 3))
+            else:
+                prefix += "\n\n"
+        if bullet:
+            prefix += "\n- " if not prefix else "- "
+        parts.append(prefix + t)
     text = " ".join(parts)
-    return re.sub(r"\s+", " ", text)[:4000]
+    text = re.sub(r"[ \t\xa0]*\n[ \t\xa0]*", "\n", text)
+    text = re.sub(r"[^\S\n]+", " ", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()[:4000]
 
 
 def _jsonld_copy(value: object) -> str:
-    """Convert JSON-LD HTML descriptions to the same safe plain text as body copy."""
-    from scrapling.parser import Adaptor
-
-    return _body_text(Adaptor(f"<body><div>{str(value)}</div></body>", url=""))
+    """Convert JSON-LD HTML descriptions to the same clean Markdown as body copy."""
+    return _html_to_markdown(value)
 
 
 def _extract_job(page, url: str) -> dict[str, str]:

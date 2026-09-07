@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform } from "framer-motion";
 import {
+  ArrowRight,
   ChevronLeft,
   ChevronRight,
   Sparkles,
@@ -61,6 +62,7 @@ export function JobSwipeDeck({
   const [showSkipMenu, setShowSkipMenu] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [failedShot, setFailedShot] = useState<{ id: string; url: string } | null>(null);
 
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-200, 200], [-15, 15]);
@@ -149,8 +151,19 @@ export function JobSwipeDeck({
       </div>
     );
   }
-
-  const shotSrc = agentScreenshotUrl(job.screenshotUrl, job.cloudinaryUrl);
+  // Cloudinary-first visual proof: the CDN URL renders when configured via
+  // Settings/env; if it fails to load (offline/expired), fall back to the
+  // local agent-run proxy. The failure is keyed by card + URL, so advancing
+  // the deck never carries a stale fallback forward.
+  const primaryShot = agentScreenshotUrl(job.screenshotUrl, job.cloudinaryUrl);
+  const localShot = agentScreenshotUrl(job.screenshotUrl, null);
+  const shotFailed = !!primaryShot && failedShot?.id === job.id && failedShot?.url === primaryShot;
+  const shotSrc = shotFailed ? localShot : primaryShot;
+  const shotFallbackAvailable = !shotFailed && !!primaryShot && !!localShot && primaryShot !== localShot;
+  const shotSourceLabel = !shotSrc ? null : !shotFailed && job.cloudinaryUrl ? "Cloudinary" : "Local capture";
+  const handleShotError = () => {
+    if (shotFallbackAvailable && primaryShot) setFailedShot({ id: job.id, url: primaryShot });
+  };
 
   const handleDragEnd = (_: unknown, info: { offset: { x: number } }) => {
     if (info.offset.x > 120) {
@@ -257,7 +270,7 @@ export function JobSwipeDeck({
                 >
                   <Globe className="h-3 w-3" />
                   Visual Proof
-                  {job.cloudinaryUrl && (
+                  {!shotFailed && job.cloudinaryUrl && (
                     <span className="h-1.5 w-1.5 rounded-full bg-[var(--chartreuse)]" />
                   )}
                 </button>
@@ -319,7 +332,7 @@ export function JobSwipeDeck({
               {/* Description Excerpt */}
               <div className="my-5 rounded-2xl bg-black/30 p-4 border border-[var(--line)]/50">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-dim mb-2">Job Description Highlights</h4>
-                <p className={cn("text-xs leading-relaxed text-[var(--paper)]/80", !detailsExpanded && "line-clamp-4")}>
+                <p className={cn("text-xs leading-relaxed whitespace-pre-line text-[var(--paper)]/80", !detailsExpanded && "line-clamp-4")}>
                   {job.jobDescription || "No detailed description extracted."}
                 </p>
                 {job.jobDescription && job.jobDescription.length > 250 && (
@@ -332,6 +345,94 @@ export function JobSwipeDeck({
                   </button>
                 )}
               </div>
+              {/* AI Match Intelligence — agent/LLM insights for this role */}
+              {(() => {
+                const gap = job.skillsGap;
+                const strengths = (gap?.strengths?.length ? gap.strengths : gap?.matchingSkills ?? []).slice(0, 3);
+                const missingBase = gap?.missingSkills?.length ? gap.missingSkills : job.multiAgentOutputs?.missingSkills ?? [];
+                const missingExtra = (gap?.keyTermFrequency ?? [])
+                  .filter((entry) => !entry.inResume && !missingBase.includes(entry.term))
+                  .map((entry) => entry.term);
+                const missing = [...missingBase, ...missingExtra].slice(0, 6);
+                const action =
+                  gap?.recommendations?.[0] ??
+                  review?.actionableFixes?.[0] ??
+                  (isDirectFit
+                    ? "Direct fit — run the agent to auto-apply."
+                    : "Tailor your profile to cover the missing keywords, then re-run scoring.");
+                const summary =
+                  job.jobBrief?.summary ??
+                  (review
+                    ? `${review.verdict.replace(/_/g, " ")} · ${review.acceptanceProbability}% callback estimate · ATS ${review.atsPassScore}%.`
+                    : null) ??
+                  (typeof job.matchScore === "number"
+                    ? `AI match score ${job.matchScore}% — ${isDirectFit ? "direct fit" : "tailor to fit"}.`
+                    : null);
+                const provider = gap?.provider ?? gap?.model ?? (review ? "employer review" : null);
+                if (!summary && strengths.length === 0 && missing.length === 0) {
+                  return (
+                    <div className="my-5 rounded-2xl border border-dashed border-[var(--line)] bg-black/20 p-4 text-center">
+                      <p className="text-xs text-dim">No AI insights yet for this role.</p>
+                      <button
+                        type="button"
+                        onClick={() => onRunEmployerReview(job)}
+                        className="mt-1 text-[11px] font-semibold text-[var(--chartreuse)] hover:underline cursor-pointer"
+                      >
+                        Run Simulate Odds to generate them →
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <div data-testid="deck-ai-insights" className="my-5 rounded-2xl border border-[var(--violet)]/20 bg-[var(--violet)]/[0.04] p-4">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <h4 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[var(--violet)]">
+                        <Sparkles className="h-3.5 w-3.5" /> AI Match Intelligence
+                      </h4>
+                      {provider && (
+                        <span className="rounded-full border border-[var(--line)] px-2 py-0.5 font-mono text-[9px] uppercase text-dim">
+                          {provider}
+                        </span>
+                      )}
+                    </div>
+                    {summary && <p className="text-xs leading-relaxed text-[var(--paper)]/85">{summary}</p>}
+                    {strengths.length > 0 && (
+                      <div className="mt-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-dim">Key strengths</p>
+                        <ul className="mt-1 space-y-1">
+                          {strengths.map((strength) => (
+                            <li key={strength} className="flex items-start gap-1.5 text-xs text-[var(--paper)]/85">
+                              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--chartreuse)]" /> {strength}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {missing.length > 0 && (
+                      <div className="mt-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-dim">Missing keywords</p>
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {missing.map((keyword) => (
+                            <span
+                              key={keyword}
+                              className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300"
+                            >
+                              <Tag className="h-3 w-3" /> {keyword}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="mt-2.5 flex items-start gap-1.5 rounded-xl border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/[0.06] px-3 py-2">
+                      <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--chartreuse)]" />
+                      <p className="text-xs leading-relaxed text-[var(--paper)]/90">
+                        <span className="font-bold">Recommended action: </span>
+                        {action}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Key Skill Tags */}
               <div className="mb-4 flex flex-wrap gap-1.5">
@@ -366,10 +467,10 @@ export function JobSwipeDeck({
               {shotSrc && (
                 <div data-testid="deck-screenshot-proof" className="mb-4 overflow-hidden rounded-xl border border-[var(--line)] bg-black/20">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={shotSrc} alt="Proof" className="max-h-28 w-full object-cover object-top" />
+                  <img src={shotSrc} alt="Proof" onError={handleShotError} className="max-h-28 w-full object-cover object-top" />
                   <div className="flex items-center gap-1.5 border-t border-[var(--line)] px-3 py-1.5 text-[10px] font-semibold text-dim">
-                    <ImageIcon className="h-3 w-3 text-[var(--chartreuse)]" /> Visual Proof
-                    {job.cloudinaryUrl && <span className="h-1.5 w-1.5 rounded-full bg-[var(--chartreuse)]" />}
+                    <ImageIcon className="h-3 w-3 text-[var(--chartreuse)]" /> Visual Proof · {shotSourceLabel}
+                    {!shotFailed && job.cloudinaryUrl && <span className="h-1.5 w-1.5 rounded-full bg-[var(--chartreuse)]" />}
                   </div>
                 </div>
               )}
@@ -378,8 +479,20 @@ export function JobSwipeDeck({
             <div className="my-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-[var(--paper)]">Live Scraped View</h3>
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-[var(--paper)]">
+                    Live Scraped View
+                    {shotSourceLabel && (
+                      <span className="rounded-full border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 px-2 py-0.5 text-[10px] font-bold text-[var(--chartreuse)]">
+                        {shotSourceLabel}
+                      </span>
+                    )}
+                  </h3>
                   <p className="text-xs text-dim">Visual snapshot of posting on original board</p>
+                  {shotFailed && localShot && (
+                    <p className="mt-1 text-[11px] font-semibold text-amber-400">
+                      Cloudinary unreachable — showing local capture instead.
+                    </p>
+                  )}
                 </div>
                 {job.url && (
                   <a
@@ -402,6 +515,7 @@ export function JobSwipeDeck({
                   <img
                     src={shotSrc}
                     alt={`${job.company} listing snapshot`}
+                    onError={handleShotError}
                     className="max-h-[320px] w-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
@@ -530,7 +644,7 @@ export function JobSwipeDeck({
               </button>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={shotSrc} alt="Full Screenshot" className="max-h-[80vh] w-auto rounded-lg object-contain" />
+            <img src={shotSrc} alt="Full Screenshot" onError={handleShotError} className="max-h-[80vh] w-auto rounded-lg object-contain" />
           </div>
         </div>
       )}

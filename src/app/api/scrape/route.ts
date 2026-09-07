@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 import { isIP } from 'node:net';
 import { readJsonResponse } from '@/lib/errors';
-import { stripNonContent, htmlToText, sanitizeDescription, sanitizeScrapeResponse } from '@/lib/scrapeSanitize';
+import { stripNonContent, htmlToMarkdown, sanitizeDescription, sanitizeScrapeResponse } from '@/lib/scrapeSanitize';
 import { AGENT_BASE_URL as AGENT_URL, agentHeaders } from '@/lib/agentClient';
 
 /** Block SSRF targets: localhost, loopback, link-local, private + reserved IPs.
@@ -172,7 +172,7 @@ async function scrapeWithCheerio(url: string) {
           salary = `${jobData.baseSalary.value?.minValue || ''} - ${jobData.baseSalary.value?.maxValue || ''} ${jobData.baseSalary.currency || ''}`.trim();
         }
         if (jobData.description) {
-          description = htmlToText(jobData.description);
+          description = htmlToMarkdown(jobData.description);
         }
       }
     } catch {
@@ -221,15 +221,16 @@ async function scrapeWithCheerio(url: string) {
     ];
 
     for (const selector of mainSelectors) {
-      const text = $(selector).text().trim();
-      if (text && text.length > 200) {
-        description = text.replace(/\s+/g, ' ');
+      const html = $(selector).first().html();
+      const markdown = html ? htmlToMarkdown(html) : '';
+      if (markdown && markdown.length > 200) {
+        description = markdown;
         break;
       }
     }
 
     if (!description) {
-      description = $('body').text();
+      description = htmlToMarkdown($('body').html() ?? '');
     }
   }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   stripNonContent,
+  htmlToMarkdown,
   htmlToText,
   isLowQualityDescription,
   sanitizeDescription,
@@ -62,7 +63,7 @@ describe("stripNonContent", () => {
 
   it("strips scripts from a JSON-LD description re-parse via htmlToText", () => {
     const text = htmlToText(JSONLD_HTML_SNIPPET);
-    expect(text).toBe("Lead the platform team. Remote-first, {braces} in copy.");
+    expect(text).toBe("Lead the platform team.\n\nRemote-first, {braces} in copy.");
   });
 });
 
@@ -173,6 +174,51 @@ describe("sanitizeDescription", () => {
     const long = "Hiring engineers. ".repeat(400);
     const out = sanitizeDescription(long);
     expect(out.length).toBe(4000);
-    expect(sanitizeDescription("Line one\n\n  Line  two\tthree")).toBe("Line one Line two three");
+    expect(sanitizeDescription("Line one\n\n  Line  two\tthree")).toBe("Line one\n\nLine two three");
+  });
+
+  it("preserves markdown paragraph breaks and bullets", () => {
+    expect(sanitizeDescription("Intro line\n\n- item one\n- item two")).toBe(
+      "Intro line\n\n- item one\n- item two"
+    );
+  });
+});
+
+describe("htmlToMarkdown", () => {
+  it("converts unordered and ordered lists to markdown bullets", () => {
+    const md = htmlToMarkdown(
+      "<p>Requirements:</p><ul><li>Five years of <strong>Go</strong></li><li>Kubernetes experience</li></ul><ol><li>Apply online</li><li>Screening call</li></ol>"
+    );
+    expect(md).toContain("- Five years of **Go**");
+    expect(md).toContain("- Kubernetes experience");
+    expect(md).toContain("1. Apply online");
+    expect(md).toContain("2. Screening call");
+    expect(md).not.toMatch(/<[a-z][^>]*>/i);
+  });
+
+  it("converts headings, bold, and tables to markdown", () => {
+    const md = htmlToMarkdown(
+      '<h2>About the role</h2><p>Join our <b>platform</b> team.</p><table><tr><th>Level</th><th>Salary</th></tr><tr><td>Senior</td><td>$150k</td></tr></table>'
+    );
+    expect(md).toContain("## About the role");
+    expect(md).toContain("**platform**");
+    expect(md).toContain("| Level | Salary |");
+    expect(md).toContain("| --- | --- |");
+    expect(md).toContain("| Senior | $150k |");
+  });
+
+  it("decodes entities and strips scripts, styles, and attributes", () => {
+    const md = htmlToMarkdown(
+      '<p class="desc" data-x="1">Fish &amp; Chips&nbsp;— hiring</p><script>evil()</script><style>.x{}</style>'
+    );
+    expect(md).toBe("Fish & Chips — hiring");
+  });
+
+  it("separates adjacent paragraphs instead of gluing them", () => {
+    expect(htmlToMarkdown("<p>para one</p><p>para two</p>")).toBe("para one\n\npara two");
+  });
+
+  it("passes plain text through normalized", () => {
+    expect(htmlToMarkdown("  Just text  ")).toBe("Just text");
   });
 });

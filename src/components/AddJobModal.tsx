@@ -23,6 +23,10 @@ interface ScrapedJob {
   location: string;
   description: string;
   salary: string;
+  screenshot?: string;
+  screenshotUrl?: string;
+  cloudinary?: string;
+  cloudinaryUrl?: string;
 }
 
 export default function AddJobModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -99,6 +103,8 @@ export default function AddJobModal({ open, onClose }: { open: boolean; onClose:
       url: scraped ? url.trim() : result.data.url,
       status: result.data.status,
       jobDescription: result.data.description,
+      screenshotUrl: scraped?.screenshotUrl || scraped?.screenshot,
+      cloudinaryUrl: scraped?.cloudinaryUrl || scraped?.cloudinary,
     });
     reset();
     onClose();

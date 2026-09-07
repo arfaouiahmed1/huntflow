@@ -83,6 +83,10 @@ interface ScrapedJob {
   location: string;
   salary: string;
   description: string;
+  screenshot?: string;
+  screenshotUrl?: string;
+  cloudinary?: string;
+  cloudinaryUrl?: string;
 }
 
 interface GeneratePayload {
@@ -1144,6 +1148,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       location: typeof data.location === 'string' && data.location.trim() ? data.location : 'Remote / Flexible',
       salary: typeof data.salary === 'string' && data.salary.trim() ? data.salary : 'Competitive Salary',
       description: data.description.trim(),
+      screenshot: data.screenshot || data.screenshotUrl,
+      screenshotUrl: data.screenshotUrl || data.screenshot,
+      cloudinary: data.cloudinary || data.cloudinaryUrl,
+      cloudinaryUrl: data.cloudinaryUrl || data.cloudinary,
     };
   }, []);
 

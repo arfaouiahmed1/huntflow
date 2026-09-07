@@ -163,6 +163,25 @@ describe("sanitizeScrapeResponse", () => {
       description: "Job description extracted from link.",
     });
   });
+
+  it("preserves screenshot, screenshotUrl, cloudinary, and cloudinaryUrl", () => {
+    expect(
+      sanitizeScrapeResponse({
+        ...good,
+        screenshot: "data:image/png;base64,abc",
+        screenshotUrl: "https://example.com/shot.png",
+        cloudinary: "https://res.cloudinary.com/demo/image/upload/shot",
+        cloudinaryUrl: "https://res.cloudinary.com/demo/image/upload/shot-cdn",
+      })
+    ).toEqual({
+      ...good,
+      screenshot: "data:image/png;base64,abc",
+      screenshotUrl: "https://example.com/shot.png",
+      cloudinary: "https://res.cloudinary.com/demo/image/upload/shot",
+      cloudinaryUrl: "https://res.cloudinary.com/demo/image/upload/shot-cdn",
+    });
+    expect(sanitizeScrapeResponse(good)).toEqual(good);
+  });
 });
 
 describe("sanitizeDescription", () => {

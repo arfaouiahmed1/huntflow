@@ -10,6 +10,12 @@ import {
   type AppearancePreferences,
   type ResolvedTheme,
 } from "@/lib/appearance";
+import {
+  WORKSPACE_PREFS_EVENT,
+  WORKSPACE_PREFS_KEY,
+  applyWorkspacePrefsToDom,
+  getStoredWorkspacePrefs,
+} from "@/lib/workspacePrefs";
 
 interface AppearanceContextValue {
   appearance: AppearancePreferences;
@@ -74,6 +80,24 @@ export function AppearanceProvider({ children }: { children: React.ReactNode }) 
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.style.colorScheme = resolvedTheme;
   }, [resolvedTheme]);
+
+  // Workspace display prefs (thumbnails, density) live on <html> datasets
+  // consumed by globals.css; applied here so they hold on every route.
+  useEffect(() => {
+    applyWorkspacePrefsToDom(getStoredWorkspacePrefs());
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === WORKSPACE_PREFS_KEY || event.key === null) {
+        applyWorkspacePrefsToDom(getStoredWorkspacePrefs());
+      }
+    };
+    const onPrefsChange = () => applyWorkspacePrefsToDom(getStoredWorkspacePrefs());
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(WORKSPACE_PREFS_EVENT, onPrefsChange);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(WORKSPACE_PREFS_EVENT, onPrefsChange);
+    };
+  }, []);
 
   const value = useMemo<AppearanceContextValue>(
     () => ({

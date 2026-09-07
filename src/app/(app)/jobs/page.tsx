@@ -24,6 +24,7 @@ import CrawlerDiscoveryControls from "@/components/crawler/CrawlerDiscoveryContr
 import type { ChannelKey } from "@/components/crawler/CrawlerChannelBar";
 import type { CrawlerFacetFilters, CrawlerSourcePublic } from "@/lib/crawler/contracts";
 import { persistNotification } from "@/lib/notificationsClient";
+import { getStoredWorkspacePrefs, sendDesktopNotification } from "@/lib/workspacePrefs";
 import { readJsonResponse } from "@/lib/errors";
 
 interface CrawlSourceResult {
@@ -78,7 +79,8 @@ export default function JobsPage() {
   } = useApp();
   const { success, error, warn } = useToast();
 
-  const [viewMode, setViewMode] = useState<"deck" | "matrix">("deck");
+  // Defaults from Settings → Workspace → Defaults & display (localStorage; server falls back to deck).
+  const [viewMode, setViewMode] = useState<"deck" | "matrix">(() => getStoredWorkspacePrefs().jobsView);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [jobs, setJobs] = useState<JobApplication[]>([]);
   const [crawling, setCrawling] = useState(false);
@@ -89,7 +91,7 @@ export default function JobsPage() {
   const [keyword, setKeyword] = useState(profile.targetTitle?.trim() || "developer");
   const [channel, setChannel] = useState<ChannelKey>("all");
   const [facets, setFacets] = useState<CrawlerFacetFilters>({});
-  const [crawlLimit, setCrawlLimit] = useState(50);
+  const [crawlLimit, setCrawlLimit] = useState(() => getStoredWorkspacePrefs().crawlLimit);
   const [sources, setSources] = useState<CrawlerSourcePublic[]>([]);
   const [lastCrawl, setLastCrawl] = useState<CrawlSummary | null>(null);
   const [liveRunId, setLiveRunId] = useState<string | null>(null);
@@ -197,6 +199,8 @@ export default function JobsPage() {
           kind: "success",
           link: "/jobs",
         });
+        // OS-level ping only when enabled in Settings → Workspace (never prompts from here).
+        void sendDesktopNotification("HUNTFLOW crawl complete", `Found ${count} fresh roles for "${searchTerm}"`);
       } else {
         const sourceNames = failedSources
           .slice(0, 3)

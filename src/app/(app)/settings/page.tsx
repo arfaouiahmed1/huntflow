@@ -817,7 +817,7 @@ export default function SettingsPage() {
   const GuideIcon = guide.icon;
 
   return (
-    <div className="max-w-7xl space-y-6">
+    <div className="w-full space-y-6">
       <div>
         <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.3em] text-[var(--chartreuse)]">
           /settings

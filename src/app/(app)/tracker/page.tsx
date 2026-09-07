@@ -29,6 +29,7 @@ import {
   X,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
+import { getStoredWorkspacePrefs } from "@/lib/workspacePrefs";
 import { scanGhostingRadar, GhostedApplication } from "@/lib/mail/ghostingRadar";
 import { ApplicationStatus, LinkedInJob, EmployerReview, JobApplication, SkillsGapAnalysis } from "@/types";
 import { cn } from "@/lib/utils";
@@ -79,13 +80,14 @@ export default function TrackerPage() {
   // AppProvider has deterministic server defaults, so the tracker can render
   // useful pipeline content before client-side persistence reconciliation.
   const mounted = true;
-  const [view, setView] = useState<"board" | "table" | "deck">("board");
+  const [view, setView] = useState<"board" | "table" | "deck">(() => getStoredWorkspacePrefs().trackerView);
   const [showAdd, setShowAdd] = useState(false);
   const [coachingOpen, setCoachingOpen] = useState(false);
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [filter, setFilter] = useState<ApplicationStatus | "all">("all");
-  const [sortKey, setSortKey] = useState<SortKey>("newest");
+  // Default from Settings → Workspace → Defaults & display (localStorage; server falls back to "newest").
+  const [sortKey, setSortKey] = useState<SortKey>(() => getStoredWorkspacePrefs().trackerSort);
   const [dragTarget, setDragTarget] = useState<string | null>(null);
   const [minMatch, setMinMatch] = useState(0);
   const [hasUrlOnly, setHasUrlOnly] = useState(false);

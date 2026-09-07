@@ -1,5 +1,6 @@
 "use client";
 import Select from "@/components/ui/Select";
+import SettingHelper from "@/components/settings/SettingHelper";
 
 import { useState, useEffect, useRef } from "react";
 import {
@@ -32,7 +33,22 @@ import {
   Monitor,
   PanelLeftClose,
   ArrowRight,
+  ArrowLeft,
+  BookOpen,
+  GraduationCap,
+  Compass,
+  LayoutGrid,
+  Table,
+  FileText,
+  Archive,
+  Send,
+  CheckCircle2,
+  Bell,
+  BellRing,
+  Eye,
+  Gauge,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useApp } from "@/context/AppContext";
 import { useAppearance } from "@/context/AppearanceContext";
@@ -46,6 +62,16 @@ import { CloudinarySettingsSchema } from "@/lib/validation";
 import { isMasked } from "@/lib/masking";
 import { toErrorMessage } from "@/lib/errors";
 import type { LinkedInLoginResult } from "@/context/AppContext";
+import {
+  CRAWL_LIMIT_OPTIONS,
+  WORKSPACE_PREFS_EVENT,
+  WORKSPACE_PREFS_KEY,
+  getStoredWorkspacePrefs,
+  saveWorkspacePrefs,
+  sendDesktopNotification,
+  type TrackerSort,
+  type WorkspacePrefs,
+} from "@/lib/workspacePrefs";
 
 const ROUTABLE_WORKFLOWS = [
   { id: "match_analysis", label: "Match analysis", hint: "Fit score and evidence gaps" },
@@ -62,16 +88,35 @@ const ROUTABLE_WORKFLOWS = [
   { id: "atsAudit", label: "ATS audit", hint: "Keyword and formatting review" },
 ] as const;
 
+const TRACKER_SORT_OPTIONS: { id: TrackerSort; label: string }[] = [
+  { id: "newest", label: "Newest first" },
+  { id: "oldest", label: "Oldest first" },
+  { id: "match", label: "Best match" },
+  { id: "company", label: "Company A–Z" },
+  { id: "applied", label: "Recently applied" },
+  { id: "followUp", label: "Follow-up due" },
+];
+
 const SETTINGS_TABS = [
   { id: "workspace", label: "Workspace", description: "Theme and navigation" },
   { id: "agents", label: "Agents", description: "Models and workflow routing" },
   { id: "crawler", label: "Crawler", description: "Concurrency and visual feeds" },
   { id: "connections", label: "Connections", description: "LinkedIn, Gmail, and mail" },
   { id: "data", label: "Data", description: "Backup and reset controls" },
+  { id: "guide", label: "Guide", description: "How to use HUNTFLOW" },
+  { id: "faq", label: "FAQ", description: "Answers and fixes" },
 ] as const;
 
 type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
-const SETTINGS_TAB_ICONS = { workspace: Sun, agents: Cpu, crawler: Layers, connections: Link2, data: Download } as const;
+const SETTINGS_TAB_ICONS = {
+  workspace: Sun,
+  agents: Cpu,
+  crawler: Layers,
+  connections: Link2,
+  data: Download,
+  guide: GraduationCap,
+  faq: BookOpen,
+} as const;
 
 type GuidePoint = { label: string; body: string };
 type TabGuideData = {
@@ -122,7 +167,109 @@ const TAB_GUIDES: Record<SettingsTab, TabGuideData> = {
     ],
     next: "Export a backup first, then restore to bring it back, or reset to begin clean.",
   },
+  guide: {
+    heading: "How to use HUNTFLOW",
+    points: [
+      { label: "What it is", body: "The end-to-end loop: discover roles, track them, analyze fit, tailor documents, and apply supervised." },
+      { label: "How to use it", body: "Step through the workflow below with Next/Back, or jump to any step — every step links to the live surface." },
+    ],
+    next: "Start at step 1 on /jobs and work forward; each step builds on the previous one.",
+    cta: { label: "Start discovering", href: "/jobs" },
+  },
+  faq: {
+    heading: "Frequently asked questions",
+    points: [
+      { label: "What it covers", body: "Providers, local models, sidecar token, Gmail OAuth, LinkedIn li_at, Cloudinary, and backup/restore." },
+      { label: "How to fix fast", body: "Every answer ends with the tab that fixes it — jump straight there instead of hunting." },
+    ],
+    next: "Still stuck? The in-app diagnostics and docs/ENVIRONMENT.md cover tokens and URLs.",
+  },
 };
+
+type GuideStep = { icon: LucideIcon; title: string; body: string; href: string; cta: string };
+const GUIDE_STEPS: GuideStep[] = [
+  {
+    icon: Compass,
+    title: "Discover roles",
+    body: "On /jobs, pick sources and run Discovery. Fresh postings land in the swipe deck ranked by fit — save the keepers, skip the rest.",
+    href: "/jobs",
+    cta: "Open Discovery",
+  },
+  {
+    icon: LayoutGrid,
+    title: "Track the pipeline",
+    body: "Saved roles land in /tracker as wishlist. Drag them across applied → interviewing → offer, or switch to table/deck and sort by match.",
+    href: "/tracker",
+    cta: "Open Tracker",
+  },
+  {
+    icon: CheckCircle2,
+    title: "Analyze fit",
+    body: "Open a job to run match analysis: fit score, evidence gaps, STAR cards, and interview questions grounded in your vault.",
+    href: "/jobs",
+    cta: "Review a role",
+  },
+  {
+    icon: FileText,
+    title: "Tailor documents",
+    body: "In /resume, the Studio drafts tailored resumes, cover and motivation letters, then compiles them to LaTeX PDF with ATS checks.",
+    href: "/resume",
+    cta: "Open Resume Studio",
+  },
+  {
+    icon: Archive,
+    title: "Build vault evidence",
+    body: "Add career facts, docs, and contacts to /vault. Every agent answer cites this evidence instead of inventing it.",
+    href: "/vault",
+    cta: "Open Vault",
+  },
+  {
+    icon: Send,
+    title: "Apply supervised",
+    body: "On /agent, the 11-agent pipeline researches, tailors, and prefills — then pauses at a human review gate. Nothing submits silently.",
+    href: "/agent",
+    cta: "Open Apply Agent",
+  },
+];
+
+type FaqItem = { q: string; a: string; action?: { label: string; tab: SettingsTab } };
+const FAQS: FaqItem[] = [
+  {
+    q: "How does the AI fallback chain work?",
+    a: "Every request tries your enabled providers top-to-bottom and hops on failure (rate limits, outages, bad JSON — 3 attempts per provider with backoff). The first enabled provider also powers legacy single-provider features. Keys stay in your local database, never in git.",
+    action: { label: "Open Agents tab", tab: "agents" },
+  },
+  {
+    q: "Can I use a local model with Ollama?",
+    a: "Yes. Add a provider pointed at your local endpoint (e.g. http://localhost:11434/v1) — a key is optional for local models. Then Test it and optionally pin heavy workflows to it via per-agent routing.",
+    action: { label: "Open Agents tab", tab: "agents" },
+  },
+  {
+    q: "What is the sidecar token (HUNTFLOW_AGENT_TOKEN)?",
+    a: "A shared secret between Next.js and the Python Scrapling agent, sent as the X-Huntflow-Token header. Set the same value in .env for both sides. LinkedIn sessions, crawling, and auto-apply need the sidecar running (default http://127.0.0.1:8001).",
+    action: { label: "Open Connections tab", tab: "connections" },
+  },
+  {
+    q: "How do I connect Gmail?",
+    a: "Create a Web-application OAuth client in Google Cloud Console, save the Client ID + Secret here, add the shown Redirect URI to Google's authorized list, then Connect with Google OAuth. IMAP/SMTP with an app password works as a fallback for sending and syncing.",
+    action: { label: "Open Connections tab", tab: "connections" },
+  },
+  {
+    q: "How do I connect LinkedIn (li_at)?",
+    a: "Either use the browser login window, or paste your li_at session cookie (linkedin.com → F12 → Application → Cookies → copy li_at). If LinkedIn shows a checkpoint, complete the verification in your browser and refresh; session-locked means another login is in progress — wait and retry.",
+    action: { label: "Open Connections tab", tab: "connections" },
+  },
+  {
+    q: "Do I need Cloudinary?",
+    a: "No — without it, screenshots stay local in .agent_runs/. With it, live browser screenshots stream to the agent console and job deck during scraping and automation. Values saved here take precedence over CLOUDINARY_* in .env.",
+    action: { label: "Open Crawler tab", tab: "crawler" },
+  },
+  {
+    q: "How do backup, restore, and reset work?",
+    a: "Export downloads one JSON snapshot (jobs, contacts, emails, interviews, reminders, memories, vault, settings, usage). Restore replaces everything and re-seeds. Reset wipes the database and local cache and reloads clean — your AI engine keys stay untouched. Always export before resetting.",
+    action: { label: "Open Data tab", tab: "data" },
+  },
+];
 
 export default function SettingsPage() {
   const {
@@ -189,7 +336,38 @@ export default function SettingsPage() {
   const [restoreBusy, setRestoreBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("workspace");
+  const [guideStep, setGuideStep] = useState(0);
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [prefs, setPrefs] = useState<WorkspacePrefs>(() => getStoredWorkspacePrefs());
   const chain = providers;
+
+  // Live-sync prefs changed in another tab; the initializer above covers first paint.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === WORKSPACE_PREFS_KEY || event.key === null) setPrefs(getStoredWorkspacePrefs());
+    };
+    const onPrefsChange = () => setPrefs(getStoredWorkspacePrefs());
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(WORKSPACE_PREFS_EVENT, onPrefsChange);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(WORKSPACE_PREFS_EVENT, onPrefsChange);
+    };
+  }, []);
+
+  const patchPrefs = (patch: Partial<WorkspacePrefs>) => setPrefs(saveWorkspacePrefs(patch));
+
+  const onTestDesktopNotification = async () => {
+    const result = await sendDesktopNotification(
+      "HUNTFLOW test notification",
+      "Desktop notifications are on — crawl and save events will ping you here.",
+      { requestPermission: true }
+    );
+    if (result === "sent") success("Test notification sent — check your OS tray.");
+    else if (result === "denied") error("Browser blocked notifications — allow them in site settings, then retry.");
+    else if (result === "unsupported") error("This browser does not support desktop notifications.");
+    else warn("Enable desktop notifications first, then send a test.");
+  };
 
   const resetAllData = async () => {
     if (!armReset) {
@@ -634,9 +812,12 @@ export default function SettingsPage() {
             ? "Session profile busy"
             : "Not signed in";
   const liNeedsAttention = ["checkpoint", "login_in_progress", "session_locked"].includes(liDetails?.state || "");
+  const activeProviders = chain.filter((c) => c.enabled).length;
+  const guide = GUIDE_STEPS[Math.min(guideStep, GUIDE_STEPS.length - 1)];
+  const GuideIcon = guide.icon;
 
   return (
-    <div className="max-w-7xl space-y-8">
+    <div className="max-w-7xl space-y-6">
       <div>
         <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.3em] text-[var(--chartreuse)]">
           /settings
@@ -646,8 +827,41 @@ export default function SettingsPage() {
           Configure providers, integrations, automation services, and local data controls.
         </p>
       </div>
+
+      {/* Live status overview — each card jumps to the tab that owns it. */}
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-label="Integration status overview">
+        <StatusCard
+          icon={Cpu}
+          label="AI engine"
+          value={chain.length === 0 ? "No providers" : `${activeProviders} active · ${chain.length} total`}
+          tone={activeProviders > 0 ? "ok" : "warn"}
+          onOpen={() => setActiveTab("agents")}
+        />
+        <StatusCard
+          icon={Link2}
+          label="LinkedIn"
+          value={liStateLabel}
+          tone={liStatus === "signed-in" ? "ok" : liNeedsAttention ? "warn" : "bad"}
+          onOpen={() => setActiveTab("connections")}
+        />
+        <StatusCard
+          icon={Mail}
+          label="Gmail"
+          value={gmailStatus.connected ? (gmailStatus.email ? `Connected · ${gmailStatus.email}` : "Connected") : "Not connected"}
+          tone={gmailStatus.connected ? "ok" : "bad"}
+          onOpen={() => setActiveTab("connections")}
+        />
+        <StatusCard
+          icon={Camera}
+          label="Media feeds"
+          value={cloudForm.cloudName ? `Cloudinary · ${cloudForm.cloudName}` : "Local snapshots"}
+          tone={cloudForm.cloudName ? "ok" : "idle"}
+          onOpen={() => setActiveTab("crawler")}
+        />
+      </div>
+
       <nav className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.08)]" aria-label="Settings sections">
-        <div className="grid grid-cols-2 gap-2 md:flex md:overflow-x-auto" role="tablist" aria-label="Settings sections">
+        <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Settings sections">
           {SETTINGS_TABS.map((tab) => {
             const Icon = SETTINGS_TAB_ICONS[tab.id];
             const selected = activeTab === tab.id;
@@ -662,7 +876,7 @@ export default function SettingsPage() {
                 data-testid={`settings-tab-${tab.id}`}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "group min-h-14 w-full rounded-xl border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chartreuse)] md:min-w-[150px] md:flex-1",
+                  "group w-full min-w-[148px] flex-1 shrink-0 rounded-xl border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chartreuse)]",
                   selected
                     ? "border-[var(--chartreuse)]/45 bg-[var(--chartreuse)]/10 text-[var(--paper)]"
                     : "border-transparent text-dim hover:border-[var(--line)] hover:bg-white/[0.03] hover:text-[var(--paper)]",
@@ -672,7 +886,7 @@ export default function SettingsPage() {
                   <Icon className={cn("h-3.5 w-3.5", selected ? "text-[var(--chartreuse)]" : "text-dim group-hover:text-[var(--paper)]")} />
                   {tab.label}
                 </span>
-                <span className="mt-1 block whitespace-nowrap text-[10px] text-dim">{tab.description}</span>
+                <span className="mt-1 block truncate text-[10px] text-dim">{tab.description}</span>
               </button>
             );
           })}
@@ -685,14 +899,18 @@ export default function SettingsPage() {
       <div id="settings-content" role="tabpanel" aria-labelledby={`settings-tab-${activeTab}`} className="space-y-6">
       <TabGuide key={`guide-${activeTab}`} data={TAB_GUIDES[activeTab]} />
       {activeTab === "workspace" && (
-        <section className="grid gap-5 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-center">
-        <div>
-          <h2 className="font-display text-sm font-semibold text-[var(--paper)]">Appearance & navigation</h2>
-          <p className="mt-1 text-xs leading-relaxed text-dim">
+        <div className="space-y-6">
+        <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 sm:p-6">
+          <SectionHeading
+            icon={Sun}
+            accent="text-[var(--chartreuse)]"
+            title="Appearance & navigation"
+            helper="Theme mode applies instantly across the app. Compact navigation collapses the desktop sidebar to icons."
+            helperLabel="Appearance and navigation"
+          />
+          <p className="mb-4 mt-1 text-xs leading-relaxed text-dim">
             Choose the workspace theme and keep the desktop navigation as roomy or compact as you prefer.
           </p>
-        </div>
-        <div className="space-y-3">
           <div className="grid grid-cols-3 gap-2" role="group" aria-label="Appearance mode">
             <button
               type="button"
@@ -734,7 +952,7 @@ export default function SettingsPage() {
               <Monitor className="h-4 w-4" /> System
             </button>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-white/[0.02] px-3 py-2.5">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-white/[0.02] px-3 py-2.5">
             <Checkbox
               checked={appearance.sidebarCollapsed}
               onChange={setSidebarCollapsed}
@@ -746,21 +964,150 @@ export default function SettingsPage() {
               <PanelLeftClose className="h-3 w-3" /> {appearance.mode === "system" ? `System · ${resolvedTheme}` : `${appearance.mode} mode`}
             </span>
           </div>
+        </section>
+
+        <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 sm:p-6">
+          <SectionHeading
+            icon={LayoutGrid}
+            accent="text-[var(--sky)]"
+            title="Defaults & display"
+            helper="These defaults load when Tracker and Discovery open, and the display toggles apply instantly across the app. Everything is stored in your browser — no server round-trip."
+            helperLabel="Defaults and display"
+          />
+          <p className="mb-4 mt-1 text-xs leading-relaxed text-dim">
+            Skip repetitive setup: pick the views you open every day and how dense the workspace feels.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
+                Default Tracker view
+                <SettingHelper label="Default Tracker view" text="The /tracker layout used on first open: board (kanban columns), table (sortable rows), or deck (swipe cards). You can still switch views per session." />
+              </p>
+              <Segmented
+                ariaLabel="Default Tracker view"
+                value={prefs.trackerView}
+                onChange={(trackerView) => patchPrefs({ trackerView })}
+                options={[
+                  { value: "board", label: "Board", icon: LayoutGrid },
+                  { value: "table", label: "Table", icon: Table },
+                  { value: "deck", label: "Deck", icon: Layers },
+                ]}
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
+                  Default Tracker sort
+                  <SettingHelper label="Default Tracker sort" text="How /tracker orders roles on first open. Column headers still re-sort per session." />
+                </p>
+                <Select
+                  value={prefs.trackerSort}
+                  onChange={(trackerSort) => patchPrefs({ trackerSort: trackerSort as TrackerSort })}
+                  options={TRACKER_SORT_OPTIONS.map((o) => ({ value: o.id, label: o.label }))}
+                  placeholder="Sort…"
+                  ariaLabel="Default Tracker sort"
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
+                  Default result limit
+                  <SettingHelper label="Default result limit" text="How many ranked results /jobs requests per Discovery run. Lower is faster; higher covers more boards." />
+                </p>
+                <Select
+                  value={String(prefs.crawlLimit) as "25" | "50" | "100" | "200"}
+                  onChange={(v) => patchPrefs({ crawlLimit: Number(v) })}
+                  options={CRAWL_LIMIT_OPTIONS.map((n) => ({ value: String(n), label: `${n} results` }))}
+                  placeholder="Result limit…"
+                  ariaLabel="Default result limit"
+                  className="w-full"
+                />
+              </div>
+            </div>
+            <div>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
+                Default Discovery view
+                <SettingHelper label="Default Discovery view" text="The /jobs layout used on first open: deck (swipe one role at a time) or matrix (scan the ranked grid)." />
+              </p>
+              <Segmented
+                ariaLabel="Default Discovery view"
+                value={prefs.jobsView}
+                onChange={(jobsView) => patchPrefs({ jobsView })}
+                options={[
+                  { value: "deck", label: "Deck", icon: Layers },
+                  { value: "matrix", label: "Matrix", icon: LayoutGrid },
+                ]}
+              />
+            </div>
+            <div className="grid gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-white/[0.02] px-3 py-2.5">
+                <Checkbox
+                  checked={prefs.showThumbnails}
+                  onChange={(showThumbnails) => patchPrefs({ showThumbnails })}
+                  label="Visual proof thumbnails"
+                  description="Show listing screenshots on cards and detail pages."
+                  aria-label="Visual proof thumbnails"
+                />
+                <Eye className="h-4 w-4 shrink-0 text-dim" aria-hidden="true" />
+                <SettingHelper label="Visual proof thumbnails" text="Hides or shows listing-proof screenshots everywhere (job cards, detail pages). Proof data is kept — only the display changes." />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-white/[0.02] px-3 py-2.5">
+                <Checkbox
+                  checked={prefs.compactDensity}
+                  onChange={(compactDensity) => patchPrefs({ compactDensity })}
+                  label="Compact density"
+                  description="Tighter panel padding across the workspace."
+                  aria-label="Compact density"
+                />
+                <Gauge className="h-4 w-4 shrink-0 text-dim" aria-hidden="true" />
+                <SettingHelper label="Compact density" text="Trims panel padding app-wide so more content fits per screen. Turn off for the roomier default." />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-white/[0.02] px-3 py-2.5">
+                <Checkbox
+                  checked={prefs.desktopNotifications}
+                  onChange={(desktopNotifications) => patchPrefs({ desktopNotifications })}
+                  label="Desktop notifications"
+                  description="OS-level pings for crawl and save events."
+                  aria-label="Desktop notifications"
+                />
+                <span className="inline-flex items-center gap-2">
+                  {prefs.desktopNotifications && (
+                    <button
+                      type="button"
+                      onClick={onTestDesktopNotification}
+                      className="inline-flex items-center gap-1 rounded-lg border border-[var(--line)] px-2 py-1 text-[10px] font-semibold text-dim transition-colors hover:text-[var(--paper)]"
+                    >
+                      <BellRing className="h-3 w-3" /> Send test
+                    </button>
+                  )}
+                  <Bell className="h-4 w-4 shrink-0 text-dim" aria-hidden="true" />
+                </span>
+                <SettingHelper label="Desktop notifications" text="Lets crawl completions and saves ping your OS tray. The browser asks permission once when you send the test." />
+              </div>
+            </div>
+          </div>
+        </section>
         </div>
-      </section>
       )}
 
       {activeTab === "agents" && (
         <div className="space-y-6">
       {/* LLM Engine */}
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
-        <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
-          <Cpu className="h-4 w-4 text-[var(--chartreuse)]" /> AI Engine
-        </h2>
-        <p className="mb-4 text-xs leading-relaxed text-dim">
-          Add providers as a fallback chain. Every request tries them top-to-bottom and hops on
-          failure (rate limits, outages, bad JSON). Keys stay in your local database. The first
-          enabled provider also powers the legacy single-provider features.
+      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 sm:p-6">
+        <SectionHeading
+          icon={Cpu}
+          accent="text-[var(--chartreuse)]"
+          title="AI Engine"
+          helper="Providers form a fallback chain: every request tries them top-to-bottom and hops on failure (rate limits, outages, bad JSON). Keys stay in your local database. The first enabled provider also powers legacy single-provider features."
+          helperLabel="AI Engine"
+          right={
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 px-2.5 py-1 text-[10px] font-semibold text-[var(--chartreuse)]">
+              <Sparkles className="h-3 w-3" /> {activeProviders} active · {chain.length} total
+            </span>
+          }
+        />
+        <p className="mb-4 mt-1 text-xs leading-relaxed text-dim">
+          Add providers as a fallback chain. Use the arrows to set priority, Test each key, and import models for dropdown picks.
         </p>
 
         {/* Chain rows */}
@@ -791,7 +1138,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Add provider */}
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <Select
             value={addId}
             onChange={(id) => {
@@ -830,25 +1177,27 @@ export default function SettingsPage() {
             ariaLabel="Add a provider"
             className="w-48"
           />
-          <span className="text-[10px] text-dim">{chain.filter((c) => c.enabled).length} active · {chain.length} total</span>
+          <span className="text-[10px] text-dim">{activeProviders} active · {chain.length} total</span>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
-              <Route className="h-4 w-4 text-[var(--sky)]" /> Per-agent model routing
-            </h2>
-            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-dim">
-              Give each workflow a preferred provider key and model. The saved provider chain remains its automatic
-              fallback path for rate limits, timeouts, and upstream outages.
-            </p>
-          </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 px-2.5 py-1 text-[10px] font-semibold text-[var(--chartreuse)]">
-            <Sparkles className="h-3 w-3" /> {agentModelRoutes.length} explicit route{agentModelRoutes.length === 1 ? "" : "s"}
-          </span>
-        </div>
+      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 sm:p-6">
+        <SectionHeading
+          icon={Route}
+          accent="text-[var(--sky)]"
+          title="Per-agent model routing"
+          helper="Give a workflow a preferred provider key and model; the saved chain stays its automatic fallback for rate limits, timeouts, and outages. Reset returns a workflow to the chain default."
+          helperLabel="Per-agent model routing"
+          right={
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 px-2.5 py-1 text-[10px] font-semibold text-[var(--chartreuse)]">
+              <Sparkles className="h-3 w-3" /> {agentModelRoutes.length} explicit route{agentModelRoutes.length === 1 ? "" : "s"}
+            </span>
+          }
+        />
+        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-dim">
+          Give each workflow a preferred provider key and model. The saved provider chain remains its automatic
+          fallback path for rate limits, timeouts, and upstream outages.
+        </p>
 
         {chain.some((provider) => provider.enabled) ? (
           <div className="mt-5 grid gap-3 xl:grid-cols-2">
@@ -930,11 +1279,15 @@ export default function SettingsPage() {
 
       <div className={activeTab === "connections" || activeTab === "crawler" ? "space-y-6" : "hidden"}>
       {/* LinkedIn */}
-      <section className={cn("rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6", activeTab === "connections" ? "" : "hidden")}>
-        <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
-          <Link2 className="h-4 w-4 text-[var(--chartreuse)]" /> LinkedIn
-        </h2>
-        <p className="mb-4 text-xs leading-relaxed text-dim">
+      <section className={cn("rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 sm:p-6", activeTab === "connections" ? "" : "hidden")}>
+        <SectionHeading
+          icon={Link2}
+          accent="text-[var(--chartreuse)]"
+          title="LinkedIn"
+          helper="Powers auto-apply and LinkedIn discovery through the local Scrapling agent (:8001). Sign in once via the browser window, or paste an li_at session cookie for a manual session."
+          helperLabel="LinkedIn"
+        />
+        <p className="mb-4 mt-1 text-xs leading-relaxed text-dim">
           Connect your real LinkedIn account. Authenticate via a real browser login window or directly paste your session cookie (<code className="font-mono text-xs text-[var(--chartreuse)]">li_at</code>).
         </p>
 
@@ -1010,7 +1363,7 @@ export default function SettingsPage() {
             <p className="text-[11px] text-dim leading-relaxed">
               Open linkedin.com in your browser, press F12 → Application → Cookies → copy the value of <code className="font-mono text-[var(--paper)]">li_at</code> and paste it below:
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 className={cn(field, "flex-1 font-mono text-xs")}
                 placeholder="AQEDATk... (paste your li_at cookie here)"
@@ -1031,16 +1384,20 @@ export default function SettingsPage() {
       </section>
 
       {/* Cloudinary & Parallelism */}
-      <section className={cn("rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6", activeTab === "crawler" ? "" : "hidden")}>
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
-            <ImageIcon className="h-4 w-4 text-[var(--chartreuse)]" /> Cloudinary Streaming & Parallel Crawler
-          </h2>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--sky)]/40 bg-[var(--sky)]/10 px-2.5 py-0.5 text-[10px] font-bold text-[var(--sky)]">
-            <Camera className="h-3 w-3" /> Live Visual Feeds
-          </span>
-        </div>
-        <p className="mb-2 text-xs leading-relaxed text-dim">
+      <section className={cn("rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 sm:p-6", activeTab === "crawler" ? "" : "hidden")}>
+        <SectionHeading
+          icon={ImageIcon}
+          accent="text-[var(--chartreuse)]"
+          title="Cloudinary Streaming & Parallel Crawler"
+          helper="Cloudinary hosts live browser screenshots so the console and deck can stream them. Concurrency is how many boards crawl in parallel — higher is faster but heavier on rate limits. Values saved here override .env."
+          helperLabel="Cloudinary streaming and parallel crawler"
+          right={
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--sky)]/40 bg-[var(--sky)]/10 px-2.5 py-0.5 text-[10px] font-bold text-[var(--sky)]">
+              <Camera className="h-3 w-3" /> Live Visual Feeds
+            </span>
+          }
+        />
+        <p className="mb-2 mt-1 text-xs leading-relaxed text-dim">
           Configure Cloudinary to stream live browser screenshots to the web console and job deck during scraping and form automation. Set the maximum crawler worker concurrency for controlled parallel discovery.
         </p>
         <p className="mb-4 text-[11px] leading-relaxed text-dim">
@@ -1053,6 +1410,7 @@ export default function SettingsPage() {
           <div>
             <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
               Cloud Name
+              <SettingHelper label="Cloud Name" text="Your Cloudinary cloud name (e.g. dktc34wxa). Find it on the Cloudinary dashboard after signing up." />
             </label>
             <input
               className={field}
@@ -1064,6 +1422,7 @@ export default function SettingsPage() {
           <div>
             <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
               API Key
+              <SettingHelper label="API Key" text="Cloudinary API key. Masked values (••••) mean unchanged — the sidecar keeps its stored secret." />
             </label>
             <input
               className={field}
@@ -1075,6 +1434,7 @@ export default function SettingsPage() {
           <div>
             <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
               API Secret
+              <SettingHelper label="API Secret" text="Cloudinary API secret. Stored locally and synced to the sidecar on Test & Sync." />
             </label>
             <input
               type="password"
@@ -1091,6 +1451,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-2">
               <Layers className="h-4 w-4 text-[var(--chartreuse)]" />
               <p className="text-xs font-semibold text-[var(--paper)]">Crawler Concurrency Pool</p>
+              <SettingHelper label="Crawler Concurrency Pool" text="Parallel workers scraping job boards at once. Start at 1–2; raise it when crawls feel slow and boards tolerate it." />
             </div>
             <p className="text-[11px] text-dim">
               Number of parallel workers scraping job boards simultaneously. Higher values crawl faster.
@@ -1114,7 +1475,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-end gap-3">
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
           <Button size="sm" variant="outline" onClick={onTestCloudinary} loading={testingCloud}>
             <PlugZap className="h-3.5 w-3.5" /> Test & Sync to Agent
           </Button>
@@ -1126,11 +1487,15 @@ export default function SettingsPage() {
       </div>
 
       {/* Email */}
-      <section className={cn("rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-6", activeTab === "connections" ? "" : "hidden")}>
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
-            <Mail className="h-4 w-4 text-[var(--chartreuse)]" /> Email & Gmail Integration
-          </h2>
+      <section className={cn("rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 sm:p-6", activeTab === "connections" ? "" : "hidden")}>
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <SectionHeading
+            icon={Mail}
+            accent="text-[var(--chartreuse)]"
+            title="Email & Gmail Integration"
+            helper="Official Google OAuth (XOAUTH2) is the recommended path for sending and syncing. IMAP/SMTP with an app password is the manual fallback when OAuth isn't configured."
+            helperLabel="Email and Gmail integration"
+          />
           <Button
             size="sm"
             variant="ghost"
@@ -1148,7 +1513,7 @@ export default function SettingsPage() {
         {/* Google OAuth Credentials Configuration Panel */}
         {googleConfigOpen && (
           <div className="mb-5 rounded-xl border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/5 p-4 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-semibold text-[var(--paper)] flex items-center gap-1.5">
                 <Key className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> Google Cloud OAuth Credentials
               </p>
@@ -1263,7 +1628,10 @@ export default function SettingsPage() {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-[var(--line)]/50 bg-white/[0.02] p-4">
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">IMAP — receive · app password (fallback)</p>
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
+              IMAP — receive · app password (fallback)
+              <SettingHelper label="IMAP fallback" text="Manual receive path used only when Gmail OAuth isn't connected. Needs a Google app password, not your login password." />
+            </p>
             <div className="grid grid-cols-2 gap-2">
               <input
                 className={field}
@@ -1301,7 +1669,10 @@ export default function SettingsPage() {
           </div>
 
           <div className="rounded-xl border border-[var(--line)]/50 bg-white/[0.02] p-4">
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">SMTP — send · app password (fallback)</p>
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
+              SMTP — send · app password (fallback)
+              <SettingHelper label="SMTP fallback" text="Manual send path used only when Gmail OAuth isn't connected. Test & save verifies both IMAP and SMTP respond." />
+            </p>
             <div className="grid grid-cols-2 gap-2">
               <input
                 className={field}
@@ -1338,7 +1709,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="sm:col-span-2 grid grid-cols-2 gap-2">
+          <div className="sm:col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <input
               className={field}
               aria-label="From name"
@@ -1393,11 +1764,17 @@ export default function SettingsPage() {
       </section>
 
       {/* Backup & restore */}
-      <section className={cn("rounded-2xl border border-[var(--line)]/70 bg-white/[0.02] p-6", activeTab === "data" ? "" : "hidden")}>
-        <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
-          <Download className="h-4 w-4" /> Backup & Restore
-        </h2>
-        <p className="mb-4 text-xs leading-relaxed text-dim">
+      {activeTab === "data" && (
+      <div className="space-y-6">
+      <section className="rounded-2xl border border-[var(--line)]/70 bg-white/[0.02] p-5 sm:p-6">
+        <SectionHeading
+          icon={Download}
+          accent="text-[var(--chartreuse)]"
+          title="Backup & Restore"
+          helper="Export downloads one JSON file with everything (jobs, contacts, emails, interviews, reminders, memories, vault, settings, usage). Restore replaces the whole workspace from such a file — export first."
+          helperLabel="Backup and restore"
+        />
+        <p className="mb-4 mt-1 text-xs leading-relaxed text-dim">
           Download a full JSON snapshot (jobs, contacts, emails, interviews, reminders, memories, vault, settings,
           usage) or restore one. Restoring replaces everything and re-seeds after import.
         </p>
@@ -1433,11 +1810,15 @@ export default function SettingsPage() {
       </section>
 
       {/* Danger zone */}
-      <section className={cn("rounded-2xl border border-[var(--coral)]/25 bg-[var(--coral)]/[0.04] p-6", activeTab === "data" ? "" : "hidden")}>
-        <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-[var(--coral)]">
-          <Trash2 className="h-4 w-4" /> Danger Zone
-        </h2>
-        <p className="mb-4 text-xs leading-relaxed text-dim">
+      <section className="rounded-2xl border border-[var(--coral)]/25 bg-[var(--coral)]/[0.04] p-5 sm:p-6">
+        <SectionHeading
+          icon={Trash2}
+          accent="text-[var(--coral)]"
+          title="Danger Zone"
+          helper="Wipes the database and local cache, then reloads with a fresh register. Profile and insights reset too; provider keys are never touched. The first click only arms — the second confirms."
+          helperLabel="Danger zone"
+        />
+        <p className="mb-4 mt-1 text-xs leading-relaxed text-dim">
           Wipes the database (jobs, contacts, emails, interviews, reminders) and re-seeds your application register.
           Profile and insights are reset too; your AI engine key stays untouched.
         </p>
@@ -1453,6 +1834,165 @@ export default function SettingsPage() {
           {armReset ? "Click again to confirm — this wipes everything" : "Reset all data"}
         </button>
       </section>
+      </div>
+      )}
+
+      {/* Guided tutorial */}
+      {activeTab === "guide" && (
+      <div className="space-y-6">
+        <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70">
+          <div className="border-b border-[var(--line)] bg-white/[0.02] px-5 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
+                Step {Math.min(guideStep, GUIDE_STEPS.length - 1) + 1} of {GUIDE_STEPS.length}
+              </p>
+              <div className="flex gap-1" aria-hidden="true">
+                {GUIDE_STEPS.map((step, i) => (
+                  <span
+                    key={step.title}
+                    className={cn(
+                      "h-1.5 rounded-full transition-all",
+                      i === guideStep ? "w-6 bg-[var(--chartreuse)]" : i < guideStep ? "w-3 bg-[var(--chartreuse)]/50" : "w-3 bg-white/10"
+                    )}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+              <div
+                className="h-full rounded-full bg-[var(--chartreuse)] transition-all"
+                style={{ width: `${((Math.min(guideStep, GUIDE_STEPS.length - 1) + 1) / GUIDE_STEPS.length) * 100}%` }}
+              />
+            </div>
+          </div>
+          <div className="p-5 sm:p-6">
+            <div className="flex items-start gap-4">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]">
+                <GuideIcon className="h-6 w-6" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="font-display text-lg font-bold text-[var(--paper)]">{guide.title}</h2>
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-dim">{guide.body}</p>
+                <Link
+                  href={guide.href}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10 px-3.5 py-2 text-xs font-bold text-[var(--chartreuse)] transition-colors hover:bg-[var(--chartreuse)]/20"
+                >
+                  {guide.cta} <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            </div>
+            <div className="mt-5 flex items-center justify-between gap-3">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setGuideStep((s) => Math.max(0, s - 1))}
+                disabled={guideStep === 0}
+              >
+                <ArrowLeft className="h-3.5 w-3.5" /> Back
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setGuideStep((s) => Math.min(GUIDE_STEPS.length - 1, s + 1))}
+                disabled={guideStep === GUIDE_STEPS.length - 1}
+              >
+                Next <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" aria-label="All workflow steps">
+          {GUIDE_STEPS.map((step, i) => {
+            const Icon = step.icon;
+            const current = i === guideStep;
+            return (
+              <button
+                key={step.title}
+                type="button"
+                onClick={() => setGuideStep(i)}
+                aria-current={current ? "step" : undefined}
+                className={cn(
+                  "rounded-xl border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chartreuse)]/60",
+                  current
+                    ? "border-[var(--chartreuse)]/50 bg-[var(--chartreuse)]/[0.07]"
+                    : "border-[var(--line)] bg-white/[0.02] hover:border-[var(--line)] hover:bg-white/[0.04]"
+                )}
+              >
+                <span className="flex items-center gap-2.5">
+                  <span className={cn(
+                    "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
+                    current ? "bg-[var(--chartreuse)]/15 text-[var(--chartreuse)]" : "bg-white/[0.04] text-dim"
+                  )}>
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <span className="text-xs font-bold text-[var(--paper)]">
+                    <span className="mr-1.5 font-mono text-[10px] text-dim">{i + 1}</span>
+                    {step.title}
+                  </span>
+                  {current && <CheckCircle2 className="ml-auto h-4 w-4 shrink-0 text-[var(--chartreuse)]" aria-hidden="true" />}
+                </span>
+                <span className="mt-2 block text-[11px] leading-relaxed text-dim">{step.body}</span>
+              </button>
+            );
+          })}
+        </section>
+      </div>
+      )}
+
+      {/* FAQ */}
+      {activeTab === "faq" && (
+      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 sm:p-6" aria-label="Frequently asked questions">
+        <SectionHeading
+          icon={BookOpen}
+          accent="text-[var(--amber)]"
+          title="Frequently asked questions"
+          helper="Short answers to the setup questions that come up most. Each one points at the tab that fixes it."
+          helperLabel="Frequently asked questions"
+        />
+        <div className="mt-4 space-y-2">
+          {FAQS.map((faq, i) => {
+            const open = openFaq === i;
+            return (
+              <div
+                key={faq.q}
+                className={cn(
+                  "overflow-hidden rounded-xl border transition-colors",
+                  open ? "border-[var(--chartreuse)]/30 bg-white/[0.03]" : "border-[var(--line)] bg-white/[0.015]"
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenFaq(open ? null : i)}
+                  aria-expanded={open}
+                  aria-controls={`faq-panel-${i}`}
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--chartreuse)]/60"
+                >
+                  <span className={cn("font-mono text-[10px]", open ? "text-[var(--chartreuse)]" : "text-dim")}>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span className="flex-1 text-xs font-semibold text-[var(--paper)]">{faq.q}</span>
+                  <ChevronDown className={cn("h-4 w-4 shrink-0 text-dim transition-transform", open && "rotate-180 text-[var(--chartreuse)]")} aria-hidden="true" />
+                </button>
+                {open && (
+                  <div id={`faq-panel-${i}`} className="px-4 pb-4">
+                    <p className="max-w-3xl text-xs leading-relaxed text-dim">{faq.a}</p>
+                    {faq.action && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab(faq.action!.tab)}
+                        className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[var(--chartreuse)] hover:underline"
+                      >
+                        {faq.action.label} <ArrowRight className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      )}
       </div>
     </div>
   );
@@ -1471,6 +2011,107 @@ const iconBtn =
 
 const miniField =
   "rounded-lg border border-[var(--line)] bg-[var(--ink-card)] px-2.5 py-1.5 text-[11px] text-[var(--paper)] outline-none placeholder:text-dim/60 focus:border-[var(--chartreuse)]/50";
+
+function StatusCard({
+  icon: Icon,
+  label,
+  value,
+  tone,
+  onOpen,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  tone: "ok" | "warn" | "bad" | "idle";
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group min-w-0 rounded-xl border border-[var(--line)] bg-[var(--ink-card)]/70 px-3 py-2.5 text-left transition-colors hover:border-[var(--chartreuse)]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chartreuse)]/60"
+    >
+      <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
+        <Icon className="h-3 w-3 shrink-0" aria-hidden="true" /> {label}
+      </span>
+      <span className="mt-1 flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className={cn(
+            "h-1.5 w-1.5 shrink-0 rounded-full",
+            tone === "ok" ? "bg-[var(--chartreuse)]" : tone === "warn" ? "bg-[var(--amber)]" : tone === "bad" ? "bg-[var(--coral)]" : "bg-dim"
+          )}
+        />
+        <span className="truncate text-[11px] font-semibold text-[var(--paper)]">{value}</span>
+      </span>
+    </button>
+  );
+}
+
+function SectionHeading({
+  icon: Icon,
+  accent,
+  title,
+  helper,
+  helperLabel,
+  right,
+}: {
+  icon: LucideIcon;
+  accent: string;
+  title: string;
+  helper: string;
+  helperLabel: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h2 className="flex min-w-0 items-center gap-2 font-display text-sm font-semibold text-[var(--paper)]">
+        <Icon className={cn("h-4 w-4 shrink-0", accent)} aria-hidden="true" />
+        <span className="truncate">{title}</span>
+        <SettingHelper label={helperLabel} text={helper} />
+      </h2>
+      {right}
+    </div>
+  );
+}
+
+function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: { value: T; label: string; icon?: LucideIcon }[];
+  ariaLabel: string;
+}) {
+  return (
+    <div role="group" aria-label={ariaLabel} className="flex flex-wrap gap-1.5">
+      {options.map((option) => {
+        const Icon = option.icon;
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chartreuse)]/60",
+              selected
+                ? "border-[var(--chartreuse)]/50 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
+                : "border-[var(--line)] bg-white/[0.02] text-dim hover:text-[var(--paper)]"
+            )}
+          >
+            {Icon && <Icon className="h-3.5 w-3.5" aria-hidden="true" />}
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function TabGuide({ data }: { data: TabGuideData }) {
   return (

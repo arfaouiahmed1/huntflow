@@ -286,3 +286,18 @@ select {
   border-top: 1px solid var(--line);
   margin: 1rem 0;
 }
+
+/* Workspace display prefs (Settings → Workspace → Defaults & display).
+   Mirrored onto <html> by AppearanceProvider; thumbnails keep their data. */
+[data-thumbs="off"] [data-testid="card-screenshot"],
+[data-thumbs="off"] [data-testid="screenshot-proof"] {
+  display: none;
+}
+[data-density="compact"] section[class*="rounded-2xl"] {
+  padding: 1rem;
+}
+@media (min-width: 1024px) {
+  [data-density="compact"] section[class*="rounded-2xl"] {
+    padding: 1.25rem;
+  }
+}

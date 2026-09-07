@@ -302,6 +302,10 @@ export interface ScrapePayload {
   location: string;
   salary: string;
   description: string;
+  screenshot?: string;
+  screenshotUrl?: string;
+  cloudinary?: string;
+  cloudinaryUrl?: string;
 }
 
 /** Defaults mirroring the inherited cheerio extractor's fallback fields. */
@@ -323,11 +327,24 @@ function nonEmptyString(value: unknown, fallback: string): string {
  * the default so the modal never renders junk.
  */
 export function sanitizeScrapeResponse(raw: Record<string, unknown>): ScrapePayload {
-  return {
+  const payload: ScrapePayload = {
     title: nonEmptyString(raw.title, DEFAULT_SCRAPE_TITLE),
     company: nonEmptyString(raw.company, DEFAULT_SCRAPE_COMPANY),
     location: nonEmptyString(raw.location, DEFAULT_SCRAPE_LOCATION),
     salary: nonEmptyString(raw.salary, DEFAULT_SCRAPE_SALARY),
     description: sanitizeDescription(nonEmptyString(raw.description, DEFAULT_SCRAPE_DESCRIPTION)),
   };
+  if (typeof raw.screenshot === 'string' && raw.screenshot.trim() !== '') {
+    payload.screenshot = raw.screenshot;
+  }
+  if (typeof raw.screenshotUrl === 'string' && raw.screenshotUrl.trim() !== '') {
+    payload.screenshotUrl = raw.screenshotUrl;
+  }
+  if (typeof raw.cloudinary === 'string' && raw.cloudinary.trim() !== '') {
+    payload.cloudinary = raw.cloudinary;
+  }
+  if (typeof raw.cloudinaryUrl === 'string' && raw.cloudinaryUrl.trim() !== '') {
+    payload.cloudinaryUrl = raw.cloudinaryUrl;
+  }
+  return payload;
 }

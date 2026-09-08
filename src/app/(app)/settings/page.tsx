@@ -33,16 +33,10 @@ import {
   Monitor,
   PanelLeftClose,
   ArrowRight,
-  ArrowLeft,
   BookOpen,
   GraduationCap,
-  Compass,
   LayoutGrid,
   Table,
-  FileText,
-  Archive,
-  Send,
-  CheckCircle2,
   Bell,
   BellRing,
   Eye,
@@ -103,8 +97,6 @@ const SETTINGS_TABS = [
   { id: "crawler", label: "Crawler", description: "Concurrency and visual feeds" },
   { id: "connections", label: "Connections", description: "LinkedIn, Gmail, and mail" },
   { id: "data", label: "Data", description: "Backup and reset controls" },
-  { id: "guide", label: "Guide", description: "How to use HUNTFLOW" },
-  { id: "faq", label: "FAQ", description: "Answers and fixes" },
 ] as const;
 
 type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
@@ -114,8 +106,6 @@ const SETTINGS_TAB_ICONS = {
   crawler: Layers,
   connections: Link2,
   data: Download,
-  guide: GraduationCap,
-  faq: BookOpen,
 } as const;
 
 type GuidePoint = { label: string; body: string };
@@ -167,109 +157,8 @@ const TAB_GUIDES: Record<SettingsTab, TabGuideData> = {
     ],
     next: "Export a backup first, then restore to bring it back, or reset to begin clean.",
   },
-  guide: {
-    heading: "How to use HUNTFLOW",
-    points: [
-      { label: "What it is", body: "The end-to-end loop: discover roles, track them, analyze fit, tailor documents, and apply supervised." },
-      { label: "How to use it", body: "Step through the workflow below with Next/Back, or jump to any step — every step links to the live surface." },
-    ],
-    next: "Start at step 1 on /jobs and work forward; each step builds on the previous one.",
-    cta: { label: "Start discovering", href: "/jobs" },
-  },
-  faq: {
-    heading: "Frequently asked questions",
-    points: [
-      { label: "What it covers", body: "Providers, local models, sidecar token, Gmail OAuth, LinkedIn li_at, Cloudinary, and backup/restore." },
-      { label: "How to fix fast", body: "Every answer ends with the tab that fixes it — jump straight there instead of hunting." },
-    ],
-    next: "Still stuck? The in-app diagnostics and docs/ENVIRONMENT.md cover tokens and URLs.",
-  },
 };
 
-type GuideStep = { icon: LucideIcon; title: string; body: string; href: string; cta: string };
-const GUIDE_STEPS: GuideStep[] = [
-  {
-    icon: Compass,
-    title: "Discover roles",
-    body: "On /jobs, pick sources and run Discovery. Fresh postings land in the swipe deck ranked by fit — save the keepers, skip the rest.",
-    href: "/jobs",
-    cta: "Open Discovery",
-  },
-  {
-    icon: LayoutGrid,
-    title: "Track the pipeline",
-    body: "Saved roles land in /tracker as wishlist. Drag them across applied → interviewing → offer, or switch to table/deck and sort by match.",
-    href: "/tracker",
-    cta: "Open Tracker",
-  },
-  {
-    icon: CheckCircle2,
-    title: "Analyze fit",
-    body: "Open a job to run match analysis: fit score, evidence gaps, STAR cards, and interview questions grounded in your vault.",
-    href: "/jobs",
-    cta: "Review a role",
-  },
-  {
-    icon: FileText,
-    title: "Tailor documents",
-    body: "In /resume, the Studio drafts tailored resumes, cover and motivation letters, then compiles them to LaTeX PDF with ATS checks.",
-    href: "/resume",
-    cta: "Open Resume Studio",
-  },
-  {
-    icon: Archive,
-    title: "Build vault evidence",
-    body: "Add career facts, docs, and contacts to /vault. Every agent answer cites this evidence instead of inventing it.",
-    href: "/vault",
-    cta: "Open Vault",
-  },
-  {
-    icon: Send,
-    title: "Apply supervised",
-    body: "On /agent, the 11-agent pipeline researches, tailors, and prefills — then pauses at a human review gate. Nothing submits silently.",
-    href: "/agent",
-    cta: "Open Apply Agent",
-  },
-];
-
-type FaqItem = { q: string; a: string; action?: { label: string; tab: SettingsTab } };
-const FAQS: FaqItem[] = [
-  {
-    q: "How does the AI fallback chain work?",
-    a: "Every request tries your enabled providers top-to-bottom and hops on failure (rate limits, outages, bad JSON — 3 attempts per provider with backoff). The first enabled provider also powers legacy single-provider features. Keys stay in your local database, never in git.",
-    action: { label: "Open Agents tab", tab: "agents" },
-  },
-  {
-    q: "Can I use a local model with Ollama?",
-    a: "Yes. Add a provider pointed at your local endpoint (e.g. http://localhost:11434/v1) — a key is optional for local models. Then Test it and optionally pin heavy workflows to it via per-agent routing.",
-    action: { label: "Open Agents tab", tab: "agents" },
-  },
-  {
-    q: "What is the sidecar token (HUNTFLOW_AGENT_TOKEN)?",
-    a: "A shared secret between Next.js and the Python Scrapling agent, sent as the X-Huntflow-Token header. Set the same value in .env for both sides. LinkedIn sessions, crawling, and auto-apply need the sidecar running (default http://127.0.0.1:8001).",
-    action: { label: "Open Connections tab", tab: "connections" },
-  },
-  {
-    q: "How do I connect Gmail?",
-    a: "Create a Web-application OAuth client in Google Cloud Console, save the Client ID + Secret here, add the shown Redirect URI to Google's authorized list, then Connect with Google OAuth. IMAP/SMTP with an app password works as a fallback for sending and syncing.",
-    action: { label: "Open Connections tab", tab: "connections" },
-  },
-  {
-    q: "How do I connect LinkedIn (li_at)?",
-    a: "Either use the browser login window, or paste your li_at session cookie (linkedin.com → F12 → Application → Cookies → copy li_at). If LinkedIn shows a checkpoint, complete the verification in your browser and refresh; session-locked means another login is in progress — wait and retry.",
-    action: { label: "Open Connections tab", tab: "connections" },
-  },
-  {
-    q: "Do I need Cloudinary?",
-    a: "No — without it, screenshots stay local in .agent_runs/. With it, live browser screenshots stream to the agent console and job deck during scraping and automation. Values saved here take precedence over CLOUDINARY_* in .env.",
-    action: { label: "Open Crawler tab", tab: "crawler" },
-  },
-  {
-    q: "How do backup, restore, and reset work?",
-    a: "Export downloads one JSON snapshot (jobs, contacts, emails, interviews, reminders, memories, vault, settings, usage). Restore replaces everything and re-seeds. Reset wipes the database and local cache and reloads clean — your AI engine keys stay untouched. Always export before resetting.",
-    action: { label: "Open Data tab", tab: "data" },
-  },
-];
 
 export default function SettingsPage() {
   const {
@@ -336,8 +225,6 @@ export default function SettingsPage() {
   const [restoreBusy, setRestoreBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("workspace");
-  const [guideStep, setGuideStep] = useState(0);
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [prefs, setPrefs] = useState<WorkspacePrefs>(() => getStoredWorkspacePrefs());
   const chain = providers;
 
@@ -813,8 +700,6 @@ export default function SettingsPage() {
             : "Not signed in";
   const liNeedsAttention = ["checkpoint", "login_in_progress", "session_locked"].includes(liDetails?.state || "");
   const activeProviders = chain.filter((c) => c.enabled).length;
-  const guide = GUIDE_STEPS[Math.min(guideStep, GUIDE_STEPS.length - 1)];
-  const GuideIcon = guide.icon;
 
   return (
     <div className="w-full space-y-6">
@@ -1087,7 +972,46 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
-        </div>
+
+        <section className="rounded-2xl border border-[var(--chartreuse)]/25 bg-[var(--chartreuse)]/[0.04] p-5 sm:p-6" aria-label="Learn HUNTFLOW">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-base font-bold text-[var(--paper)]">Learn HUNTFLOW</h2>
+              <p className="mt-1 max-w-xl text-xs leading-relaxed text-dim">
+                The interactive demo and searchable answers now live under Settings in the sidebar.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <Link
+              href="/guide"
+              className="group flex items-center gap-3 rounded-xl border border-[var(--chartreuse)]/30 bg-[var(--ink-card)]/70 p-4 transition-colors hover:border-[var(--chartreuse)]/60"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--chartreuse)]/15 text-[var(--chartreuse)]">
+                <GraduationCap className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-[var(--paper)]">Guide & Demo</span>
+                <span className="block text-[11px] text-dim">Six-step interactive walkthrough with live links.</span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-[var(--chartreuse)] transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+            </Link>
+            <Link
+              href="/faq"
+              className="group flex items-center gap-3 rounded-xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-4 transition-colors hover:border-[var(--chartreuse)]/50"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/[0.05] text-[var(--amber)]">
+                <BookOpen className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-[var(--paper)]">FAQ</span>
+                <span className="block text-[11px] text-dim">Searchable answers across six categories.</span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-dim transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--chartreuse)]" aria-hidden="true" />
+            </Link>
+          </div>
+        </section>
+         </div>
       )}
 
       {activeTab === "agents" && (
@@ -1837,162 +1761,6 @@ export default function SettingsPage() {
       </div>
       )}
 
-      {/* Guided tutorial */}
-      {activeTab === "guide" && (
-      <div className="space-y-6">
-        <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70">
-          <div className="border-b border-[var(--line)] bg-white/[0.02] px-5 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">
-                Step {Math.min(guideStep, GUIDE_STEPS.length - 1) + 1} of {GUIDE_STEPS.length}
-              </p>
-              <div className="flex gap-1" aria-hidden="true">
-                {GUIDE_STEPS.map((step, i) => (
-                  <span
-                    key={step.title}
-                    className={cn(
-                      "h-1.5 rounded-full transition-all",
-                      i === guideStep ? "w-6 bg-[var(--chartreuse)]" : i < guideStep ? "w-3 bg-[var(--chartreuse)]/50" : "w-3 bg-white/10"
-                    )}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/[0.06]">
-              <div
-                className="h-full rounded-full bg-[var(--chartreuse)] transition-all"
-                style={{ width: `${((Math.min(guideStep, GUIDE_STEPS.length - 1) + 1) / GUIDE_STEPS.length) * 100}%` }}
-              />
-            </div>
-          </div>
-          <div className="p-5 sm:p-6">
-            <div className="flex items-start gap-4">
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]">
-                <GuideIcon className="h-6 w-6" aria-hidden="true" />
-              </span>
-              <div className="min-w-0">
-                <h2 className="font-display text-lg font-bold text-[var(--paper)]">{guide.title}</h2>
-                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-dim">{guide.body}</p>
-                <Link
-                  href={guide.href}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10 px-3.5 py-2 text-xs font-bold text-[var(--chartreuse)] transition-colors hover:bg-[var(--chartreuse)]/20"
-                >
-                  {guide.cta} <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </div>
-            </div>
-            <div className="mt-5 flex items-center justify-between gap-3">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setGuideStep((s) => Math.max(0, s - 1))}
-                disabled={guideStep === 0}
-              >
-                <ArrowLeft className="h-3.5 w-3.5" /> Back
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => setGuideStep((s) => Math.min(GUIDE_STEPS.length - 1, s + 1))}
-                disabled={guideStep === GUIDE_STEPS.length - 1}
-              >
-                Next <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" aria-label="All workflow steps">
-          {GUIDE_STEPS.map((step, i) => {
-            const Icon = step.icon;
-            const current = i === guideStep;
-            return (
-              <button
-                key={step.title}
-                type="button"
-                onClick={() => setGuideStep(i)}
-                aria-current={current ? "step" : undefined}
-                className={cn(
-                  "rounded-xl border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chartreuse)]/60",
-                  current
-                    ? "border-[var(--chartreuse)]/50 bg-[var(--chartreuse)]/[0.07]"
-                    : "border-[var(--line)] bg-white/[0.02] hover:border-[var(--line)] hover:bg-white/[0.04]"
-                )}
-              >
-                <span className="flex items-center gap-2.5">
-                  <span className={cn(
-                    "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
-                    current ? "bg-[var(--chartreuse)]/15 text-[var(--chartreuse)]" : "bg-white/[0.04] text-dim"
-                  )}>
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                  <span className="text-xs font-bold text-[var(--paper)]">
-                    <span className="mr-1.5 font-mono text-[10px] text-dim">{i + 1}</span>
-                    {step.title}
-                  </span>
-                  {current && <CheckCircle2 className="ml-auto h-4 w-4 shrink-0 text-[var(--chartreuse)]" aria-hidden="true" />}
-                </span>
-                <span className="mt-2 block text-[11px] leading-relaxed text-dim">{step.body}</span>
-              </button>
-            );
-          })}
-        </section>
-      </div>
-      )}
-
-      {/* FAQ */}
-      {activeTab === "faq" && (
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/70 p-5 sm:p-6" aria-label="Frequently asked questions">
-        <SectionHeading
-          icon={BookOpen}
-          accent="text-[var(--amber)]"
-          title="Frequently asked questions"
-          helper="Short answers to the setup questions that come up most. Each one points at the tab that fixes it."
-          helperLabel="Frequently asked questions"
-        />
-        <div className="mt-4 space-y-2">
-          {FAQS.map((faq, i) => {
-            const open = openFaq === i;
-            return (
-              <div
-                key={faq.q}
-                className={cn(
-                  "overflow-hidden rounded-xl border transition-colors",
-                  open ? "border-[var(--chartreuse)]/30 bg-white/[0.03]" : "border-[var(--line)] bg-white/[0.015]"
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpenFaq(open ? null : i)}
-                  aria-expanded={open}
-                  aria-controls={`faq-panel-${i}`}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--chartreuse)]/60"
-                >
-                  <span className={cn("font-mono text-[10px]", open ? "text-[var(--chartreuse)]" : "text-dim")}>
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="flex-1 text-xs font-semibold text-[var(--paper)]">{faq.q}</span>
-                  <ChevronDown className={cn("h-4 w-4 shrink-0 text-dim transition-transform", open && "rotate-180 text-[var(--chartreuse)]")} aria-hidden="true" />
-                </button>
-                {open && (
-                  <div id={`faq-panel-${i}`} className="px-4 pb-4">
-                    <p className="max-w-3xl text-xs leading-relaxed text-dim">{faq.a}</p>
-                    {faq.action && (
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab(faq.action!.tab)}
-                        className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[var(--chartreuse)] hover:underline"
-                      >
-                        {faq.action.label} <ArrowRight className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
-      )}
       </div>
     </div>
   );

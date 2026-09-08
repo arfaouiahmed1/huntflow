@@ -60,7 +60,7 @@
     "eslint": "^9",
     "eslint-config-next": "^16.3.1",
     "playwright": "^1.62.1",
-    "react-doctor": "^0.9.12",
+    "react-doctor": "^0.9.13",
     "react-grab": "^0.2.0",
     "react-scan": "^0.5.7",
     "tailwindcss": "^4",

@@ -213,6 +213,8 @@ export interface JobApplication {
   companyLogo?: string;
   /** Board/feed the job was crawled from (e.g. "HN Who is Hiring", "RemoteOK"). */
   source?: string;
+  /** Origin of the tracker row: manual entry vs crawler-promoted vs LinkedIn import. Defaults to manual. */
+  origin?: string;
   /** Marks low-confidence hiring-post extractions (HN Who-is-Hiring style). */
   hiringPost?: boolean;
   /** Live screenshot URL of the job page or crawl proof */

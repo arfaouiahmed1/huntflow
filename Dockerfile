@@ -37,11 +37,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends lmodern \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder --chown=node:node /app/public ./public
-COPY --from=builder --chown=node:node /app/.next/standalone ./
-COPY --from=builder --chown=node:node /app/.next/static ./.next/static
-COPY --from=builder --chown=node:node /app/src/lib/pdf/templates ./src/lib/pdf/templates
-
+  COPY --from=builder --chown=node:node /app/public ./public
+  COPY --from=builder --chown=node:node /app/.next/standalone ./
+  COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+  COPY --from=builder --chown=node:node /app/src/lib/pdf/templates ./src/lib/pdf/templates
+  COPY --from=builder --chown=node:node /app/scripts/crawler-worker.mjs ./scripts/crawler-worker.mjs
 RUN mkdir -p /app/data && chown -R node:node /app/data
 USER node
 

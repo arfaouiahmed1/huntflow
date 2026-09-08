@@ -1,16 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { POST as crawlPost } from "@/app/api/crawl/route";
 import { POST as discoverPost } from "@/app/api/crawl/sources/discover/route";
-import { jobsRepo } from "@/lib/db";
+import { discoveryQueueRepo, jobsRepo } from "@/lib/db";
 import { NextRequest } from "next/server";
 
 describe("Unified Crawler API & ATS Discovery Engine", () => {
   beforeEach(() => {
-    // Clear mock jobs
+    // Clear mock jobs and inbox queue
     const jobs = jobsRepo.list();
     for (const j of jobs) {
       if (j.id.startsWith("ats_") || j.id.startsWith("gh_")) jobsRepo.remove(j.id);
     }
+    discoveryQueueRepo.deleteAll();
   });
 
   it("handles ATS direct crawl request and persists structured jobs via unified /api/crawl", async () => {
@@ -69,12 +70,15 @@ describe("Unified Crawler API & ATS Discovery Engine", () => {
     expect(data.success).toBe(true);
     expect(data.count).toBe(2);
     expect(data.runId).toBeDefined();
-
-    // Verify jobs saved in SQLite
-    const stripeJob = jobsRepo.get("gh_stripe_101");
-    expect(stripeJob).toBeDefined();
-    expect(stripeJob?.company).toBe("Stripe");
-    expect(stripeJob?.title).toContain("Staff");
+    // Verify jobs queued in Discovery Inbox (not straight to tracker)
+    expect(jobsRepo.get("gh_stripe_101")).toBeNull();
+    const queued = discoveryQueueRepo.list({ statuses: ["new", "seen", "saved", "dismissed"], limit: 50 });
+    expect(queued.length).toBe(2);
+    const stripeItem = queued.find((q) => q.externalId === "gh_stripe_101");
+    expect(stripeItem).toBeDefined();
+    const payload = JSON.parse(stripeItem!.payloadJson) as { company: string; title: string };
+    expect(payload.company).toBe("Stripe");
+    expect(payload.title).toContain("Staff");
   });
 
   it("handles ATS board discovery query correctly via /api/crawl/sources/discover", async () => {

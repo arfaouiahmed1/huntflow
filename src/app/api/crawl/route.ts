@@ -5,7 +5,7 @@ import {
   settingsRepo,
   crawlerRunsRepo,
   crawlerJobsStagingRepo,
-  jobSourceEdgesRepo,
+  discoveryQueueRepo,
   savedSearchesRepo,
 } from "@/lib/db";
 import { resolveCloudinaryConfig } from "@/lib/cloudinaryConfig";
@@ -222,11 +222,24 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Build set of already-known / decided keys to avoid duplicates
+    // Build set of already-known / decided keys to avoid duplicates.
+    // Tracker rows, inbox rows, and legacy settings decisions all count —
+    // re-crawls refresh queue payloads in place instead of duplicating.
     const seen = new Set<string>();
     for (const j of jobsRepo.list()) {
       const k = dedupKey(j);
       if (k) seen.add(k);
+      if (j.canonicalKey) seen.add(j.canonicalKey);
+    }
+    for (const q of discoveryQueueRepo.list({ statuses: ["new", "seen", "saved", "dismissed"], limit: 100000 })) {
+      if (q.canonicalKey) seen.add(q.canonicalKey);
+      try {
+        const payload = JSON.parse(q.payloadJson) as { url?: string; title?: string; company?: string };
+        const k = dedupKey(payload);
+        if (k) seen.add(k);
+      } catch {
+        // ignore malformed payload rows
+      }
     }
     try {
       const rawDec = settingsRepo.get("crawl_decisions");
@@ -330,23 +343,30 @@ export async function POST(req: NextRequest) {
     const uniqueJobs = collapseDuplicateJobs(candidates);
     uniqueJobs.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
 
-    // 5. Persist top candidates to SQLite jobs repository
-    const toPersist = uniqueJobs.slice(0, Math.min(limit, uniqueJobs.length));
-    for (const job of toPersist) {
+    // 5. Queue top candidates in the Discovery Inbox — never straight to tracker.
+    // Source edges are recorded at promotion time, when the tracker row exists:
+    // job_source_edges.job_id references jobs(id), so inbox rows link by
+    // (source_id, external_id) until a save promotes them.
+    const toQueue = uniqueJobs.slice(0, Math.min(limit, uniqueJobs.length));
+    let queuedCount = 0;
+    for (const job of toQueue) {
       try {
-        jobsRepo.upsert(job);
-        const sourceId = job.source || channel;
-        jobSourceEdgesRepo.upsertEdge({
-          jobId: job.id,
-          sourceId,
+        const canonicalKey = job.canonicalKey || dedupKey(job);
+        if (!canonicalKey) continue;
+        discoveryQueueRepo.upsert({
+          canonicalKey,
+          sourceId: job.source || channel,
           externalId: job.id,
-          sourceUrl: job.url || "",
+          runId,
+          payload: job,
+          matchScore: job.matchScore ?? null,
+          rankingBreakdown: job.rankingBreakdown ?? null,
         });
+        queuedCount++;
       } catch (err) {
-        console.warn("[crawl-persist]", job.id, err);
+        console.warn("[crawl-queue]", job.id, err);
       }
     }
-
     // Update run status in SQLite
     crawlerRunsRepo.update(runId, {
       status: "completed",
@@ -360,8 +380,8 @@ export async function POST(req: NextRequest) {
       savedSearchesRepo.recordRun(saveSearchId);
     }
 
-    // Background enrichment for top 5 candidates
-    const enrichBatch = toPersist.slice(0, 5);
+    // Background enrichment for top 5 queued candidates (payload-only; tracker untouched)
+    const enrichBatch = toQueue.slice(0, 5);
     if (enrichBatch.length > 0) {
       void (async () => {
         for (const job of enrichBatch) {
@@ -372,15 +392,24 @@ export async function POST(req: NextRequest) {
               jobUrl: job.url,
             });
             const research = intel.research as Awaited<ReturnType<typeof researchCompany>> | undefined;
-            if (research) {
-              const current = jobsRepo.get(job.id);
-              if (current) {
-                jobsRepo.upsert({
-                  ...current,
-                  multiAgentOutputs: {
-                    ...(current.multiAgentOutputs ?? {}),
-                    companyResearch: research,
+            if (research && job.canonicalKey) {
+              const current = discoveryQueueRepo.get(job.canonicalKey);
+              if (current && (current.status === "new" || current.status === "seen")) {
+                const payload = JSON.parse(current.payloadJson) as JobApplication;
+                discoveryQueueRepo.upsert({
+                  canonicalKey: job.canonicalKey,
+                  sourceId: current.sourceId,
+                  externalId: current.externalId,
+                  runId,
+                  payload: {
+                    ...payload,
+                    multiAgentOutputs: {
+                      ...(payload.multiAgentOutputs ?? {}),
+                      companyResearch: research,
+                    },
                   },
+                  matchScore: current.matchScore,
+                  rankingBreakdown: current.rankingBreakdown,
                 });
               }
             }
@@ -396,6 +425,7 @@ export async function POST(req: NextRequest) {
       runId: sidecarRunId || runId,
       status: "completed",
       count: uniqueJobs.length,
+      queued: queuedCount,
       jobs: uniqueJobs,
       concurrency: effectiveConcurrency,
       plannedSources: boardsCrawled,

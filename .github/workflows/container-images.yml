@@ -6,11 +6,13 @@ on:
       - main
     paths:
       - "Dockerfile"
+      - "docker-compose.images.yml"
       - "next.config.ts"
       - "package.json"
       - "package-lock.json"
       - "public/**"
       - "src/**"
+      - "scripts/crawler-worker.mjs"
       - "scrapling-agent/**"
       - ".github/workflows/container-images.yml"
   pull_request:
@@ -18,11 +20,13 @@ on:
       - main
     paths:
       - "Dockerfile"
+      - "docker-compose.images.yml"
       - "next.config.ts"
       - "package.json"
       - "package-lock.json"
       - "public/**"
       - "src/**"
+      - "scripts/crawler-worker.mjs"
       - "scrapling-agent/**"
       - ".github/workflows/container-images.yml"
   workflow_dispatch:

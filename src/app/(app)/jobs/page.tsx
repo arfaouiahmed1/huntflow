@@ -55,6 +55,7 @@ interface CrawlApiResponse {
   error?: string;
   runId?: string | null;
   count?: number;
+  queued?: number;
   jobs?: JobApplication[];
   concurrency?: number;
   boardsCrawled?: number;
@@ -65,13 +66,17 @@ interface CrawlNotice {
   title: string;
   detail: string;
 }
-
-const DECISIONS_MAX = 500;
+interface InboxCounts {
+  new: number;
+  seen: number;
+  saved: number;
+  dismissed: number;
+  total: number;
+  pending: number;
+}
 export default function JobsPage() {
   const {
-    applications,
     profile,
-    addApplication,
     triggerAutoApplyBatch,
     triggerMatchBatch,
     cloudinarySettings,
@@ -82,12 +87,15 @@ export default function JobsPage() {
   // Defaults from Settings → Workspace → Defaults & display (localStorage; server falls back to deck).
   const [viewMode, setViewMode] = useState<"deck" | "matrix">(() => getStoredWorkspacePrefs().jobsView);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  // Discovery Inbox: unreviewed crawler queue. Crawling only enqueues;
+  // swipe-right promotes into the tracker, swipe-left dismisses the inbox row.
   const [jobs, setJobs] = useState<JobApplication[]>([]);
+  const [inboxCounts, setInboxCounts] = useState<InboxCounts>({ new: 0, seen: 0, saved: 0, dismissed: 0, total: 0, pending: 0 });
+  const [inboxLoading, setInboxLoading] = useState(true);
   const [crawling, setCrawling] = useState(false);
   const [offline, setOffline] = useState(false);
   const [checked, setChecked] = useState(false);
   const [workerCount] = useState<number>(1);
-  const [decisions, setDecisions] = useState<Record<string, string>>({});
   const [keyword, setKeyword] = useState(profile.targetTitle?.trim() || "developer");
   const [channel, setChannel] = useState<ChannelKey>("all");
   const [facets, setFacets] = useState<CrawlerFacetFilters>({});
@@ -101,36 +109,47 @@ export default function JobsPage() {
   const [reviewData, setReviewData] = useState<EmployerReview | null>(null);
   const [discoveryModalOpen, setDiscoveryModalOpen] = useState(false);
 
-  const savedKeys = useMemo(
-    () => new Set(applications.map((a) => dedupKey(a))),
-    [applications]
-  );
-  const skipKeys = useMemo(
-    () => new Set(Object.entries(decisions).filter(([, v]) => v.startsWith("skipped")).map(([k]) => k)),
-    [decisions]
-  );
-
-  const recordDecision = useCallback(
-    async (job: JobApplication, outcome: "saved" | "skipped", reason?: string) => {
-      const key = dedupKey(job);
-      const val = reason ? `${outcome}:${reason}` : outcome;
-      const next = { ...decisions, [key]: val };
-      const keys = Object.keys(next);
-      if (keys.length > DECISIONS_MAX) {
-        for (const k of keys.slice(0, keys.length - DECISIONS_MAX)) delete next[k];
+  const fetchInbox = useCallback(async () => {
+    setInboxLoading(true);
+    try {
+      const res = await fetch("/api/discovery/inbox?status=pending&limit=200", { cache: "no-store" });
+      const data = await readJsonResponse<{ success?: boolean; jobs?: JobApplication[]; counts?: InboxCounts; error?: string }>(res);
+      if (res.ok && data?.success) {
+        setJobs(collapseDuplicateJobs(data.jobs || []));
+        if (data.counts) setInboxCounts(data.counts);
+      } else if (!res.ok) {
+        warn(data?.error || `Inbox load failed (HTTP ${res.status}).`);
       }
-      setDecisions(next);
+    } catch (err) {
+      warn(err instanceof Error ? err.message : "Failed to load Discovery Inbox.");
+    } finally {
+      setInboxLoading(false);
+    }
+  }, [warn]);
+
+  const queueKey = useCallback((job: JobApplication) => job.canonicalKey || dedupKey(job), []);
+
+  const decideInbox = useCallback(
+    async (job: JobApplication, outcome: "saved" | "dismissed", reason?: string) => {
+      const canonicalKey = queueKey(job);
+      if (!canonicalKey) return null;
       try {
-        await fetch("/api/data/settings", {
+        const res = await fetch("/api/discovery/decide", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ crawl_decisions: JSON.stringify(next) }),
+          body: JSON.stringify({ canonicalKey, outcome, reason }),
         });
+        const data = await readJsonResponse<{ success?: boolean; job?: JobApplication; counts?: InboxCounts; error?: string }>(res);
+        if (!res.ok || !data?.success) throw new Error(data?.error || `Decision failed (HTTP ${res.status}).`);
+        setJobs((prev) => prev.filter((j) => queueKey(j) !== canonicalKey));
+        if (data.counts) setInboxCounts(data.counts);
+        return data;
       } catch (err) {
-        warn(err instanceof Error ? err.message : "Failed to sync crawl decisions — working offline.");
+        error(err instanceof Error ? err.message : "Failed to record decision.");
+        return null;
       }
     },
-    [decisions, warn]
+    [queueKey, error]
   );
 
   const runCrawl = useCallback(async () => {
@@ -177,7 +196,6 @@ export default function JobsPage() {
 
       if (data.offline) {
         setOffline(true);
-        setJobs([]);
         const message = data.error || "Start the local crawler agent and retry discovery.";
         setCrawlNotice({ tone: "error", title: "Crawler agent unavailable", detail: message });
         error(message);
@@ -185,14 +203,15 @@ export default function JobsPage() {
       }
 
       setOffline(false);
-      setJobs(collapseDuplicateJobs(data.jobs || []));
+      await fetchInbox();
       if (count > 0) {
+        const queued = Number(data.queued ?? count);
         setCrawlNotice({
           tone: "success",
-          title: `Discovery complete — ${count} role${count === 1 ? "" : "s"} found`,
-          detail: `Searched ${data.boardsCrawled || 0} enabled sources for “${searchTerm}”.`,
+          title: `Discovery complete — ${queued} role${queued === 1 ? "" : "s"} queued in the inbox`,
+          detail: `Searched ${data.boardsCrawled || 0} enabled sources for “${searchTerm}”. Swipe right to save keepers to Your Applications.`,
         });
-        success(`Discovered and ranked ${count} fresh job opportunity(ies).`);
+        success(`Queued ${queued} fresh job opportunit${queued === 1 ? "y" : "ies"} in the Discovery Inbox.`);
         void persistNotification({
           title: "Crawl complete",
           message: `Found ${count} fresh roles for "${searchTerm}"`,
@@ -218,11 +237,10 @@ export default function JobsPage() {
       setCrawlNotice({ tone: "error", title: "Discovery failed", detail: message });
       error(message);
       setOffline(true);
-      setJobs([]);
     } finally {
       setCrawling(false);
     }
-  }, [channel, facets, keyword, crawlLimit, cloudinarySettings.concurrency, success, error, warn, refreshData]);
+  }, [channel, facets, keyword, crawlLimit, cloudinarySettings.concurrency, success, error, warn, refreshData, fetchInbox]);
 
   const handleToggleSource = useCallback(async (id: string, enabled: boolean) => {
     try {
@@ -272,19 +290,17 @@ export default function JobsPage() {
           }),
         });
         const data = await res.json();
-        if (data.success && data.jobs) {
-          const unique = collapseDuplicateJobs(data.jobs);
-          setJobs((prev: JobApplication[]) => collapseDuplicateJobs([...prev, ...unique]));
-          success(`Ingested ${unique.length} roles directly from ${name}!`);
+        if (data.success) {
+          await fetchInbox();
+          success(`Ingested roles directly from ${name} into the Discovery Inbox!`);
           void refreshData();
         }
       } catch (err) {
         error(err instanceof Error ? err.message : "Failed to ingest company roles");
       }
     },
-    [success, error, refreshData]
+    [success, error, refreshData, fetchInbox]
   );
-
   /* Boot checks health and loads sources */
   useEffect(() => {
     let cancelled = false;
@@ -305,16 +321,8 @@ export default function JobsPage() {
         }
       }
     };
-    const loadDecisions = async () => {
-      try {
-        const res = await fetch("/api/data", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json();
-        const stored = data.settings?.crawl_decisions;
-        if (stored) setDecisions(JSON.parse(stored) ?? {});
-      } catch {
-        // ignore
-      }
+    const loadInbox = async () => {
+      await fetchInbox();
     };
     const loadSources = async () => {
       try {
@@ -327,49 +335,36 @@ export default function JobsPage() {
         // ignore
       }
     };
-    void loadDecisions();
+    void loadInbox();
     void loadSources();
     void boot();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [fetchInbox]);
 
-  const saveJob = useCallback(
-    (job: JobApplication): JobApplication => {
-      const existing = applications.find((a) => dedupKey(a) === dedupKey(job));
-      if (existing) return existing;
-      return addApplication({
-        title: job.title,
-        company: job.company,
-        location: job.location,
-        salary: job.salary,
-        url: job.url,
-        status: "wishlist",
-        jobDescription: job.jobDescription,
-        matchScore: job.matchScore,
-        fitCategory: job.fitCategory,
-        skillsGap: job.skillsGap,
-        source: job.source,
-        hiringPost: job.hiringPost,
-        screenshotUrl: job.screenshotUrl,
-        cloudinaryUrl: job.cloudinaryUrl,
-        notes: job.source ? `Crawled from ${job.source}` : undefined,
-        autoApplyStatus: "idle",
-        autoApplyLogs: [],
-      });
+  // Promote an inbox card into the tracker (wishlist) via the decide API.
+  // Returns the promoted tracker job, or null when the decision failed.
+  const promoteInbox = useCallback(
+    async (job: JobApplication): Promise<JobApplication | null> => {
+      const data = await decideInbox(job, "saved");
+      return data?.job ?? null;
     },
-    [applications, addApplication]
+    [decideInbox]
   );
 
   const handleSave = useCallback(
     (job: JobApplication) => {
-      const saved = saveJob(job);
-      void recordDecision(saved, "saved");
-      success(`Saved ${saved.title} to tracker.`);
-      void persistNotification({ title: "Saved to tracker", message: `${saved.title} @ ${saved.company} — saved to wishlist`, kind: "success", link: "/tracker" });
+      void (async () => {
+        const data = await decideInbox(job, "saved");
+        if (!data) return;
+        const saved = data.job ?? job;
+        success(`Saved ${saved.title} to Your Applications.`);
+        void persistNotification({ title: "Saved to tracker", message: `${saved.title} @ ${saved.company} — saved to wishlist`, kind: "success", link: "/tracker" });
+        void refreshData();
+      })();
     },
-    [saveJob, recordDecision, success]
+    [decideInbox, success, refreshData]
   );
 
   const handleRunEmployerReview = useCallback(
@@ -393,11 +388,6 @@ export default function JobsPage() {
         const data = await res.json();
         if (res.ok && data.success && data.review) {
           setReviewData(data.review);
-          const current = applications.find((a) => a.id === job.id);
-          if (current) {
-            const updated = { ...current, employerReview: data.review };
-            void recordDecision(updated, "saved");
-          }
         } else {
           error(data.error || "Failed to generate employer review");
         }
@@ -405,7 +395,7 @@ export default function JobsPage() {
         error(err instanceof Error ? err.message : "Failed to run Employer Simulator.");
       }
     },
-    [profile, applications, recordDecision, error]
+    [profile, error]
   );
 
   const handleOpenEmployerReview = useCallback(
@@ -423,53 +413,71 @@ export default function JobsPage() {
 
   const handleReviewed = useCallback(
     (job: JobApplication, reason?: string) => {
-      void recordDecision(job, "skipped", reason);
-      if (reason && reason !== "generic") {
-        warn(`Skipped: learned preference "${reason.replace("_", " ")}" for future filter tuning.`);
-      }
+      void (async () => {
+        const data = await decideInbox(job, "dismissed", reason ?? "generic");
+        if (!data) return;
+        if (reason && reason !== "generic") {
+          warn(`Dismissed: learned preference "${reason.replace("_", " ")}" for future filter tuning.`);
+        }
+        void refreshData();
+      })();
     },
-    [recordDecision, warn]
+    [decideInbox, warn, refreshData]
   );
 
   const handleBatchSave = useCallback(
     (selected: JobApplication[]) => {
-      for (const j of selected) {
-        const saved = saveJob(j);
-        void recordDecision(saved, "saved");
-      }
-      success(`Saved ${selected.length} job(s) to pipeline tracker.`);
+      void (async () => {
+        let savedCount = 0;
+        for (const j of selected) {
+          const data = await decideInbox(j, "saved");
+          if (data) savedCount++;
+        }
+        success(`Saved ${savedCount} job(s) to Your Applications.`);
+        void refreshData();
+      })();
     },
-    [saveJob, recordDecision, success]
+    [decideInbox, success, refreshData]
   );
 
   const handleBatchAutoApply = useCallback(
     async (selected: JobApplication[]) => {
-      const savedJobs = selected.map((j) => {
-        const s = saveJob(j);
-        void recordDecision(s, "saved");
-        return s;
-      });
-      const ids = savedJobs.map((j) => j.id);
+      const ids: string[] = [];
+      for (const j of selected) {
+        const promoted = await promoteInbox(j);
+        if (promoted) ids.push(promoted.id);
+      }
+      if (ids.length === 0) {
+        warn("Nothing to auto-apply — inbox decisions failed.");
+        return;
+      }
       success(`Dispatched parallel auto-apply workers for ${ids.length} roles…`);
       await triggerAutoApplyBatch(ids, { submit: false });
+      void refreshData();
     },
-    [saveJob, recordDecision, triggerAutoApplyBatch, success]
+    [promoteInbox, triggerAutoApplyBatch, success, warn, refreshData]
   );
 
   const handleBatchMatch = useCallback(
     async (selected: JobApplication[]) => {
-      const savedJobs = selected.map((j) => saveJob(j));
-      const ids = savedJobs.map((j) => j.id);
+      const ids: string[] = [];
+      for (const j of selected) {
+        const promoted = await promoteInbox(j);
+        if (promoted) ids.push(promoted.id);
+      }
+      if (ids.length === 0) {
+        warn("Nothing to analyze — inbox decisions failed.");
+        return;
+      }
       success(`Running parallel AI ATS match analysis on ${ids.length} jobs…`);
       await triggerMatchBatch(ids);
+      void refreshData();
     },
-    [saveJob, triggerMatchBatch, success]
+    [promoteInbox, triggerMatchBatch, success, warn, refreshData]
   );
-
-  /* Guard: filter jobs against savedKeys, skipKeys, and active facets */
+  /* Inbox rows are server-filtered to pending (new/seen); facets narrow client-side. */
   const visibleJobs = useMemo(() => {
     return jobs.filter((j: JobApplication) => {
-      if (savedKeys.has(dedupKey(j)) || skipKeys.has(dedupKey(j))) return false;
       if (facets.workModes && facets.workModes.length > 0 && j.workMode && !facets.workModes.includes(j.workMode)) {
         return false;
       }
@@ -489,7 +497,7 @@ export default function JobsPage() {
       }
       return true;
     });
-  }, [jobs, savedKeys, skipKeys, facets]);
+  }, [jobs, facets]);
 
   const hasZeroFilterResult = jobs.length > 0 && visibleJobs.length === 0;
 
@@ -497,12 +505,11 @@ export default function JobsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.28em] text-[var(--chartreuse)]">Global Crawler Network</p>
           <h1 className="font-display text-2xl font-bold tracking-tight text-[var(--paper)]">
-            Discovery Control
+            Discovery Inbox
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-dim">
-            Demand-driven global source network across public ATS feeds, aggregators, regional portals, and curated companies.
+            Unreviewed crawler discoveries — swipe right to save keepers to Your Applications, left to dismiss. Crawling only queues here; it never touches your tracker. Saved roles appear in /tracker.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -599,7 +606,7 @@ export default function JobsPage() {
           <FilterX className="h-8 w-8 text-amber-400 mx-auto" />
           <h3 className="text-sm font-semibold text-white">No postings match current active filters</h3>
           <p className="text-xs text-[var(--paper-dim)] max-w-md mx-auto">
-            {jobs.length} roles were found by the crawl, but active region, seniority, visa, or salary filters filtered them out.
+            {jobs.length} roles are waiting in the inbox, but active region, seniority, visa, or salary filters filtered them out.
           </p>
           <Button
             type="button"
@@ -616,11 +623,14 @@ export default function JobsPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-bold text-[var(--paper)]">
-            Crawl Results ({visibleJobs.length})
+            Discovery Inbox ({visibleJobs.length})
           </h2>
+          <span className="font-mono text-[11px] text-dim">
+            {inboxCounts.pending} pending · {inboxCounts.saved} saved · {inboxCounts.dismissed} dismissed
+          </span>
           {jobs.length > visibleJobs.length && (
             <span className="text-xs text-dim">
-              ({jobs.length - visibleJobs.length} hidden by decisions/filters)
+              ({jobs.length - visibleJobs.length} hidden by filters)
             </span>
           )}
         </div>
@@ -652,15 +662,15 @@ export default function JobsPage() {
           </div>
         </div>
       </div>
-      {visibleJobs.length === 0 && !hasZeroFilterResult && !crawling && (
+      {visibleJobs.length === 0 && !hasZeroFilterResult && !crawling && !inboxLoading && (
         <section
           data-testid="crawl-empty-state"
           className="rounded-3xl border border-dashed border-[var(--line)] bg-white/[0.015] p-8 text-center"
         >
           <FilterX className="mx-auto h-8 w-8 text-dim" />
-          <h3 className="mt-3 text-sm font-semibold text-[var(--paper)]">No crawl results yet</h3>
+          <h3 className="mt-3 text-sm font-semibold text-[var(--paper)]">Inbox zero — no unreviewed discoveries</h3>
           <p className="mx-auto mt-2 max-w-lg text-xs leading-relaxed text-dim">
-            Run Discovery above to query the selected sources. Zero results is valid before a crawl completes, or when no enabled source matches the keyword and filters — HUNTFLOW never invents postings.
+            Run Discovery above to queue fresh roles, or enable the worker for continuous background crawling. Swipe right to save keepers to Your Applications — HUNTFLOW never invents postings.
           </p>
         </section>
       )}
@@ -670,13 +680,11 @@ export default function JobsPage() {
           jobs={visibleJobs}
           onSave={handleSave}
           onAutoApply={async (job) => {
-            const saved = saveJob(job);
-            void recordDecision(saved, "saved");
-            await triggerAutoApplyBatch([saved.id], { submit: false });
+            const promoted = await promoteInbox(job);
+            if (promoted) await triggerAutoApplyBatch([promoted.id], { submit: false });
           }}
           onTailor={(job) => {
-            const saved = saveJob(job);
-            void recordDecision(saved, "saved");
+            void promoteInbox(job);
           }}
           onReviewed={(job: JobApplication, reason?: string) => handleReviewed(job, reason)}
           onRunEmployerReview={handleOpenEmployerReview}
@@ -688,13 +696,11 @@ export default function JobsPage() {
           jobs={visibleJobs}
           onSave={handleSave}
           onAutoApply={async (job) => {
-            const saved = saveJob(job);
-            void recordDecision(saved, "saved");
-            await triggerAutoApplyBatch([saved.id], { submit: false });
+            const promoted = await promoteInbox(job);
+            if (promoted) await triggerAutoApplyBatch([promoted.id], { submit: false });
           }}
           onTailor={(job) => {
-            const saved = saveJob(job);
-            void recordDecision(saved, "saved");
+            void promoteInbox(job);
           }}
           onBatchSave={handleBatchSave}
           onBatchAutoApply={handleBatchAutoApply}
@@ -719,7 +725,7 @@ export default function JobsPage() {
         job={reviewJob}
         review={reviewData}
         onTailor={(job) => {
-          saveJob(job);
+          void decideInbox(job, "saved");
         }}
       />
     </div>

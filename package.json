@@ -10,6 +10,7 @@
     "dev": "concurrently -n \"next,scrapling\" -c \"green,magenta\" \"next dev\" \"cd scrapling-agent && uv run uvicorn server:app --port 8001\"",
     "dev:all": "npm run dev",
     "dev:scrapling": "cd scrapling-agent && uv run uvicorn server:app --port 8001",
+    "worker:crawler": "node scripts/crawler-worker.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

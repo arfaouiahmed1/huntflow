@@ -285,3 +285,34 @@ export interface EnrichmentItemRecord {
   provenance: string;
   updatedAt: string;
 }
+export type DiscoveryQueueStatus = "new" | "seen" | "saved" | "dismissed";
+
+export interface DiscoveryQueueItem {
+  canonicalKey: string;
+  sourceId: string;
+  externalId: string;
+  runId?: string | null;
+  firstRunId?: string | null;
+  /** Full JobApplication payload — sufficient to render deck/matrix cards without joining jobs. */
+  payloadJson: string;
+  normalizedHash?: string | null;
+  matchScore?: number | null;
+  rankingBreakdown?: Record<string, number> | null;
+  status: DiscoveryQueueStatus;
+  savedJobId?: string | null;
+  dismissReason?: string | null;
+  dismissedAt?: string | null;
+  seenAt?: string | null;
+  decidedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DiscoveryQueueCounts {
+  new: number;
+  seen: number;
+  saved: number;
+  dismissed: number;
+  total: number;
+  pending: number;
+}

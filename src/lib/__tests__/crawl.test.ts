@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { POST } from "@/app/api/crawl/route";
 import { dedupKey } from "@/lib/dedup";
-import { jobsRepo, settingsRepo } from "@/lib/db";
+import { discoveryQueueRepo, jobsRepo, settingsRepo } from "@/lib/db";
 import { NextRequest } from "next/server";
 
 function post(body: unknown) {
@@ -49,6 +49,7 @@ const crawledJobs = [
 describe("POST /api/crawl — offline sidecar", () => {
   beforeEach(() => {
     jobsRepo.removeAll();
+    discoveryQueueRepo.deleteAll();
     settingsRepo.wipe();
     makeTracked("seed-1");
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
@@ -63,16 +64,17 @@ describe("POST /api/crawl — offline sidecar", () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data).toMatchObject({ success: true, count: 0, jobs: [], offline: true });
-
     const jobs = jobsRepo.list();
     expect(jobs.length).toBe(1); // only the pre-seeded row survived
     expect(jobs[0].id).toBe("seed-1");
+    expect(discoveryQueueRepo.counts().total).toBe(0);
   });
 });
 
 describe("POST /api/crawl — online sidecar", () => {
   beforeEach(() => {
     jobsRepo.removeAll();
+    discoveryQueueRepo.deleteAll();
     settingsRepo.wipe();
     vi.stubGlobal(
       "fetch",
@@ -84,7 +86,7 @@ describe("POST /api/crawl — online sidecar", () => {
     vi.unstubAllGlobals();
   });
 
-  it("scores every crawled job and persists it as a wishlist stub", async () => {
+  it("scores every crawled job and queues it in the inbox without touching the tracker", async () => {
     const res = await POST(post({ category: "all", keyword: "developer", limit: 20 }));
     expect(res.status).toBe(200);
     const data = await res.json();
@@ -102,13 +104,17 @@ describe("POST /api/crawl — online sidecar", () => {
       expect(job.jobDescription).toBeTruthy();
     }
 
-    // Intended contract: fresh discoveries land as wishlist stubs (enrichment queue refines later).
-    const persisted = jobsRepo.list().sort((a, b) => a.id.localeCompare(b.id));
-    expect(persisted.map((j) => j.id)).toEqual(["c1", "c2"]);
-    for (const p of persisted) {
-      expect(p.status).toBe("wishlist");
-      expect(typeof p.matchScore).toBe("number");
-      expect(p.matchScore).toBe(data.jobs.find((j: { id: string }) => j.id === p.id)?.matchScore);
+    // Intended contract: fresh discoveries land in the Discovery Inbox;
+    // the tracker (manual listings) stays untouched until swipe-right saves.
+    expect(jobsRepo.list()).toHaveLength(0);
+    expect(data.queued).toBe(2);
+    const queued = discoveryQueueRepo.list({ statuses: ["new", "seen"], limit: 50 });
+    expect(queued).toHaveLength(2);
+    for (const q of queued) {
+      const job = JSON.parse(q.payloadJson) as { id: string; status: string; matchScore: number };
+      expect(job.status).toBe("wishlist");
+      expect(typeof job.matchScore).toBe("number");
+      expect(job.matchScore).toBe(data.jobs.find((j: { id: string }) => j.id === job.id)?.matchScore);
     }
   });
 
@@ -156,9 +162,9 @@ describe("POST /api/crawl — online sidecar", () => {
     expect(data.count).toBe(2);
   });
 
-  it("persists stubs unconditionally even when a row with the same id exists", async () => {
-    // Different url than the crawled job → passes dedupKey; only the removed
-    // existence guard could have blocked persistence.
+  it("never overwrites tracker rows: same-id crawls queue while manual rows survive", async () => {
+    // Different url than the crawled job → passes dedupKey; crawl must queue
+    // without touching the pre-existing tracker row.
     makeTracked("c1", {
       title: "Stale Leftover Row",
       company: "GhostCo",
@@ -171,9 +177,8 @@ describe("POST /api/crawl — online sidecar", () => {
 
     const c1 = jobsRepo.get("c1");
     expect(c1).not.toBeNull();
-    expect(c1?.title).toBe("Senior React Engineer");
-    expect(c1?.status).toBe("wishlist");
-    expect(jobsRepo.get("c2")).not.toBeNull();
+    expect(c1?.title).toBe("Stale Leftover Row");
+    expect(discoveryQueueRepo.counts().pending).toBe(2);
   });
 
   it("surfaces runId and per-board sourceResults from the sidecar response", async () => {

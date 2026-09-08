@@ -73,7 +73,7 @@ const SORT_OPTIONS: { id: SortKey; label: string }[] = [
 ];
 
 export default function TrackerPage() {
-  const { applications, profile, interviews, emails, searchLinkedInJobs, saveLinkedInJob, addApplication, updateApplication, triggerAutoApply } = useApp();
+  const { applications, profile, interviews, emails, searchLinkedInJobs, saveLinkedInJob, updateApplication, triggerAutoApply } = useApp();
   const router = useRouter();
   const openJob = useCallback((id: string) => router.push(`/jobs/${id}`), [router]);
   const { success, error } = useToast();
@@ -93,7 +93,6 @@ export default function TrackerPage() {
   const [hasUrlOnly, setHasUrlOnly] = useState(false);
   const [autoAppliedOnly, setAutoAppliedOnly] = useState(false);
   const [crawledOnly, setCrawledOnly] = useState(false);
-  const [crawling, setCrawling] = useState(false);
 
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewJob, setReviewJob] = useState<JobApplication | null>(null);
@@ -227,69 +226,12 @@ export default function TrackerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleCrawlWeb = async () => {
-    if (crawling) return;
-    setCrawling(true);
-    try {
-      const concurrency = 4;
-      const res = await fetch("/api/crawl", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category: "all", limit: 8, concurrency }),
-      });
-      const data = await res.json();
-      if (res.ok && Array.isArray(data.jobs) && data.jobs.length > 0) {
-        let addedCount = 0;
-        const existingKeys = new Set(
-          applications.map((a) => `${(a.company || "").toLowerCase().trim()}:::${(a.title || "").toLowerCase().trim()}`)
-        );
-
-        for (const job of data.jobs) {
-          const key = `${(job.company || "").toLowerCase().trim()}:::${(job.title || "").toLowerCase().trim()}`;
-          if (existingKeys.has(key)) continue;
-          existingKeys.add(key);
-
-          addApplication({
-            title: job.title || "Discovered Opportunity",
-            company: job.company || "Unknown Company",
-            location: job.location || "Remote",
-            salary: job.salary,
-            url: job.url,
-            status: "wishlist",
-            jobDescription: job.jobDescription || "",
-            matchScore: job.matchScore,
-            fitCategory: job.fitCategory,
-            skillsGap: job.skillsGap,
-            source: job.source || "Scrapling Crawler",
-            hiringPost: job.hiringPost,
-            screenshotUrl: job.screenshotUrl,
-            cloudinaryUrl: job.cloudinaryUrl,
-            notes: job.source ? `Discovered via ${job.source}` : "Discovered via Scrapling Crawler",
-            autoApplyStatus: "idle",
-            autoApplyLogs: [],
-          });
-          addedCount++;
-        }
-
-        if (addedCount > 0) {
-          success(
-            `Scrapling Crawler added ${addedCount} fresh opportunit${addedCount === 1 ? "y" : "ies"} to your Wishlist!`
-          );
-          setView("deck");
-        } else {
-          success("Crawl complete — all discovered roles are already tracked in your pipeline.");
-        }
-      } else if (data.offline) {
-        error("Crawler engine is offline. Run 'npm run dev:scrapling' to start the local sidecar.");
-        } else {
-        error(data.error || "Crawl completed with zero new matches.");
-      }
-    } catch (err) {
-      error(err instanceof Error ? err.message : "Failed to connect to web crawler endpoint.");
-    } finally {
-      setCrawling(false);
-    }
-  };
+  // Discovery lives in the Inbox (/jobs): crawling only queues there, and
+  // swipe-right promotes keepers into this tracker. This entry point routes
+  // there instead of writing crawl results straight into the pipeline.
+  const handleCrawlWeb = useCallback(() => {
+    router.push("/jobs");
+  }, [router]);
 
   const handleRunEmployerReview = async (job: JobApplication) => {
     setReviewJob(job);

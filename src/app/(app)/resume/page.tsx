@@ -128,11 +128,11 @@ const ALL_TEMPLATES: TemplateMeta[] = [
 ];
 
 const QUICK_PROMPTS = [
-  { label: "🎯 ATS Keyword Polish", prompt: "Analyze this resume against modern ATS algorithms and optimize keyword density without keyword stuffing." },
-  { label: "📈 Quantify Achievements", prompt: "Rewrite work experience bullets using the Google XYZ formula (Accomplished [X], measured by [Y], by doing [Z])." },
-  { label: "⚡ Cut to Exact 1-Page", prompt: "Tighten spacing and condense bullet points so this resume fits perfectly on a single page." },
-  { label: "🗄️ Ingest Vault Evidence", prompt: "Scan my Profile Vault and pull in verified technical project metrics and production achievements." },
-  { label: "🇩🇪 DACH CV Style", prompt: "Format this into a German Tabellarischer Lebenslauf structure." },
+  { label: "ATS keyword polish", prompt: "Analyze this resume against modern ATS algorithms and optimize keyword density without keyword stuffing." },
+  { label: "Quantify achievements", prompt: "Rewrite work experience bullets using the Google XYZ formula (Accomplished [X], measured by [Y], by doing [Z])." },
+  { label: "Cut to exact 1-page", prompt: "Tighten spacing and condense bullet points so this resume fits perfectly on a single page." },
+  { label: "Ingest vault evidence", prompt: "Scan my Profile Vault and pull in verified technical project metrics and production achievements." },
+  { label: "DACH CV style", prompt: "Format this into a German Tabellarischer Lebenslauf structure." },
 ];
 
 function profileToResume(profile: ReturnType<typeof useApp>["profile"]): ResumeContent {
@@ -292,7 +292,7 @@ export default function ResumeStudioPage() {
     {
       id: "msg-0",
       sender: "assistant",
-      text: "👋 **Welcome to the LaTeX & Typst Resume Studio!**\n\nI operate across your live document canvas. You can ask me to rewrite bullet points with quantifiable impact, sync data from your **Vault**, or switch typesetting engines.\n\n💡 *Tip: Highlight any text on the preview canvas to instantly quote and edit with AI.*",
+      text: "**Welcome to the LaTeX & Typst Resume Studio!**\n\nI operate across your live document canvas. You can ask me to rewrite bullet points with quantifiable impact, sync data from your **Vault**, or switch typesetting engines.\n\n*Tip: Highlight any text on the preview canvas (mouse or keyboard) to instantly quote and edit with AI.*",
       timestamp: "Just now",
     },
   ]);
@@ -444,8 +444,9 @@ export default function ResumeStudioPage() {
     success("Reverted to previous version.");
   };
 
-  // Text selection handler on preview
-  const handlePreviewMouseUp = () => {
+  // Text selection handler on preview (mouse and keyboard alike: a
+  // `selectionchange` listener below feeds keyboard-driven selections here).
+  const handlePreviewMouseUp = useCallback(() => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim()) {
       setSelectionPopup((p) => ({ ...p, visible: false }));
@@ -467,7 +468,23 @@ export default function ResumeStudioPage() {
       x: rect.left + rect.width / 2,
       y: rect.top - 12,
     });
-  };
+  }, []);
+
+  // Keyboard-selected text never fires mouseup, so mirror it here. Selections
+  // outside the preview canvas (e.g. the chat input) are ignored.
+  useEffect(() => {
+    const onSelectionChange = () => {
+      const sel = window.getSelection();
+      const container = previewContainerRef.current;
+      if (!sel || sel.isCollapsed || !container) return;
+      const anchor = sel.anchorNode;
+      const anchorEl = anchor instanceof Element ? anchor : anchor?.parentElement;
+      if (!anchorEl || !container.contains(anchorEl)) return;
+      handlePreviewMouseUp();
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, [handlePreviewMouseUp]);
 
   const addSelectionToChat = () => {
     if (!selectionPopup.text) return;
@@ -700,7 +717,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         >
           <button
             onClick={addSelectionToChat}
-            className="flex items-center gap-1.5 rounded-full border border-[var(--chartreuse)] bg-[var(--ink-card)] px-3 py-1.5 text-xs font-bold text-[var(--chartreuse)] shadow-2xl hover:bg-[var(--chartreuse)] hover:text-black transition-all cursor-pointer"
+            className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-[var(--chartreuse)] bg-[var(--ink-card)] px-3 py-1.5 text-xs font-bold text-[var(--chartreuse)] shadow-2xl hover:bg-[var(--chartreuse)] hover:text-black transition-all cursor-pointer"
           >
             <MessageSquarePlus className="h-3.5 w-3.5" />
             <span>Add to chat</span>
@@ -923,7 +940,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           </div>
 
           {/* Chat Messages */}
-          <div className="max-h-[50vh] min-h-0 flex-1 space-y-4 overflow-y-auto p-4 lg:max-h-none">
+          <div role="log" aria-label="Copilot conversation" className="max-h-[50vh] min-h-0 flex-1 space-y-4 overflow-y-auto p-4 lg:max-h-none">
             {chatMessages.map((msg) => {
               const isAssistant = msg.sender === "assistant";
               return (
@@ -970,9 +987,10 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                 disabled={copilotBusy}
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Ask AI Copilot to rewrite, enhance metrics, or optimize..."
-                className="flex-1 rounded-xl border border-[var(--line)] bg-white/[0.04] px-3.5 py-2 text-xs text-[var(--paper)] outline-none transition-all placeholder:text-dim focus:border-[var(--chartreuse)]/50 focus:bg-white/[0.06]"
+                aria-label="Ask the AI Copilot to rewrite, enhance metrics, or optimize"
+                className="flex min-h-[44px] flex-1 rounded-xl border border-[var(--line)] bg-white/[0.04] px-3.5 py-2 text-xs text-[var(--paper)] outline-none transition-all placeholder:text-dim focus:border-[var(--chartreuse)]/50 focus:bg-white/[0.06]"
               />
-              <Button type="submit" size="sm" disabled={!chatInput.trim() || copilotBusy} loading={copilotBusy} className="shadow-[var(--glow)]">
+              <Button type="submit" size="sm" disabled={!chatInput.trim() || copilotBusy} loading={copilotBusy} aria-label="Send message" className="min-h-[44px] shadow-[var(--glow)]">
                 <Send className="h-3.5 w-3.5" />
               </Button>
             </form>

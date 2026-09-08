@@ -12,7 +12,6 @@ import {
   Check,
   Copy,
   Layers,
-  Award,
   Zap,
   Save,
   Undo2,
@@ -23,10 +22,12 @@ import {
   ZoomOut,
   RotateCcw,
   SlidersHorizontal,
-  GripVertical,
   Code2,
   Cpu,
   ShieldCheck,
+  AlertTriangle,
+  PanelLeftClose,
+  Pin,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { useToast } from "@/components/ui/Toaster";
@@ -243,12 +244,24 @@ export default function ResumeStudioPage() {
   >(null);
   const [promptInspectorOpen, setPromptInspectorOpen] = useState(false);
   const [showVariantsModal, setShowVariantsModal] = useState(false);
-  // 3-Pane Resizing Widths
-  const [leftWidthPercent, setLeftWidthPercent] = useState(28);
-  const [rightWidthPercent, setRightWidthPercent] = useState(28);
-  const [isDraggingLeft, setIsDraggingLeft] = useState(false);
-  const [isDraggingRight, setIsDraggingRight] = useState(false);
+  // Refine rail: tabbed Chat / ATS / Diff workspace. Collapsible on desktop,
+  // stacked below the canvas on mobile. No mouse-only resize handles.
+  const [refineTab, setRefineTab] = useState<"chat" | "ats" | "diff">("chat");
+  const [refineCollapsed, setRefineCollapsed] = useState(false);
+  const [configureOpen, setConfigureOpen] = useState(false);
   const [zoom, setZoom] = useState(100);
+  // Dirty tracking: snapshot of the last profile-synced content so the UI can
+  // say honestly whether the canvas holds unsynced changes.
+  const [lastSyncedJson, setLastSyncedJson] = useState(() => JSON.stringify(profileToResume(profile)));
+  const isDirty = useMemo(() => JSON.stringify(resume) !== lastSyncedJson, [resume, lastSyncedJson]);
+  // Honest one-line compile status for the header chip (role=status).
+  const compileStatus = useMemo(() => {
+    if (pdfState === "compiling") return engine === "typst" ? "Rendering Typst preview…" : "Compiling LaTeX…";
+    if (pdfState === "no-tex") return "TeX unavailable";
+    if (pdfState === "error") return "Compile failed";
+    if (engine === "typst") return "Typst preview · HTML approximation";
+    return pdfUrl ? "PDF ready · LaTeX" : "Preview ready";
+  }, [pdfState, engine, pdfUrl]);
 
   const filteredTemplates = useMemo(
     () => ALL_TEMPLATES.filter((t) => t.kind === docKind || t.kind === "both"),
@@ -430,34 +443,6 @@ export default function ResumeStudioPage() {
     setResume(previous);
     success("Reverted to previous version.");
   };
-
-  // Resizing mouse handlers
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      const totalWidth = window.innerWidth;
-      if (isDraggingLeft) {
-        const newLeftPercent = Math.min(Math.max((e.clientX / totalWidth) * 100, 20), 40);
-        setLeftWidthPercent(newLeftPercent);
-      } else if (isDraggingRight) {
-        const newRightPercent = Math.min(Math.max(((totalWidth - e.clientX) / totalWidth) * 100, 20), 40);
-        setRightWidthPercent(newRightPercent);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsDraggingLeft(false);
-      setIsDraggingRight(false);
-    };
-
-    if (isDraggingLeft || isDraggingRight) {
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
-    }
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isDraggingLeft, isDraggingRight]);
 
   // Text selection handler on preview
   const handlePreviewMouseUp = () => {
@@ -653,6 +638,7 @@ export default function ResumeStudioPage() {
         year: ed.year || "",
       })),
     });
+    setLastSyncedJson(JSON.stringify(resume));
     success("Synced resume changes to main Profile & My Info!");
   };
 
@@ -685,10 +671,21 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
     setTimeout(() => setCopied(false), 2000);
     success("Copied clean markdown to clipboard!");
   };
-
+  // Pin the live engine source as the diff baseline (shared by the compile
+  // controls and the Diff tab).
+  const pinBaseline = () => {
+    const src = engine === "typst" ? typstSource : latexSource;
+    if (!src.trim()) {
+      errToast("Nothing to pin yet — wait for the preview to render.");
+      return;
+    }
+    setBaseline({ tex: src, engine });
+    setDiffCollapsed(false);
+    success(`Baseline pinned on ${engine === "typst" ? "Typst markup" : "LaTeX source"} — diff is live.`);
+  };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-5rem)] overflow-hidden space-y-2">
+    <div className="flex min-h-0 flex-col gap-2 lg:h-[calc(100vh-5rem)] lg:overflow-hidden">
       {/* Floating Selection Popup: "Add to chat" */}
       {selectionPopup.visible && (
         <div
@@ -711,179 +708,165 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         </div>
       )}
 
-      {/* Studio Header: Global Actions, Engine Switcher & ATS Score */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/80 px-4 py-2.5 backdrop-blur shrink-0">
-        <div className="flex items-center gap-3">
-          <h1 className="font-display text-[15px] font-bold tracking-tight text-[var(--paper)] flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-lg border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10">
-              <FileText className="h-4 w-4 text-[var(--chartreuse)]" />
+      {/* Studio Header: engine, target job, compile status, export, configure */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/80 px-4 py-2.5 backdrop-blur shrink-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <h1 className="font-display flex items-center gap-2 text-[15px] font-bold tracking-tight text-[var(--paper)]">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10">
+              <FileText className="h-4 w-4 text-[var(--chartreuse)]" aria-hidden />
             </span>
-            Resume & CV Studio
+            <span className="hidden min-[420px]:inline">Resume & CV Studio</span>
+            <span className="min-[420px]:hidden">Studio</span>
+            {isDirty && (
+              <span title="Canvas has changes not yet synced to your profile" className="rounded-full border border-amber-300/40 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
+                Unsaved
+              </span>
+            )}
           </h1>
 
-          {/* Resume vs CV Toggle Pill */}
-          <div className="flex items-center rounded-xl border border-[var(--line)] bg-black/40 p-0.5 shadow-inner">
+          {/* Engine selector: Typst fast markup preview vs authoritative LaTeX PDF */}
+          <div role="group" aria-label="Typesetting engine" className="flex items-center rounded-xl border border-[var(--line)] bg-black/40 p-0.5 shadow-inner">
             <button
-              onClick={() => handleToggleDocKind("resume")}
-              className={cn(
-                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer",
-                docKind === "resume"
-                  ? "bg-[var(--chartreuse)] text-neutral-950 shadow-sm"
-                  : "text-dim hover:text-[var(--paper)]"
-              )}
-            >
-              <FileText className="h-3 w-3" />
-              <span>Resume</span>
-            </button>
-            <button
-              onClick={() => handleToggleDocKind("cv")}
-              className={cn(
-                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer",
-                docKind === "cv"
-                  ? "bg-[var(--chartreuse)] text-neutral-950 shadow-sm"
-                  : "text-dim hover:text-[var(--paper)]"
-              )}
-            >
-              <Layers className="h-3 w-3" />
-              <span>CV</span>
-            </button>
-          </div>
-
-          {/* Engine Switcher */}
-          <div className="flex items-center rounded-xl border border-[var(--line)] bg-black/40 p-0.5 shadow-inner">
-            <button
+              type="button"
+              aria-pressed={engine === "typst"}
               onClick={() => {
                 setEngine("typst");
                 void compilePreview();
               }}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer",
+                "flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-all",
                 engine === "typst"
-                  ? "bg-sky-500 text-neutral-950 font-bold shadow-sm"
+                  ? "bg-sky-500 font-bold text-neutral-950 shadow-sm"
                   : "text-dim hover:text-[var(--paper)]"
               )}
-              title="Instant <30ms Typst Typesetting Engine"
+              title="Typst fast preview (HTML approximation — no compiled PDF)"
             >
-              <Zap className="h-3 w-3" />
-              <span>Typst (Fast)</span>
+              <Zap className="h-3 w-3" aria-hidden />
+              <span>Typst</span>
             </button>
             <button
+              type="button"
+              aria-pressed={engine === "latex"}
               onClick={() => {
                 setEngine("latex");
                 void compilePreview();
               }}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer",
+                "flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-all",
                 engine === "latex"
-                  ? "bg-emerald-500 text-neutral-950 font-bold shadow-sm"
+                  ? "bg-emerald-500 font-bold text-neutral-950 shadow-sm"
                   : "text-dim hover:text-[var(--paper)]"
               )}
-              title="Full LaTeX TeX Live Compiler"
+              title="LaTeX compiler (authoritative PDF + SyncTeX)"
             >
-              <FileCode className="h-3 w-3" />
-              <span>LaTeX (TeX)</span>
+              <FileCode className="h-3 w-3" aria-hidden />
+              <span>LaTeX</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 rounded-full border border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 px-2.5 py-1 text-[11px] font-bold tracking-tight text-[var(--chartreuse)] shadow-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--chartreuse)] animate-pulse" aria-hidden />
-            <Award className="h-3 w-3" /> ATS {atsReport.score}/100
+          {/* Target job (compact readout — full tailoring context lives here too) */}
+          <div className="w-44 sm:w-56">
+            <Select
+              value={selectedJobId}
+              onChange={(v) => setSelectedJobId(v)}
+              options={[
+                { value: "", label: "General Profile (No specific job)" },
+                ...applications.map((app) => ({ value: app.id, label: `${app.company} — ${app.title}` })),
+              ]}
+              placeholder="Select job…"
+              ariaLabel="Tailor for target job"
+              className="w-full [&>button]:min-h-[44px]"
+            />
           </div>
+
+          {/* Honest compile status (announced to assistive tech) */}
+          <p
+            role="status"
+            className={cn(
+              "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold tracking-tight shadow-sm",
+              pdfState === "error"
+                ? "border-red-400/30 bg-red-400/10 text-red-200"
+                : pdfState === "no-tex"
+                  ? "border-amber-300/30 bg-amber-400/10 text-amber-200"
+                  : "border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
+            )}
+          >
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" aria-hidden />
+            {compileStatus}
+          </p>
         </div>
 
-        {/* Action Controls & Zoom Toolbar */}
         <div className="flex flex-wrap items-center gap-1.5">
+          <Button size="sm" onClick={downloadPdf} loading={compilingPdf} className="min-h-[44px] shadow-[var(--glow)]">
+            <Download className="h-3.5 w-3.5" aria-hidden /> Export PDF
+          </Button>
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setShowVariantsModal(true)}
-            className="border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]"
-            title="Manage Master Resume Archetypes & Funnels"
+            onClick={() => setConfigureOpen(true)}
+            aria-haspopup="dialog"
+            title="Studio settings: templates, zoom, history, compile actions"
+            className="min-h-[44px] border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]"
           >
-            <Layers className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
-            <span>Archetypes</span>
+            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+            <span className="hidden sm:inline">Configure</span>
           </Button>
-
-          {history.length > 0 && (
-            <Button size="sm" variant="outline" onClick={undoLast} title="Undo last change" className="border-[var(--line)] bg-white/[0.04]">
-              <Undo2 className="h-3.5 w-3.5" /> Undo
-            </Button>
-          )}
-          <div className="flex items-center gap-1 rounded-xl border border-[var(--line)] bg-black/40 px-1.5 py-1 shadow-inner">
+        </div>
+      </div>
+      {/* Studio workbench: Refine rail + document canvas (canvas first on mobile) */}
+      <div className={cn("relative flex min-h-0 flex-1 flex-col gap-4", refineCollapsed ? "lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--ink)]" : "lg:grid lg:grid-cols-[minmax(320px,360px)_minmax(0,1fr)] lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--ink)] lg:shadow-[0_12px_40px_rgba(0,0,0,0.22)]")}>
+        {!refineCollapsed && (
+        <section
+          aria-label="Refine workspace"
+          className="order-2 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl lg:order-1 lg:h-full lg:rounded-none lg:border-0 lg:border-r"
+        >
+          {/* Rail header: collapse + Chat / ATS / Diff tabs */}
+          <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] bg-[var(--ink-soft)]/60 px-2 py-1.5">
+            <div role="tablist" aria-label="Refine tools" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+              {(["chat", "ats", "diff"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  id={`refine-tab-${tab}`}
+                  aria-selected={refineTab === tab}
+                  aria-controls={`refine-panel-${tab}`}
+                  onClick={() => setRefineTab(tab)}
+                  className={cn(
+                    "min-h-[44px] shrink-0 rounded-lg px-3 text-xs font-bold capitalize transition-colors",
+                    refineTab === tab
+                      ? "bg-[var(--chartreuse)]/15 text-[var(--chartreuse)] ring-1 ring-[var(--chartreuse)]/30"
+                      : "text-dim hover:bg-white/[0.05] hover:text-[var(--paper)]"
+                  )}
+                >
+                  {tab === "chat" ? "Chat" : tab === "ats" ? `ATS · ${atsReport.score}` : "Diff"}
+                </button>
+              ))}
+            </div>
             <button
-              onClick={() => setZoom((z) => Math.max(z - 10, 50))}
-              className="grid h-6 w-6 place-items-center rounded-md text-dim hover:text-[var(--paper)] hover:bg-white/[0.06] transition-colors"
-              title="Zoom Out"
+              type="button"
+              onClick={() => setRefineCollapsed(true)}
+              aria-label="Collapse refine panel"
+              title="Collapse refine panel"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-dim transition-colors hover:bg-white/[0.06] hover:text-[var(--paper)]"
             >
-              <ZoomOut className="h-3.5 w-3.5" />
-            </button>
-            <span className="font-mono text-[11px] font-semibold tabular-nums text-[var(--paper)] min-w-[36px] text-center">
-              {zoom}%
-            </span>
-            <button
-              onClick={() => setZoom((z) => Math.min(z + 10, 150))}
-              className="grid h-6 w-6 place-items-center rounded-md text-dim hover:text-[var(--paper)] hover:bg-white/[0.06] transition-colors"
-              title="Zoom In"
-            >
-              <ZoomIn className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={() => setZoom(100)}
-              className="grid h-6 w-6 place-items-center rounded-md text-dim hover:text-[var(--paper)] hover:bg-white/[0.06] transition-colors"
-              title="Reset Zoom (100%)"
-            >
-              <RotateCcw className="h-3 w-3" />
+              <PanelLeftClose className="h-4 w-4" aria-hidden />
             </button>
           </div>
 
-          <Button size="sm" variant="outline" onClick={copyMarkdown} title="Copy Markdown" className="border-[var(--line)] bg-white/[0.04]">
-            {copied ? <Check className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> : <Copy className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline">{copied ? "Copied" : "Copy MD"}</span>
-          </Button>
-
-          <Button size="sm" onClick={downloadPdf} loading={compilingPdf} className="shadow-[var(--glow)]">
-            <Download className="h-3.5 w-3.5" /> Export PDF
-          </Button>
-
-          <ResumeCompileControls
-            pdfState={pdfState}
-            diffCollapsed={diffCollapsed}
-            changedSections={changedSections}
-            onCompilePreview={compilePreview}
-            onCompileSynctex={compileSynctex}
-            onToggleDiff={() => setDiffCollapsed((v) => !v)}
-            onPinBaseline={() => {
-              const src = engine === "typst" ? typstSource : latexSource;
-              if (!src.trim()) {
-                errToast("Nothing to pin yet — wait for the preview to render.");
-                return;
-              }
-              setBaseline({ tex: src, engine });
-              setDiffCollapsed(false);
-              success(`Baseline pinned on ${engine === "typst" ? "Typst markup" : "LaTeX source"} — diff is live.`);
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Main 3-Pane Resizable Workbench Canvas */}
-      <div className="relative flex flex-1 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink)] shadow-[0_12px_40px_rgba(0,0,0,0.22)]">
-        {/* PANE 1 (LEFT): AI Resume Copilot with Prompt Inspector */}
-        <div
-          style={{ width: `${leftWidthPercent}%` }}
-          className="flex flex-col h-full border-r border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl shrink-0 shadow-[4px_0_20px_rgba(0,0,0,0.12)] min-w-[300px]"
-        >
-          {/* Copilot Header */}
-          <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--ink-soft)]/60 px-4 py-3">
+          {refineTab === "chat" && (
+          <div role="tabpanel" id="refine-panel-chat" aria-labelledby="refine-tab-chat" className="flex min-h-0 flex-1 flex-col">
+          {/* Copilot status row */}
+          <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--ink-soft)]/60 px-4 py-2.5">
             <div className="flex items-center gap-2">
               <div className="relative grid h-7 w-7 place-items-center rounded-lg border border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10">
-                <Bot className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
-                <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--chartreuse)]" />
+                <Bot className="h-3.5 w-3.5 text-[var(--chartreuse)]" aria-hidden />
+                <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--chartreuse)]" aria-hidden />
               </div>
               <div>
                 <p className="font-display text-xs font-bold text-[var(--paper)]">AI Resume Copilot</p>
-                <p className="text-[10px] text-dim flex items-center gap-1">
-                  <Archive className="h-2.5 w-2.5 text-[var(--chartreuse)]" /> Vault RAG connected
+                <p className="flex items-center gap-1 text-[10px] text-dim">
+                  <Archive className="h-2.5 w-2.5 text-[var(--chartreuse)]" aria-hidden /> Vault RAG connected
                 </p>
               </div>
             </div>
@@ -891,19 +874,21 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
               <button
                 type="button"
                 onClick={() => setPromptInspectorOpen(!promptInspectorOpen)}
+                aria-expanded={promptInspectorOpen}
+                aria-label="Toggle context inspector"
+                title="Toggle context inspector"
                 className={cn(
-                  "p-1.5 rounded-lg border text-xs transition-colors",
+                  "grid h-11 w-11 place-items-center rounded-lg border text-xs transition-colors",
                   promptInspectorOpen
                     ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/15 text-[var(--chartreuse)]"
                     : "border-[var(--line)] text-dim hover:text-[var(--paper)] hover:bg-white/[0.04]"
                 )}
-                title="Toggle Live Prompt Inspector"
               >
-                <Code2 className="h-3.5 w-3.5" />
+                <Code2 className="h-3.5 w-3.5" aria-hidden />
               </button>
               {copilotBusy && (
-                <span className="flex items-center gap-1.5 text-[10px] text-[var(--chartreuse)] font-mono animate-pulse">
-                  <Sparkles className="h-3 w-3" /> Optimizing…
+                <span role="status" className="flex items-center gap-1.5 font-mono text-[10px] text-[var(--chartreuse)] animate-pulse">
+                  <Sparkles className="h-3 w-3" aria-hidden /> Optimizing…
                 </span>
               )}
             </div>
@@ -938,7 +923,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           </div>
 
           {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="max-h-[50vh] min-h-0 flex-1 space-y-4 overflow-y-auto p-4 lg:max-h-none">
             {chatMessages.map((msg) => {
               const isAssistant = msg.sender === "assistant";
               return (
@@ -992,24 +977,102 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
               </Button>
             </form>
           </div>
-        </div>
-
-        {/* RESIZE DRAG HANDLE 1 */}
-        <div
-          onMouseDown={() => setIsDraggingLeft(true)}
-          className={cn(
-            "w-1.5 bg-[var(--line)] hover:bg-[var(--chartreuse)]/40 transition-colors cursor-col-resize flex items-center justify-center shrink-0 select-none",
-            isDraggingLeft && "bg-[var(--chartreuse)]/60"
+          </div>
           )}
-        >
-          <GripVertical className="h-3 w-3 text-dim opacity-40 group-hover:opacity-80" />
-        </div>
+          {refineTab === "ats" && (
+          <div role="tabpanel" id="refine-panel-ats" aria-labelledby="refine-tab-ats" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
+            <div className="rounded-xl border border-[var(--line)] bg-black/30 p-3">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--paper)]">
+                  <ShieldCheck className="h-3.5 w-3.5 text-[var(--chartreuse)]" aria-hidden /> ATS diagnostic
+                </span>
+                <span className="font-mono text-xs font-extrabold text-[var(--chartreuse)]">{atsReport.score}/100</span>
+              </div>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                <div className="h-full bg-[var(--chartreuse)] transition-all duration-500" style={{ width: `${atsReport.score}%` }} />
+              </div>
+              <p className="mt-2 text-[10px] leading-relaxed text-dim">
+                Heuristic checks against your {selectedJob ? `target role (${selectedJob.company} — ${selectedJob.title})` : "general profile"}. Estimated length: {atsReport.estimatedPages} page{atsReport.estimatedPages === 1 ? "" : "s"}.
+              </p>
+            </div>
+            <ul className="mt-3 space-y-1.5">
+              {atsReport.checks.map((check) => (
+                <li key={check.id} className="rounded-lg border border-[var(--line)] bg-white/[0.02] px-3 py-2">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--paper)]">
+                    {check.ok ? (
+                      <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden />
+                    ) : (
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-300" aria-hidden />
+                    )}
+                    {check.label}
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-dim">{check.hint}</p>
+                </li>
+              ))}
+            </ul>
+            {atsReport.keywords.length > 0 && (
+              <div className="mt-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">Target-role keywords</p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {atsReport.keywords.map((k) => (
+                    <span
+                      key={k.term}
+                      title={k.inResume ? "Covered in your resume" : "Missing — consider mirroring it in summary or skills"}
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold",
+                        k.inResume
+                          ? "border-[var(--chartreuse)]/30 bg-[var(--chartreuse)]/10 text-[var(--chartreuse)]"
+                          : "border-amber-300/30 bg-amber-400/10 text-amber-200"
+                      )}
+                    >
+                      {k.term}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          )}
+          {refineTab === "diff" && (
+          <div role="tabpanel" id="refine-panel-diff" aria-labelledby="refine-tab-diff" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-bold text-[var(--paper)]">Source diff</p>
+              <Button size="sm" variant="outline" onClick={pinBaseline} className="min-h-[44px] border-[var(--line)]">
+                <Pin className="h-3.5 w-3.5" aria-hidden /> {baseline ? "Re-pin baseline" : "Pin baseline"}
+              </Button>
+            </div>
+            {!baseline ? (
+              <p className="mt-3 rounded-xl border border-[var(--line)] bg-black/30 px-3.5 py-2.5 text-[11px] leading-relaxed text-dim">
+                No baseline pinned yet. Pin one to compare every later edit line-by-line, per section.
+              </p>
+            ) : !baselineMatchesEngine ? (
+              <p role="status" className="mt-3 rounded-xl border border-[var(--line)] bg-black/30 px-3.5 py-2.5 text-[11px] leading-relaxed text-dim">
+                Baseline was pinned on {baseline.engine === "typst" ? "Typst markup" : "LaTeX source"} — switch back to that engine or pin a fresh baseline to compare.
+              </p>
+            ) : (
+              <ResumeDiff beforeTex={baseline.tex} afterTex={currentTex} className="mt-3" />
+            )}
+          </div>
+          )}
+        </section>
+        )}
+        {refineCollapsed && (
+          <button
+            type="button"
+            onClick={() => setRefineCollapsed(false)}
+            aria-label="Expand refine panel"
+            title="Expand refine panel"
+            className="hidden w-10 shrink-0 cursor-pointer items-center justify-center self-stretch border-r border-[var(--line)] text-dim transition-colors hover:bg-white/[0.04] hover:text-[var(--paper)] lg:grid"
+          >
+            <PanelLeftClose className="h-4 w-4 rotate-180" aria-hidden />
+          </button>
+        )}
 
-        {/* PANE 2 (MIDDLE): Live Document Typesetting Canvas with Dual-Engine Preview */}
+        {/* Document canvas (first on mobile) */}
         <div
           ref={previewContainerRef}
           onMouseUp={handlePreviewMouseUp}
-          className="flex-1 overflow-auto bg-[var(--ink-deep)] p-6 flex flex-col items-center gap-5 relative select-text min-w-[420px]"
+          className="relative order-1 flex min-h-[60vh] flex-col items-center gap-5 overflow-visible bg-[var(--ink-deep)] p-4 select-text sm:p-6 lg:order-2 lg:min-h-0 lg:flex-1 lg:overflow-auto"
           style={{
             backgroundImage:
               "radial-gradient(800px 500px at 50% -10%, color-mix(in srgb, var(--chartreuse) 4%, transparent), transparent 60%), radial-gradient(700px 400px at 100% 100%, color-mix(in srgb, var(--sky) 3%, transparent), transparent 55%)",
@@ -1034,150 +1097,15 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             resume={resume}
             selectedTemplate={selectedTemplate}
             zoom={zoom}
-            isDragging={isDraggingLeft || isDraggingRight}
+            isDragging={false}
             htmlOpen={htmlOpen}
             onToggle={() => setHtmlOpen((v) => !v)}
             pdfUrl={pdfUrl}
             pdfState={pdfState}
           />
-          {!diffCollapsed && baseline && (
-            <div className="w-full max-w-[900px] shrink-0 px-4 pb-8 sm:px-8">
-              {baselineMatchesEngine ? (
-                <ResumeDiff beforeTex={baseline.tex} afterTex={currentTex} />
-              ) : (
-                <p role="status" className="rounded-xl border border-[var(--line)] bg-black/30 px-3.5 py-2.5 text-[11px] leading-relaxed text-dim">
-                  Baseline was pinned on {baseline.engine === "typst" ? "Typst markup" : "LaTeX source"} — switch back to that engine or pin a fresh baseline to compare.
-                </p>
-              )}
-            </div>
-          )}
         </div>
 
-        {/* RESIZE DRAG HANDLE 2 */}
-        <div
-          onMouseDown={() => setIsDraggingRight(true)}
-          className={cn(
-            "w-1.5 bg-[var(--line)] hover:bg-[var(--chartreuse)]/40 transition-colors cursor-col-resize flex items-center justify-center shrink-0 select-none",
-            isDraggingRight && "bg-[var(--chartreuse)]/60"
-          )}
-        >
-          <GripVertical className="h-3 w-3 text-dim opacity-40 group-hover:opacity-80" />
-        </div>
 
-        {/* PANE 3 (RIGHT): ATS Diagnostic Tree, Template Switcher & Section Reordering */}
-        <div
-          style={{ width: `${rightWidthPercent}%` }}
-          className="border-l border-[var(--line)] bg-[var(--ink-card)]/95 backdrop-blur-xl p-4 overflow-y-auto space-y-6 shrink-0 shadow-[-12px_0_32px_rgba(0,0,0,0.2)] min-w-[300px]"
-        >
-          <div className="flex items-center justify-between border-b border-[var(--line)] pb-3.5">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--paper)] flex items-center gap-2">
-              <span className="grid h-6 w-6 place-items-center rounded-lg bg-[var(--chartreuse)]/12 ring-1 ring-[var(--chartreuse)]/20">
-                <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
-              </span>
-              Studio Diagnostics & Controls
-            </h3>
-          </div>
-
-          {/* ATS Diagnostic Tree */}
-          <div className="rounded-xl border border-[var(--line)] bg-black/30 p-3 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-[var(--paper)] flex items-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 text-[var(--chartreuse)]" /> ATS Parser Score
-              </span>
-              <span className="text-xs font-mono font-extrabold text-[var(--chartreuse)]">
-                {atsReport.score}/100
-              </span>
-            </div>
-            <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-[var(--chartreuse)] transition-all duration-500"
-                style={{ width: `${atsReport.score}%` }}
-              />
-            </div>
-            <div className="text-[10px] text-dim space-y-1 pt-1">
-              <div className="flex items-center justify-between">
-                <span>Standard Section Headings</span>
-                <span className="text-emerald-400 font-mono">100% Passed</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Quantified Bullet Impact</span>
-                <span className="text-emerald-400 font-mono">92% High</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Estimated Print Pages</span>
-                <span className="text-[var(--paper)] font-mono">{atsReport.estimatedPages} Page</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Target Job Tailoring */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
-              Tailor for Target Job
-            </label>
-            <Select
-              value={selectedJobId}
-              onChange={(v) => setSelectedJobId(v)}
-              options={[
-                { value: "", label: "General Profile (No specific job)" },
-                ...applications.map((app) => ({ value: app.id, label: `${app.company} — ${app.title}` })),
-              ]}
-              placeholder="Select job…"
-              ariaLabel="Tailor for Target Job"
-              className="w-full"
-            />
-          </div>
-
-          {/* Template Switcher */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
-                {docKind === "cv" ? "CV Formats" : "ATS Resume Formats"} ({filteredTemplates.length})
-              </label>
-              <span className="rounded-full border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/10 px-2 py-0.5 text-[10px] font-mono font-semibold tracking-tight text-[var(--chartreuse)] uppercase">
-                {docKind} Mode
-              </span>
-            </div>
-            <div className="grid grid-cols-1 gap-2.5">
-              {filteredTemplates.map((tmpl) => {
-                const isSelected = selectedTemplate === tmpl.id;
-                return (
-                  <div
-                    key={tmpl.id}
-                    onClick={() => handleTemplateChange(tmpl.id)}
-                    className={cn(
-                      "rounded-xl border p-3 cursor-pointer transition-all space-y-2 group",
-                      isSelected
-                        ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/10 shadow-[0_8px_24px_rgba(185,237,87,0.12)] ring-1 ring-[var(--chartreuse)]/20"
-                        : "border-[var(--line)] bg-black/20 hover:border-white/15 hover:bg-white/[0.03]"
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold tracking-tight text-[var(--paper)] group-hover:text-[var(--chartreuse)] transition-colors">
-                        {tmpl.name}
-                      </span>
-                      <span className="shrink-0 text-[9px] font-mono font-bold tracking-wide text-[var(--chartreuse)] bg-[var(--chartreuse)]/10 px-2 py-0.5 rounded-full border border-[var(--chartreuse)]/20">
-                        {tmpl.badge}
-                      </span>
-                    </div>
-
-                    <p className="text-[10px] text-dim leading-relaxed">{tmpl.desc}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="pt-3 border-t border-[var(--line)] space-y-2.5">
-            <Button size="sm" variant="outline" className="w-full justify-center border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]" onClick={syncToProfile}>
-              <Save className="h-3.5 w-3.5" /> Sync with Main Profile
-            </Button>
-            <Button size="sm" className="w-full justify-center shadow-[var(--glow)]" onClick={downloadPdf} loading={compilingPdf}>
-              <Download className="h-3.5 w-3.5" /> Export {engine === "typst" ? "Typst" : "LaTeX"} PDF
-            </Button>
-          </div>
-        </div>
       </div>
 
       {pendingSwitch && (
@@ -1210,12 +1138,201 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         </Modal>
       )}
 
+      {configureOpen && (
+        <Modal open={configureOpen} onClose={() => setConfigureOpen(false)} title="Studio settings" wide>
+          <div className="space-y-6">
+            {/* Document kind: real radios, explicit AI opt-in on switch */}
+            <fieldset>
+              <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">Document</legend>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {(
+                  [
+                    { kind: "resume", name: "Resume", desc: "Compact 1-page high-impact industry format." },
+                    { kind: "cv", name: "CV", desc: "Detailed multi-page curriculum vitae." },
+                  ] as const
+                ).map((opt) => (
+                  <label
+                    key={opt.kind}
+                    className={cn(
+                      "cursor-pointer rounded-xl border p-3 transition-all",
+                      docKind === opt.kind
+                        ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/10 ring-1 ring-[var(--chartreuse)]/20"
+                        : "border-[var(--line)] bg-black/20 hover:border-white/15"
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="resume-doc-kind"
+                        checked={docKind === opt.kind}
+                        onChange={() => handleToggleDocKind(opt.kind)}
+                        className="h-4 w-4 shrink-0 accent-[#b9ed57]"
+                      />
+                      <span className="text-xs font-bold text-[var(--paper)]">{opt.name}</span>
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-dim">{opt.desc}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-dim">
+                Switching asks for confirmation first — AI reformatting only runs on explicit opt-in.
+              </p>
+            </fieldset>
+
+            {/* Template gallery: real radios, honest descriptors */}
+            <fieldset>
+              <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
+                Layout template ({filteredTemplates.length})
+              </legend>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {filteredTemplates.map((tmpl) => {
+                  const isSelected = selectedTemplate === tmpl.id;
+                  return (
+                    <label
+                      key={tmpl.id}
+                      className={cn(
+                        "cursor-pointer rounded-xl border p-3 transition-all",
+                        isSelected
+                          ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/10 ring-1 ring-[var(--chartreuse)]/20"
+                          : "border-[var(--line)] bg-black/20 hover:border-white/15"
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <input
+                            type="radio"
+                            name="resume-template"
+                            checked={isSelected}
+                            onChange={() => handleTemplateChange(tmpl.id)}
+                            aria-label={tmpl.name}
+                            className="h-4 w-4 shrink-0 accent-[#b9ed57]"
+                          />
+                          <span className="truncate text-xs font-bold text-[var(--paper)]">{tmpl.name}</span>
+                        </span>
+                        <span className="shrink-0 rounded-full border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/10 px-2 py-0.5 font-mono text-[9px] font-bold tracking-wide text-[var(--chartreuse)]">
+                          {tmpl.badge}
+                        </span>
+                      </span>
+                      <span className="mt-1.5 block text-[10px] leading-relaxed text-dim">{tmpl.desc}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            {/* Preview controls */}
+            <section aria-label="Preview controls" className="space-y-2 border-t border-[var(--line)] pt-4">
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">Preview</h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 rounded-xl border border-[var(--line)] bg-black/40 px-1.5 py-1 shadow-inner">
+                  <button
+                    type="button"
+                    onClick={() => setZoom((z) => Math.max(z - 10, 50))}
+                    aria-label="Zoom out"
+                    className="grid h-11 w-11 place-items-center rounded-md text-dim transition-colors hover:bg-white/[0.06] hover:text-[var(--paper)]"
+                  >
+                    <ZoomOut className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                  <span aria-live="polite" className="min-w-[44px] text-center font-mono text-[11px] font-semibold tabular-nums text-[var(--paper)]">
+                    {zoom}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setZoom((z) => Math.min(z + 10, 150))}
+                    aria-label="Zoom in"
+                    className="grid h-11 w-11 place-items-center rounded-md text-dim transition-colors hover:bg-white/[0.06] hover:text-[var(--paper)]"
+                  >
+                    <ZoomIn className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setZoom(100)}
+                    aria-label="Reset zoom to 100 percent"
+                    className="grid h-11 w-11 place-items-center rounded-md text-dim transition-colors hover:bg-white/[0.06] hover:text-[var(--paper)]"
+                  >
+                    <RotateCcw className="h-3 w-3" aria-hidden />
+                  </button>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setHtmlOpen((v) => !v)}
+                  aria-expanded={htmlOpen}
+                  className="min-h-[44px] border-[var(--line)] bg-white/[0.04]"
+                >
+                  {htmlOpen ? "Hide structure preview" : "Show structure preview"}
+                </Button>
+              </div>
+            </section>
+
+            {/* History & sharing */}
+            <section aria-label="History and sharing" className="space-y-2 border-t border-[var(--line)] pt-4">
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">History & sharing</h3>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={undoLast}
+                  disabled={history.length === 0}
+                  title="Undo last change"
+                  className="min-h-[44px] border-[var(--line)] bg-white/[0.04]"
+                >
+                  <Undo2 className="h-3.5 w-3.5" aria-hidden /> Undo{history.length > 0 ? ` (${history.length})` : ""}
+                </Button>
+                <Button size="sm" variant="outline" onClick={copyMarkdown} title="Copy Markdown" className="min-h-[44px] border-[var(--line)] bg-white/[0.04]">
+                  {copied ? <Check className="h-3.5 w-3.5 text-[var(--chartreuse)]" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+                  {copied ? "Copied" : "Copy MD"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={syncToProfile} className="min-h-[44px] border-[var(--line)] bg-white/[0.04]">
+                  <Save className="h-3.5 w-3.5" aria-hidden /> Sync with Main Profile
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setConfigureOpen(false);
+                    setShowVariantsModal(true);
+                  }}
+                  title="Manage Master Resume Archetypes & Funnels"
+                  className="min-h-[44px] border-[var(--line)] bg-white/[0.04]"
+                >
+                  <Layers className="h-3.5 w-3.5 text-[var(--chartreuse)]" aria-hidden /> Archetypes
+                </Button>
+              </div>
+              <p role="status" className="text-[11px] leading-relaxed text-dim">
+                {isDirty ? "Canvas has changes not yet synced to your profile." : "Canvas matches your synced profile."}
+              </p>
+            </section>
+
+            {/* Compile actions */}
+            <section aria-label="Compile actions" className="space-y-2 border-t border-[var(--line)] pt-4">
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">Compile</h3>
+              <ResumeCompileControls
+                pdfState={pdfState}
+                diffCollapsed={diffCollapsed}
+                changedSections={changedSections}
+                onCompilePreview={compilePreview}
+                onCompileSynctex={compileSynctex}
+                onToggleDiff={() => {
+                  setDiffCollapsed(false);
+                  setRefineTab("diff");
+                  setRefineCollapsed(false);
+                  setConfigureOpen(false);
+                }}
+                onPinBaseline={pinBaseline}
+              />
+            </section>
+          </div>
+        </Modal>
+      )}
+
       {showVariantsModal && (
         <Modal open={showVariantsModal} onClose={() => setShowVariantsModal(false)} title="Resume Archetypes & Conversion Funnels" wide>
           <ResumeVariantsManager
             onSelectVariant={(variant) => {
               setResume(variant.content);
               setSelectedTemplate(variant.templateId || "classic-ats");
+              setLastSyncedJson(JSON.stringify(variant.content));
               setShowVariantsModal(false);
               success(`Loaded archetype "${variant.name}" into editor.`);
             }}

@@ -21,6 +21,8 @@ import {
   FileSignature,
   PanelLeftClose,
   PanelLeftOpen,
+  GraduationCap,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppearance } from "@/context/AppearanceContext";
@@ -39,6 +41,11 @@ const nav = [
   { href: "/interviews", label: "Interviews", icon: CalendarClock },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
+
+const settingsSubNav = [
+  { href: "/guide", label: "Guide & Demo", icon: GraduationCap },
+  { href: "/faq", label: "FAQ", icon: BookOpen },
+ ];
 
 function AgentStatus({ collapsed = false }: { collapsed?: boolean }) {
   const [online, setOnline] = useState<boolean | null>(null);
@@ -183,6 +190,34 @@ export default function Sidebar() {
               </Link>
             );
           })}
+          <div
+            className={cn(sidebarCollapsed ? "mt-1 flex flex-col gap-1.5" : "relative ml-5 border-l border-line/70 pl-2")}
+            aria-label="Settings help"
+          >
+            {!sidebarCollapsed && (
+              <span className="px-2 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim/70">
+                Learn
+              </span>
+            )}
+            {settingsSubNav.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href;
+              return (
+                <Link key={href} href={href} aria-label={label} title={sidebarCollapsed ? `Settings — ${label}` : label}>
+                  <span
+                    className={cn(
+                      "group relative flex items-center rounded-lg py-2 text-xs font-medium transition-colors",
+                      sidebarCollapsed ? "justify-center px-0" : "gap-2.5 px-2.5",
+                      active ? "bg-chartreuse/10 text-chartreuse" : "text-dim hover:bg-white/[0.04] hover:text-paper"
+                    )}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <Icon className={cn("h-3.5 w-3.5 shrink-0", active ? "text-chartreuse" : "text-dim group-hover:text-paper")} aria-hidden="true" />
+                    <span className={sidebarCollapsed ? "sr-only" : "truncate"}>{label}</span>
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
         </nav>
 
         <div className="mt-auto border-t border-line/60">
@@ -223,7 +258,27 @@ export default function Sidebar() {
                   </Link>
                 );
               })}
-            </nav>
+              {settingsSubNav.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href;
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-label={`Settings — ${label}`}
+                    title={`Settings — ${label}`}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "grid h-8 w-8 shrink-0 place-items-center rounded-lg border transition-colors",
+                      active
+                        ? "border-chartreuse/40 bg-chartreuse/15 text-chartreuse"
+                        : "border-dashed border-line/60 text-dim hover:bg-white/[0.05] hover:text-paper"
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                  </Link>
+                );
+              })}
+             </nav>
           </div>
         </div>
       </header>

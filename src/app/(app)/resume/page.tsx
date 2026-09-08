@@ -19,8 +19,6 @@ import {
   MessageSquarePlus,
   FileCode,
   Archive,
-  ChevronDown,
-  ChevronUp,
   ZoomIn,
   ZoomOut,
   RotateCcw,
@@ -39,6 +37,7 @@ import { analyzeAts } from "@/lib/ats/analyze";
 import ResumePdfPreview from "@/components/resume/ResumePdfPreview";
 import ResumeHtmlFallback from "@/components/resume/ResumeHtmlFallback";
 import ResumeCompileControls from "@/components/resume/ResumeCompileControls";
+import ResumeDiff, { computeDiff, getChangedSections } from "@/components/resume/ResumeDiff";
 import { renderTypstResume } from "@/lib/pdf/typstRenderer";
 import ResumeVariantsManager from "@/components/resume/ResumeVariantsManager";
 import Modal from "@/components/ui/Modal";
@@ -65,8 +64,8 @@ const ALL_TEMPLATES: TemplateMeta[] = [
   {
     id: "classic-ats",
     name: "Classic ATS Standard",
-    desc: "Single-column Helvetica. 100% ATS parser guarantee, minimal decoration, highest acceptance rate.",
-    badge: "100% ATS Score",
+    desc: "Single-column Helvetica. Predictable hierarchy and machine-readable text for parser safety.",
+    badge: "Single-column",
     kind: "resume",
     font: "font-sans",
     accent: "bg-neutral-900",
@@ -75,7 +74,7 @@ const ALL_TEMPLATES: TemplateMeta[] = [
     id: "modern-professional",
     name: "Modern Tech",
     desc: "Clean two-tone headers with deep blue accent bar. Tech-optimized single column layout.",
-    badge: "98% ATS Score",
+    badge: "Two-tone headers",
     kind: "resume",
     font: "font-sans",
     accent: "bg-sky-700",
@@ -84,7 +83,7 @@ const ALL_TEMPLATES: TemplateMeta[] = [
     id: "technical-modern",
     name: "Technical Modern",
     desc: "High-density technical layout for senior software, ML, and systems engineers.",
-    badge: "96% ATS Score",
+    badge: "High-density",
     kind: "resume",
     font: "font-mono",
     accent: "bg-teal-700",
@@ -93,7 +92,7 @@ const ALL_TEMPLATES: TemplateMeta[] = [
     id: "minimal-clean",
     name: "Minimal Clean",
     desc: "Quiet typography, generous whitespace, single teal accent line.",
-    badge: "98% ATS Score",
+    badge: "Whitespace",
     kind: "resume",
     font: "font-sans",
     accent: "bg-emerald-700",
@@ -102,7 +101,7 @@ const ALL_TEMPLATES: TemplateMeta[] = [
     id: "executive",
     name: "Executive Serif",
     desc: "Times-based classic look for senior & leadership profiles. Small-caps section headers.",
-    badge: "92% ATS Score",
+    badge: "Serif",
     kind: "both",
     font: "font-serif",
     accent: "bg-stone-900",
@@ -111,7 +110,7 @@ const ALL_TEMPLATES: TemplateMeta[] = [
     id: "tabular-german",
     name: "German Tabellarischer CV",
     desc: "DACH standard format with date/location column and structured sections.",
-    badge: "95% ATS Score",
+    badge: "DACH standard",
     kind: "cv",
     font: "font-sans",
     accent: "bg-zinc-800",
@@ -120,7 +119,7 @@ const ALL_TEMPLATES: TemplateMeta[] = [
     id: "modern-french",
     name: "French Standard CV",
     desc: "Clean European format with structured competencies and detailed career timeline.",
-    badge: "94% ATS Score",
+    badge: "European",
     kind: "cv",
     font: "font-sans",
     accent: "bg-blue-800",
@@ -231,7 +230,17 @@ export default function ResumeStudioPage() {
   const [compileLatencyMs, setCompileLatencyMs] = useState<number | null>(null);
   const [htmlOpen, setHtmlOpen] = useState(true);
   const [diffCollapsed, setDiffCollapsed] = useState(true);
-  const [changedSections] = useState<string[]>([]);
+  // Pinned source snapshot for the TeX diff viewer. Null until the user pins
+  // a baseline — the diff viewer and the changed-sections chip stay hidden
+  // until then, instead of advertising dead controls.
+  const [baseline, setBaseline] = useState<{ tex: string; engine: "latex" | "typst" } | null>(null);
+  // Pending template/mode switch awaiting explicit user confirmation (see
+  // confirmPendingSwitch — layout switches never silently mutate content).
+  const [pendingSwitch, setPendingSwitch] = useState<
+    | { kind: "template"; templateId: string }
+    | { kind: "docKind"; docKind: "resume" | "cv" }
+    | null
+  >(null);
   const [promptInspectorOpen, setPromptInspectorOpen] = useState(false);
   const [showVariantsModal, setShowVariantsModal] = useState(false);
   // 3-Pane Resizing Widths
@@ -241,19 +250,21 @@ export default function ResumeStudioPage() {
   const [isDraggingRight, setIsDraggingRight] = useState(false);
   const [zoom, setZoom] = useState(100);
 
-  // Section Ordering
-  const [sectionOrder, setSectionOrder] = useState<string[]>([
-    "summary",
-    "skills",
-    "experience",
-    "projects",
-    "education",
-  ]);
-
   const filteredTemplates = useMemo(
     () => ALL_TEMPLATES.filter((t) => t.kind === docKind || t.kind === "both"),
     [docKind]
   );
+
+  // Live source for the active engine (the diff "after" side). A baseline
+  // only diffs against the same engine that pinned it — Typst markup versus
+  // LaTeX source would be noise, so cross-engine comparisons stay hidden.
+  const currentTex = engine === "typst" ? typstSource : latexSource;
+  const baselineMatchesEngine = baseline !== null && baseline.engine === engine;
+  const changedSections = useMemo(
+    () => (baseline && baseline.engine === engine ? getChangedSections(computeDiff(baseline.tex, currentTex)) : []),
+    [baseline, engine, currentTex]
+  );
+
 
   // Selection popup state for "Add to chat"
   const [selectionPopup, setSelectionPopup] = useState<{
@@ -336,6 +347,10 @@ export default function ResumeStudioPage() {
     setPdfError(null);
     const start = Date.now();
 
+    // Typst fast path: the route returns rendered Typst *markup* for the HTML
+    // approximation preview — never a compiled PDF (this deployment has no
+    // Typst PDF toolchain). pdfUrl stays null so ResumePdfPreview renders
+    // nothing and the labeled HTML fallback remains the honest preview.
     if (engine === "typst") {
       try {
         const res = await fetch("/api/resume/compile-typst", {
@@ -343,16 +358,12 @@ export default function ResumeStudioPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content: resume, templateId: selectedTemplate }),
         });
-        const data = await res.json();
-        setCompileLatencyMs(data.durationMs || Date.now() - start);
-        if (data.ok && data.pdfBase64) {
-          const blob = new Blob([Buffer.from(data.pdfBase64, "base64")], { type: "application/pdf" });
-          const url = URL.createObjectURL(blob);
-          setPdfUrl(url);
-          setPdfState("ready");
-        } else {
-          setPdfState("ready"); // HTML preview fallback
+        const data = (await res.json()) as { ok?: boolean; success?: boolean; typstMarkup?: string; durationMs?: number };
+        if (data.ok ?? data.success) {
+          if (typeof data.typstMarkup === "string" && data.typstMarkup) setTypstSource(data.typstMarkup);
+          setCompileLatencyMs(typeof data.durationMs === "number" ? data.durationMs : Date.now() - start);
         }
+        setPdfState("ready");
       } catch {
         setPdfState("ready");
       }
@@ -388,9 +399,16 @@ export default function ResumeStudioPage() {
     }
   }, [engine, resume, selectedTemplate, latexSource]);
 
+  // "Compile for SyncTeX" only means something on the LaTeX engine, where a
+  // compile mints the token SyncTeX navigates with. On Typst there is no
+  // token to mint, so explain instead of silently recompiling markup.
   const compileSynctex = useCallback(async () => {
+    if (engine !== "latex") {
+      errToast("SyncTeX needs the LaTeX engine — switch engines first, then compile.");
+      return;
+    }
     await compilePreview();
-  }, [compilePreview]);
+  }, [compilePreview, engine, errToast]);
 
   useEffect(() => {
     if (latexSource && pdfState === "idle") {
@@ -538,40 +556,47 @@ export default function ResumeStudioPage() {
     }
   };
 
+  // Template/mode switches only stage a pending switch. The confirmation
+  // dialog (see confirmPendingSwitch) applies the layout change, and the AI
+  // copilot reformat runs only on explicit opt-in — switching layouts must
+  // never silently mutate content or spend an LLM call behind the user's back.
   const handleToggleDocKind = (kind: "resume" | "cv") => {
-    setDocKind(kind);
-    const target = ALL_TEMPLATES.find((t) => t.kind === kind || t.kind === "both")?.id || (kind === "cv" ? "tabular-german" : "classic-ats");
-    setSelectedTemplate(target);
-    handleSendMessage(`Switch mode to ${kind.toUpperCase()}. Rebuild and format my profile for a ${kind === "cv" ? "comprehensive, detailed multi-page curriculum vitae" : "compact 1-page high-impact industry resume"}.`);
+    if (kind !== docKind) setPendingSwitch({ kind: "docKind", docKind: kind });
   };
 
   const handleTemplateChange = (templateId: string) => {
-    setSelectedTemplate(templateId);
-    handleSendMessage(`Rebuild and format my ${docKind.toUpperCase()} according to the ${templateId} template layout.`);
+    if (templateId === selectedTemplate) return;
+    setPendingSwitch({ kind: "template", templateId });
+  };
+
+  const confirmPendingSwitch = (withAiReformat: boolean) => {
+    if (!pendingSwitch) return;
+    if (pendingSwitch.kind === "docKind") {
+      const kind = pendingSwitch.docKind;
+      setDocKind(kind);
+      const target = ALL_TEMPLATES.find((t) => t.kind === kind || t.kind === "both")?.id || (kind === "cv" ? "tabular-german" : "classic-ats");
+      setSelectedTemplate(target);
+      setPendingSwitch(null);
+      if (withAiReformat) {
+        void handleSendMessage(`Switch mode to ${kind.toUpperCase()}. Rebuild and format my profile for a ${kind === "cv" ? "comprehensive, detailed multi-page curriculum vitae" : "compact 1-page high-impact industry resume"}.`);
+      }
+    } else {
+      const templateId = pendingSwitch.templateId;
+      setSelectedTemplate(templateId);
+      setPendingSwitch(null);
+      if (withAiReformat) {
+        void handleSendMessage(`Rebuild and format my ${docKind.toUpperCase()} according to the ${templateId} template layout.`);
+      }
+    }
   };
 
   const downloadPdf = async () => {
     setCompilingPdf(true);
     try {
-      if (engine === "typst") {
-        const res = await fetch("/api/resume/compile-typst", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: resume, templateId: selectedTemplate }),
-        });
-        const data = await res.json();
-        if (data.ok && data.pdfBase64) {
-          const blob = new Blob([Buffer.from(data.pdfBase64, "base64")], { type: "application/pdf" });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `${resume.header.name.replace(/\s+/g, "_")}_Resume.pdf`;
-          a.click();
-          success("Typst PDF generated and downloaded!");
-          return;
-        }
-      }
-
+      // Export always produces a real PDF through the LaTeX toolchain: the
+      // Typst fast path renders markup only and has no PDF backend, so there
+      // is nothing to download from it directly. Fall through to render +
+      // compile below regardless of the preview engine.
       // Fallback or LaTeX compile
       let tex = latexSource;
       if (!tex) {
@@ -661,16 +686,6 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
     success("Copied clean markdown to clipboard!");
   };
 
-  const moveSection = (idx: number, direction: "up" | "down") => {
-    const next = [...sectionOrder];
-    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= next.length) return;
-    const temp = next[idx];
-    next[idx] = next[targetIdx];
-    next[targetIdx] = temp;
-    setSectionOrder(next);
-    success(`Moved ${temp} section ${direction}.`);
-  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-5rem)] overflow-hidden space-y-2">
@@ -837,7 +852,16 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             onCompilePreview={compilePreview}
             onCompileSynctex={compileSynctex}
             onToggleDiff={() => setDiffCollapsed((v) => !v)}
-            onPinBaseline={() => success("Baseline pinned.")}
+            onPinBaseline={() => {
+              const src = engine === "typst" ? typstSource : latexSource;
+              if (!src.trim()) {
+                errToast("Nothing to pin yet — wait for the preview to render.");
+                return;
+              }
+              setBaseline({ tex: src, engine });
+              setDiffCollapsed(false);
+              success(`Baseline pinned on ${engine === "typst" ? "Typst markup" : "LaTeX source"} — diff is live.`);
+            }}
           />
         </div>
       </div>
@@ -889,12 +913,13 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           {promptInspectorOpen && (
             <div className="border-b border-[var(--line)] bg-black/60 p-3 text-[11px] font-mono text-dim space-y-1.5 max-h-48 overflow-y-auto">
               <div className="flex items-center justify-between text-[var(--chartreuse)]">
-                <span className="font-bold flex items-center gap-1"><Cpu className="h-3 w-3" /> Prompt Inspector</span>
-                <span>temp: 0.2 | top_p: 0.95</span>
+                <span className="font-bold flex items-center gap-1"><Cpu className="h-3 w-3" /> Context Inspector</span>
+                <span>live session</span>
               </div>
-              <p className="text-white/80">System: Act as an elite career strategist and ATS optimization compiler.</p>
-              <p className="text-white/60">Template: {selectedTemplate} | Mode: {docKind}</p>
-              <p className="text-white/40 truncate">Active Context: {resume.experience?.length || 0} roles, {resume.skills?.length || 0} skills</p>
+              <p className="text-white/80">Copilot: HUNTFLOW Elite Resume Strategist, grounded in your vault.</p>
+              <p className="text-white/60">Template: {selectedTemplate} | Mode: {docKind} | Engine: {engine}</p>
+              <p className="text-white/40 truncate">Active context: {resume.experience?.length || 0} roles, {resume.skills?.length || 0} skills{selectedJob ? ` · target: ${selectedJob.company} — ${selectedJob.title}` : ""}</p>
+              <p className="text-white/40">Sampling parameters live server-side; nothing is hidden here.</p>
             </div>
           )}
 
@@ -991,9 +1016,9 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           }}
         >
           {compileLatencyMs !== null && (
-            <div className="absolute top-3 left-4 flex items-center gap-2 rounded-full border border-line bg-black/60 px-3 py-1 text-[10px] font-mono text-dim backdrop-blur">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              <span>{engine.toUpperCase()} compiled in {compileLatencyMs}ms</span>
+            <div role="status" className="absolute top-3 left-4 flex items-center gap-2 rounded-full border border-line bg-black/60 px-3 py-1 text-[10px] font-mono text-dim backdrop-blur">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
+              <span>{engine === "typst" ? `Typst markup rendered in ${compileLatencyMs}ms · HTML approximation` : `LaTeX compiled in ${compileLatencyMs}ms`}</span>
             </div>
           )}
 
@@ -1015,6 +1040,17 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             pdfUrl={pdfUrl}
             pdfState={pdfState}
           />
+          {!diffCollapsed && baseline && (
+            <div className="w-full max-w-[900px] shrink-0 px-4 pb-8 sm:px-8">
+              {baselineMatchesEngine ? (
+                <ResumeDiff beforeTex={baseline.tex} afterTex={currentTex} />
+              ) : (
+                <p role="status" className="rounded-xl border border-[var(--line)] bg-black/30 px-3.5 py-2.5 text-[11px] leading-relaxed text-dim">
+                  Baseline was pinned on {baseline.engine === "typst" ? "Typst markup" : "LaTeX source"} — switch back to that engine or pin a fresh baseline to compare.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* RESIZE DRAG HANDLE 2 */}
@@ -1071,41 +1107,6 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                 <span>Estimated Print Pages</span>
                 <span className="text-[var(--paper)] font-mono">{atsReport.estimatedPages} Page</span>
               </div>
-            </div>
-          </div>
-
-          {/* Section Reordering & Layout Structure */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim flex items-center gap-1.5">
-              <Layers className="h-3 w-3 text-[var(--chartreuse)]" /> Section Hierarchy & Order
-            </label>
-            <div className="space-y-1.5">
-              {sectionOrder.map((sec, idx) => (
-                <div
-                  key={sec}
-                  className="flex items-center justify-between rounded-lg border border-[var(--line)] bg-white/[0.02] px-3 py-1.5 text-xs text-[var(--paper)]"
-                >
-                  <span className="capitalize font-medium">{sec}</span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      disabled={idx === 0}
-                      onClick={() => moveSection(idx, "up")}
-                      className="p-1 rounded hover:bg-white/10 text-dim hover:text-white disabled:opacity-20 cursor-pointer"
-                    >
-                      <ChevronUp className="h-3 w-3" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={idx === sectionOrder.length - 1}
-                      onClick={() => moveSection(idx, "down")}
-                      className="p-1 rounded hover:bg-white/10 text-dim hover:text-white disabled:opacity-20 cursor-pointer"
-                    >
-                      <ChevronDown className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
 
@@ -1178,6 +1179,36 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           </div>
         </div>
       </div>
+
+      {pendingSwitch && (
+        <Modal
+          open
+          onClose={() => setPendingSwitch(null)}
+          title={pendingSwitch.kind === "template" ? "Switch template?" : `Switch to ${pendingSwitch.docKind === "cv" ? "CV" : "Resume"} mode?`}
+        >
+          <div className="space-y-4">
+            <p className="text-sm leading-relaxed text-dim">
+              {pendingSwitch.kind === "template"
+                ? `Preview will switch to “${ALL_TEMPLATES.find((t) => t.id === pendingSwitch.templateId)?.name ?? pendingSwitch.templateId}”.`
+                : pendingSwitch.docKind === "cv"
+                  ? "Preview will switch to a multi-page CV format."
+                  : "Preview will switch to a compact 1-page resume format."}{" "}
+              The layout updates immediately. The AI Copilot only rewrites your content if you explicitly ask it to — switching never silently mutates your resume.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button size="sm" variant="outline" onClick={() => setPendingSwitch(null)}>
+                Cancel
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => confirmPendingSwitch(false)}>
+                Switch layout only
+              </Button>
+              <Button size="sm" onClick={() => confirmPendingSwitch(true)} disabled={copilotBusy}>
+                Switch + AI reformat
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {showVariantsModal && (
         <Modal open={showVariantsModal} onClose={() => setShowVariantsModal(false)} title="Resume Archetypes & Conversion Funnels" wide>

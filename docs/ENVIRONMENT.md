@@ -24,6 +24,14 @@ npm run doctor
 - `HUNTFLOW_AGENT_TOKEN`: Shared secret token for sidecar endpoints. Sent as `X-Huntflow-Token`.
 - `HUNTFLOW_CRAWL_CONCURRENCY`: Concurrency limit for background crawl tasks (1-16, default: 1).
 
+### Continuous Crawler Worker (Opt-In)
+- `HUNTFLOW_WEB_URL`: Base URL the worker polls for due saved searches (default: `http://127.0.0.1:3000`).
+- `HUNTFLOW_WORKER_POLL_SECONDS`: Seconds between due-schedule polls (clamped 15-3600, default: `60`).
+- `HUNTFLOW_WORKER_CONCURRENCY`: Crawl concurrency per triggered run (clamped 1-4, default: `1`).
+- `HUNTFLOW_WORKER_LIMIT`: Max roles accepted per triggered crawl (clamped 1-200, default: `50`).
+- `HUNTFLOW_WORKER_DRY_RUN`: Set to `1` to log due searches without triggering crawls (default: off).
+Worker discoveries land in the Discovery Inbox (`/jobs`); nothing is written directly to the tracker.
+
 ### Optional Crawler API Keys
 - `THEMUSE_API_KEY`: API key for The Muse developer API.
 - `ADZUNA_APP_ID` & `ADZUNA_APP_KEY`: Application ID and key for Adzuna jobs API.

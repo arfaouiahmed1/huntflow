@@ -37,6 +37,25 @@ curl http://127.0.0.1:8001/health            # {"status":"ok","sources":{"total"
 Or use the GHCR pull path below: `docker compose -f docker-compose.images.yml --profile agent pull && docker compose -f docker-compose.images.yml --profile agent up -d`.
 
 The agent port is also bound to loopback. Agent screenshots remain in the named run volume unless Cloudinary is deliberately configured.
+## Start the optional continuous crawler worker
+
+The worker (`profiles: ["worker"]`) polls `GET /api/worker/status` for due saved searches (default 180-minute cadence + ±20% jitter, server-computed) and triggers at most one `POST /api/crawl` per poll at concurrency 1. It never opens the SQLite file — all persistence goes through web-side routes — and discoveries land in the Discovery Inbox (`/jobs`), never directly in the tracker.
+
+Local (web running):
+
+```bash
+npm run worker:crawler
+HUNTFLOW_WORKER_DRY_RUN=1 npm run worker:crawler  # log due searches without crawling
+```
+
+Detached alongside the stack (source build or GHCR pull file):
+
+```bash
+docker compose --profile worker up -d worker
+docker compose -f docker-compose.images.yml --profile worker up -d worker
+```
+
+Tuning (see `.env.example`): `HUNTFLOW_WORKER_POLL_SECONDS` (15–3600, default 60), `HUNTFLOW_WORKER_CONCURRENCY` (1–4, default 1), `HUNTFLOW_WORKER_LIMIT` (1–200, default 50). The worker requires the web container healthy (`depends_on: web healthy`) and the sidecar for actual crawls (`--profile agent`); when the sidecar is offline it logs and retries on the next poll.
 ## Build in GitHub Actions and pull locally
 
 The repository workflow `.github/workflows/container-images.yml` builds both images on a hosted GitHub runner. It publishes a stable `main` tag and an immutable commit-SHA tag to GitHub Container Registry (GHCR). The workflow does not require Docker Desktop on the developer machine.

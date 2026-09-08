@@ -31,11 +31,36 @@ export default function Modal({
     };
   }, [open, onClose]);
 
-  // Move focus into the dialog on open and restore it on close.
+  // Move focus into the dialog on open and restore it on close. A Tab trap
+  // keeps keyboard users inside the dialog while it is open.
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const previouslyFocused = useRef<Element | null>(null);
   useEffect(() => {
-    if (open) panelRef.current?.focus();
+    if (open) {
+      previouslyFocused.current = document.activeElement;
+      panelRef.current?.focus();
+    } else {
+      (previouslyFocused.current as HTMLElement | null)?.focus?.();
+      previouslyFocused.current = null;
+    }
   }, [open]);
+
+  const trapTab = (e: React.KeyboardEvent) => {
+    if (e.key !== "Tab" || !panelRef.current) return;
+    const items = panelRef.current.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea, input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -53,6 +78,7 @@ export default function Modal({
           <motion.div
             ref={panelRef}
             tabIndex={-1}
+            onKeyDown={trapTab}
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.98 }}

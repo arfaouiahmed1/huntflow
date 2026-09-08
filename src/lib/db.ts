@@ -20,6 +20,9 @@ import type {
   EnrichmentSourceRecord,
   EnrichmentItemRecord,
   JobSourceEdge,
+  DiscoveryQueueItem,
+  DiscoveryQueueStatus,
+  DiscoveryQueueCounts,
 } from "./crawler/contracts";
 import { seedJobs } from "./seedData";
 import { initialProfile } from "./initialData";
@@ -425,6 +428,25 @@ export function migrate(database: DatabaseSync) {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS discovery_queue (
+      canonical_key TEXT PRIMARY KEY,
+      source_id TEXT NOT NULL,
+      external_id TEXT NOT NULL,
+      run_id TEXT,
+      first_run_id TEXT,
+      payload_json TEXT NOT NULL,
+      normalized_hash TEXT,
+      match_score INTEGER,
+      ranking_breakdown TEXT,
+      status TEXT NOT NULL DEFAULT 'new',
+      saved_job_id TEXT,
+      dismiss_reason TEXT,
+      dismissed_at TEXT,
+      seen_at TEXT,
+      decided_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE TABLE IF NOT EXISTS enrichment_sources (
       id TEXT PRIMARY KEY,
       repo TEXT NOT NULL,
@@ -450,6 +472,8 @@ export function migrate(database: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_job_source_edges_source ON job_source_edges(source_id);
     CREATE INDEX IF NOT EXISTS idx_saved_searches_next_run ON saved_searches(next_run_at);
     CREATE INDEX IF NOT EXISTS idx_enrichment_items_source ON enrichment_items(source_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_discovery_queue_source ON discovery_queue(source_id, external_id);
+    CREATE INDEX IF NOT EXISTS idx_discovery_queue_status_score ON discovery_queue(status, match_score DESC);
   `);
   /* Idempotent column additions for databases created before a column existed */
   const addColumn = (table: string, column: string, ddl: string) => {
@@ -487,11 +511,13 @@ export function migrate(database: DatabaseSync) {
   addColumn("jobs", "source_confidence", "source_confidence REAL");
   addColumn("jobs", "sources_count", "sources_count INTEGER");
   addColumn("jobs", "ranking_breakdown", "ranking_breakdown TEXT");
+  addColumn("jobs", "origin", "origin TEXT NOT NULL DEFAULT 'manual'");
   database.exec("CREATE INDEX IF NOT EXISTS idx_memory_expires_at ON memory(expires_at);");
   database.exec("CREATE INDEX IF NOT EXISTS idx_memory_embeddings_memory_id ON memory_embeddings(memory_id);");
   database.exec("CREATE INDEX IF NOT EXISTS idx_jobs_canonical_key ON jobs(canonical_key);");
   database.exec("CREATE INDEX IF NOT EXISTS idx_jobs_work_mode ON jobs(work_mode);");
   database.exec("CREATE INDEX IF NOT EXISTS idx_jobs_seniority ON jobs(seniority);");
+  database.exec("CREATE INDEX IF NOT EXISTS idx_jobs_origin ON jobs(origin);");
 }
 
 // ---------------------------------------------------------------------------
@@ -505,6 +531,7 @@ const JOB_COLUMNS = [
   "interview_questions", "job_brief", "salary_intel", "auto_apply_status",
   "auto_apply_logs", "employer_review", "fit_category", "multi_agent_outputs",
   "source", "hiring_post", "created_date", "company_logo",
+  "origin",
   "postal_code",
   "screenshot_url", "cloudinary_url", "skip_reason",
   "canonical_key", "first_seen_at", "last_seen_at", "posted_at", "closed_at",
@@ -567,8 +594,7 @@ function rowToJob(row: Record<string, unknown>): JobApplication {
     salaryMin: row.salary_min == null ? undefined : Number(row.salary_min),
     salaryMax: row.salary_max == null ? undefined : Number(row.salary_max),
     salaryCurrency: (row.salary_currency as string) || undefined,
-    visaSignal: (row.visa_signal as JobApplication["visaSignal"]) || undefined,
-    techTags: json(row.tech_tags, undefined),
+    origin: (row.origin as string) || "manual",
     sourceConfidence: row.source_confidence == null ? undefined : Number(row.source_confidence),
     sourcesCount: row.sources_count == null ? undefined : Number(row.sources_count),
     rankingBreakdown: json(row.ranking_breakdown, undefined),
@@ -603,6 +629,7 @@ function jobToRow(job: JobApplication): Record<string, unknown> {
     fit_category: job.fitCategory ?? null,
     multi_agent_outputs: job.multiAgentOutputs ? JSON.stringify(job.multiAgentOutputs) : null,
     source: job.source ?? null,
+    origin: job.origin ?? "manual",
     hiring_post: job.hiringPost ? 1 : 0,
     created_date: job.createdDate,
     company_logo: job.companyLogo ?? null,
@@ -737,6 +764,7 @@ export const jobsRepo = {
          auto_apply_logs=excluded.auto_apply_logs, employer_review=excluded.employer_review,
          fit_category=excluded.fit_category, multi_agent_outputs=excluded.multi_agent_outputs,
          source=excluded.source, hiring_post=excluded.hiring_post,
+         origin=excluded.origin,
          company_logo=excluded.company_logo,
          screenshot_url=excluded.screenshot_url,
          cloudinary_url=excluded.cloudinary_url,
@@ -1178,6 +1206,195 @@ export const jobSourceEdgesRepo = {
     getDb().prepare("DELETE FROM job_source_edges").run();
   },
 };
+
+export const DISCOVERY_QUEUE_STATUSES: readonly DiscoveryQueueStatus[] = ["new", "seen", "saved", "dismissed"];
+
+function rowToQueueItem(row: Record<string, unknown>): DiscoveryQueueItem {
+  const status = String(row.status ?? "new");
+  return {
+    canonicalKey: String(row.canonical_key),
+    sourceId: String(row.source_id ?? ""),
+    externalId: String(row.external_id ?? ""),
+    runId: (row.run_id as string) || null,
+    firstRunId: (row.first_run_id as string) || null,
+    payloadJson: String(row.payload_json ?? "{}"),
+    normalizedHash: (row.normalized_hash as string) || null,
+    matchScore: row.match_score == null ? null : Number(row.match_score),
+    rankingBreakdown: (() => {
+      try {
+        return row.ranking_breakdown ? (JSON.parse(String(row.ranking_breakdown)) as Record<string, number>) : null;
+      } catch {
+        return null;
+      }
+    })(),
+    status: (DISCOVERY_QUEUE_STATUSES as readonly string[]).includes(status) ? (status as DiscoveryQueueStatus) : "new",
+    savedJobId: (row.saved_job_id as string) || null,
+    dismissReason: (row.dismiss_reason as string) || null,
+    dismissedAt: (row.dismissed_at as string) || null,
+    seenAt: (row.seen_at as string) || null,
+    decidedAt: (row.decided_at as string) || null,
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+export const discoveryQueueRepo = {
+  /** Idempotent ingest: same canonical key refreshes payload/score; terminal decisions are never reopened. */
+  upsert(item: {
+    canonicalKey: string;
+    sourceId: string;
+    externalId: string;
+    runId?: string | null;
+    payload: JobApplication;
+    normalizedHash?: string | null;
+    matchScore?: number | null;
+    rankingBreakdown?: Record<string, number> | null;
+  }): DiscoveryQueueItem {
+    const db = getDb();
+    const now = new Date().toISOString();
+    const payloadJson = JSON.stringify(item.payload);
+    const rankingJson = item.rankingBreakdown ? JSON.stringify(item.rankingBreakdown) : null;
+    const existing = db.prepare("SELECT * FROM discovery_queue WHERE canonical_key = ?").get(item.canonicalKey) as Record<string, unknown> | undefined;
+    if (!existing) {
+      const bySource = db.prepare("SELECT * FROM discovery_queue WHERE source_id = ? AND external_id = ?").get(item.sourceId, item.externalId) as Record<string, unknown> | undefined;
+      if (bySource && String(bySource.canonical_key) !== item.canonicalKey) {
+        db.prepare(
+          `UPDATE discovery_queue SET payload_json = ?, normalized_hash = COALESCE(?, normalized_hash),
+            match_score = COALESCE(?, match_score), ranking_breakdown = COALESCE(?, ranking_breakdown),
+            run_id = COALESCE(?, run_id), updated_at = ? WHERE canonical_key = ?`
+        ).run(payloadJson, item.normalizedHash ?? null, item.matchScore ?? null, rankingJson, item.runId ?? null, now, String(bySource.canonical_key));
+        const row = db.prepare("SELECT * FROM discovery_queue WHERE canonical_key = ?").get(String(bySource.canonical_key)) as Record<string, unknown>;
+        return rowToQueueItem(row);
+      }
+      db.prepare(
+        `INSERT INTO discovery_queue (canonical_key, source_id, external_id, run_id, first_run_id, payload_json,
+          normalized_hash, match_score, ranking_breakdown, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)`
+      ).run(item.canonicalKey, item.sourceId, item.externalId, item.runId ?? null, item.runId ?? null, payloadJson, item.normalizedHash ?? null, item.matchScore ?? null, rankingJson, now, now);
+      const row = db.prepare("SELECT * FROM discovery_queue WHERE canonical_key = ?").get(item.canonicalKey) as Record<string, unknown>;
+      return rowToQueueItem(row);
+    }
+    // Refresh payload/score on re-crawl. Terminal states (saved/dismissed) keep their
+    // decision columns — only the rendered payload and telemetry advance.
+    db.prepare(
+      `UPDATE discovery_queue SET payload_json = ?, normalized_hash = COALESCE(?, normalized_hash),
+        match_score = COALESCE(?, match_score), ranking_breakdown = COALESCE(?, ranking_breakdown),
+        run_id = COALESCE(?, run_id), updated_at = ? WHERE canonical_key = ?`
+    ).run(payloadJson, item.normalizedHash ?? null, item.matchScore ?? null, rankingJson, item.runId ?? null, now, item.canonicalKey);
+    const row = db.prepare("SELECT * FROM discovery_queue WHERE canonical_key = ?").get(item.canonicalKey) as Record<string, unknown>;
+    return rowToQueueItem(row);
+  },
+  get(canonicalKey: string): DiscoveryQueueItem | null {
+    const row = getDb().prepare("SELECT * FROM discovery_queue WHERE canonical_key = ?").get(canonicalKey) as Record<string, unknown> | undefined;
+    return row ? rowToQueueItem(row) : null;
+  },
+  findBySource(sourceId: string, externalId: string): DiscoveryQueueItem | null {
+    const row = getDb().prepare("SELECT * FROM discovery_queue WHERE source_id = ? AND external_id = ?").get(sourceId, externalId) as Record<string, unknown> | undefined;
+    return row ? rowToQueueItem(row) : null;
+  },
+  /** Newest-first inbox slice. `statuses` defaults to pending (`new` + `seen`). */
+  list(options: { statuses?: DiscoveryQueueStatus[]; limit?: number; offset?: number } = {}): DiscoveryQueueItem[] {
+    const statuses = options.statuses ?? ["new", "seen"];
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+    const offset = Math.max(options.offset ?? 0, 0);
+    if (statuses.length === 0) return [];
+    const placeholders = statuses.map(() => "?").join(", ");
+    const rows = getDb().prepare(
+      `SELECT * FROM discovery_queue WHERE status IN (${placeholders})
+       ORDER BY match_score DESC NULLS LAST, created_at DESC LIMIT ? OFFSET ?`
+    ).all(...statuses, limit, offset) as Record<string, unknown>[];
+    return rows.map(rowToQueueItem);
+  },
+  /** Highest-scoring pending item without marking it seen. */
+  peek(): DiscoveryQueueItem | null {
+    const rows = this.list({ statuses: ["new", "seen"], limit: 1 });
+    return rows[0] ?? null;
+  },
+  markSeen(canonicalKey: string): void {
+    const now = new Date().toISOString();
+    getDb().prepare(
+      `UPDATE discovery_queue SET status = 'seen', seen_at = COALESCE(seen_at, ?), updated_at = ?
+       WHERE canonical_key = ? AND status = 'new'`
+    ).run(now, now, canonicalKey);
+  },
+  /** Transactional terminal decision. Saved links the promoted tracker row; dismissed never touches jobs. */
+  decide(canonicalKey: string, outcome: "saved" | "dismissed", options: { reason?: string | null; savedJobId?: string | null } = {}): DiscoveryQueueItem | null {
+    const db = getDb();
+    db.exec("BEGIN");
+    try {
+      const row = db.prepare("SELECT * FROM discovery_queue WHERE canonical_key = ?").get(canonicalKey) as Record<string, unknown> | undefined;
+      if (!row) {
+        db.exec("ROLLBACK");
+        return null;
+      }
+      const now = new Date().toISOString();
+      if (outcome === "saved") {
+        db.prepare(
+          `UPDATE discovery_queue SET status = 'saved', saved_job_id = COALESCE(?, saved_job_id),
+            dismiss_reason = NULL, dismissed_at = NULL, decided_at = ?, updated_at = ? WHERE canonical_key = ?`
+        ).run(options.savedJobId ?? null, now, now, canonicalKey);
+      } else {
+        db.prepare(
+          `UPDATE discovery_queue SET status = 'dismissed', dismiss_reason = ?, dismissed_at = ?,
+            decided_at = ?, updated_at = ? WHERE canonical_key = ?`
+        ).run(options.reason ?? null, now, now, now, canonicalKey);
+      }
+      db.exec("COMMIT");
+    } catch (err) {
+      try { db.exec("ROLLBACK"); } catch { /* already rolled back */ }
+      throw err;
+    }
+    return this.get(canonicalKey);
+  },
+  counts(): DiscoveryQueueCounts {
+    const rows = getDb().prepare("SELECT status, COUNT(*) AS n FROM discovery_queue GROUP BY status").all() as Array<{ status: string; n: number }>;
+    const counts: DiscoveryQueueCounts = { new: 0, seen: 0, saved: 0, dismissed: 0, total: 0, pending: 0 };
+    for (const r of rows) {
+      const n = Number(r.n ?? 0);
+      if (r.status === "new") counts.new = n;
+      else if (r.status === "seen") counts.seen = n;
+      else if (r.status === "saved") counts.saved = n;
+      else if (r.status === "dismissed") counts.dismissed = n;
+    }
+    counts.total = counts.new + counts.seen + counts.saved + counts.dismissed;
+    counts.pending = counts.new + counts.seen;
+    return counts;
+  },
+  /** Delete terminal items decided before `cutoffIso` (stale handling). Returns rows removed. */
+  pruneDecided(cutoffIso: string): number {
+    const res = getDb().prepare(
+      `DELETE FROM discovery_queue WHERE status IN ('saved', 'dismissed') AND decided_at IS NOT NULL AND decided_at < ?`
+    ).run(cutoffIso);
+    return Number((res as unknown as { changes: number }).changes ?? 0);
+  },
+  deleteAll(): void {
+    getDb().prepare("DELETE FROM discovery_queue").run();
+  },
+  /** Full-row restore for backup import (bypasses decision guards). */
+  restore(item: DiscoveryQueueItem): void {
+    getDb().prepare(
+      `INSERT INTO discovery_queue (canonical_key, source_id, external_id, run_id, first_run_id, payload_json,
+        normalized_hash, match_score, ranking_breakdown, status, saved_job_id, dismiss_reason, dismissed_at,
+        seen_at, decided_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(canonical_key) DO UPDATE SET
+        source_id=excluded.source_id, external_id=excluded.external_id, run_id=excluded.run_id,
+        first_run_id=excluded.first_run_id, payload_json=excluded.payload_json,
+        normalized_hash=excluded.normalized_hash, match_score=excluded.match_score,
+        ranking_breakdown=excluded.ranking_breakdown, status=excluded.status,
+        saved_job_id=excluded.saved_job_id, dismiss_reason=excluded.dismiss_reason,
+        dismissed_at=excluded.dismissed_at, seen_at=excluded.seen_at, decided_at=excluded.decided_at,
+        created_at=excluded.created_at, updated_at=excluded.updated_at`
+    ).run(
+      item.canonicalKey, item.sourceId, item.externalId, item.runId ?? null, item.firstRunId ?? null,
+      item.payloadJson, item.normalizedHash ?? null, item.matchScore ?? null,
+      item.rankingBreakdown ? JSON.stringify(item.rankingBreakdown) : null, item.status,
+      item.savedJobId ?? null, item.dismissReason ?? null, item.dismissedAt ?? null,
+      item.seenAt ?? null, item.decidedAt ?? null, item.createdAt, item.updatedAt
+    );
+  },
+};
+
 
 export const savedSearchesRepo = {
   create(search: { id?: string; name: string; channel?: string; query?: unknown; queryJson?: string; cadenceMinutes?: number; enabled?: boolean }): SavedSearchRecord {
@@ -2520,6 +2737,7 @@ export function computeStats(): AnalyticsStats {
 
 export const ALL_TABLES_IN_DELETION_ORDER = [
   "job_source_edges",
+  "discovery_queue",
   "crawler_jobs_staging",
   "crawler_source_state",
   "crawler_sources",
@@ -2614,7 +2832,6 @@ export function markSeeded() {
 // ---------------------------------------------------------------------------
 // Backup / restore
 // ---------------------------------------------------------------------------
-
 export interface BackupData {
   jobs: JobApplication[];
   contacts: Contact[];
@@ -2636,6 +2853,7 @@ export interface BackupData {
   enrichmentSources?: EnrichmentSourceRecord[];
   enrichmentItems?: EnrichmentItemRecord[];
   jobSourceEdges?: JobSourceEdge[];
+  discoveryQueue?: DiscoveryQueueItem[];
 }
 
 export function exportAllData(): BackupData {
@@ -2660,6 +2878,7 @@ export function exportAllData(): BackupData {
     enrichmentSources: enrichmentSourcesRepo.list(),
     enrichmentItems: enrichmentItemsRepo.listAll(100000),
     jobSourceEdges: jobSourceEdgesRepo.listAll(100000),
+    discoveryQueue: discoveryQueueRepo.list({ statuses: ["new", "seen", "saved", "dismissed"], limit: 100000 }),
   };
 }
 
@@ -2749,6 +2968,7 @@ export function importAllData(data: BackupData): { counts: Record<string, number
       enrichmentItemsRepo.upsert({ sourceId: ei.sourceId, itemKey: ei.itemKey, payload, provenance: ei.provenance });
     }
     for (const jse of data.jobSourceEdges ?? []) jobSourceEdgesRepo.upsertEdge({ ...jse, jobId: jse.jobId! });
+    for (const item of data.discoveryQueue ?? []) discoveryQueueRepo.restore(item);
     markSeeded();
     db.exec("COMMIT");
   } catch (e) {

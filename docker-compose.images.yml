@@ -52,6 +52,25 @@ services:
     volumes:
       - huntflow-agent-runs:/app/.agent_runs
 
+  # Opt-in continuous crawler. ONE crawl per poll iteration, concurrency 1,
+  # server-computed due schedule (default 180 min + jitter). HTTP-only against
+  # web — never opens the SQLite file directly.
+  # Enable: docker compose --profile worker up -d worker
+  worker:
+    profiles: ["worker"]
+    image: ghcr.io/arfaouiahmed1/huntflow-web:${HUNTFLOW_IMAGE_TAG:-main}
+    pull_policy: always
+    restart: unless-stopped
+    command: ["node", "scripts/crawler-worker.mjs"]
+    environment:
+      HUNTFLOW_WEB_URL: http://web:3000
+      HUNTFLOW_WORKER_POLL_SECONDS: ${HUNTFLOW_WORKER_POLL_SECONDS:-60}
+      HUNTFLOW_WORKER_CONCURRENCY: ${HUNTFLOW_WORKER_CONCURRENCY:-1}
+      HUNTFLOW_WORKER_LIMIT: ${HUNTFLOW_WORKER_LIMIT:-50}
+    depends_on:
+      web:
+        condition: service_healthy
+
 volumes:
   huntflow-data:
   huntflow-agent-runs:

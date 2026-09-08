@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { POST } from "@/app/api/crawl/route";
 import { GET as GET_DATA } from "@/app/api/data/route";
-import { GET as GET_JOBS_COLLECTION } from "@/app/api/data/[collection]/route";
-import { jobsRepo, settingsRepo } from "@/lib/db";
+import { GET as GET_INBOX } from "@/app/api/discovery/inbox/route";
+import { discoveryQueueRepo, jobsRepo, settingsRepo } from "@/lib/db";
 import { NextRequest } from "next/server";
 
 /**
@@ -36,46 +36,48 @@ const crawledJobs = [
   },
 ];
 
-describe("Task 10 — persisted jobs are queryable via GET /api/data (jobs)", () => {
+describe("Task 10 — queued discoveries are queryable via GET /api/discovery/inbox (tracker stays clean)", () => {
   beforeEach(() => {
     jobsRepo.removeAll();
+    discoveryQueueRepo.deleteAll();
     settingsRepo.wipe();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ jobs: crawledJobs }), { status: 200 })));
   });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it("POST /api/crawl persists wishlist stubs that GET /api/data returns", async () => {
+  it("POST /api/crawl queues inbox items that GET /api/discovery/inbox returns (tracker stays clean)", async () => {
     const res = await POST(post({ category: "all", keyword: "developer", limit: 20 }));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.offline).toBe(false);
     expect(data.count).toBe(2);
 
-    // Direct DB check
-    const listed = jobsRepo.list();
-    expect(listed.map((j) => j.id).sort()).toEqual(["task10-c1", "task10-c2"]);
+    // Tracker (manual listings) stays clean — crawl only queues.
+    expect(jobsRepo.list()).toHaveLength(0);
+    expect(discoveryQueueRepo.counts().pending).toBe(2);
 
-    // GET /api/data hydrates the same jobs (refreshData source)
+    // GET /api/data hydrates tracker jobs (refreshData source) — crawled ids stay out
     const getRes = await GET_DATA();
     expect(getRes.status).toBe(200);
     const payload = await getRes.json();
     expect(Array.isArray(payload.jobs)).toBe(true);
-    const ids = (payload.jobs as Array<{ id: string }>).map((j) => j.id);
-    expect(ids).toEqual(expect.arrayContaining(["task10-c1", "task10-c2"]));
-    // also via collection route GET /api/data/jobs
-    const colRes = await GET_JOBS_COLLECTION(new NextRequest("http://localhost/api/data/jobs"), { params: Promise.resolve({ collection: "jobs" }) });
-    expect(colRes.status).toBe(200);
-    const colData = await colRes.json();
-    const colIds = (colData.jobs as Array<{ id: string }>).map((j) => j.id);
-    expect(colIds).toEqual(expect.arrayContaining(["task10-c1", "task10-c2"]));
+    const trackerIds = (payload.jobs as Array<{ id: string }>).map((j) => j.id);
+    expect(trackerIds).not.toContain("task10-c1");
+    expect(trackerIds).not.toContain("task10-c2");
+
+    // Inbox route serves the queued candidates instead.
+    const inboxRes = await GET_INBOX(new NextRequest("http://localhost/api/discovery/inbox?status=pending"));
+    expect(inboxRes.status).toBe(200);
+    const inbox = await inboxRes.json();
+    const inboxIds = (inbox.jobs as Array<{ id: string }>).map((j) => j.id).sort();
+    expect(inboxIds).toEqual(["task10-c1", "task10-c2"]);
   });
 
-  it("refreshData rehydrates: second GET after external upsert sees new job", async () => {
-    // first crawl persists 2
+  it("refreshData rehydrates: second GET after manual upsert sees the manual job only", async () => {
+    // first crawl queues 2 in the inbox; tracker stays empty
     await POST(post({ category: "all", keyword: "developer", limit: 20 }));
-    expect(jobsRepo.list().length).toBe(2);
+    expect(jobsRepo.list().length).toBe(0);
+    expect(discoveryQueueRepo.counts().pending).toBe(2);
 
-    // simulate external persistence (another crawl or manual add)
+    // simulate manual add (user-tracked listing, separate from the inbox)
     jobsRepo.upsert({
       id: "task10-c3",
       title: "Manual Add",
@@ -88,11 +90,10 @@ describe("Task 10 — persisted jobs are queryable via GET /api/data (jobs)", ()
       createdDate: "2026-08-29",
     } as never);
 
-    // refreshData = GET /api/data should now include 3
+    // refreshData = GET /api/data includes only the manual job
     const refreshed = await GET_DATA();
     const jobs = (await refreshed.json()).jobs as Array<{ id: string }>;
-    expect(jobs.map((j) => j.id)).toEqual(expect.arrayContaining(["task10-c1", "task10-c2", "task10-c3"]));
-    expect(jobs.length).toBe(3);
+    expect(jobs.map((j) => j.id)).toEqual(["task10-c3"]);
   });
 });
 

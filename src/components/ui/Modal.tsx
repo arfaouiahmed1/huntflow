@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { FOCUSABLE_SELECTOR, canRestoreFocus, resolveTrapIndex } from "./modalFocus";
 
 export default function Modal({
   open,
@@ -31,34 +32,45 @@ export default function Modal({
     };
   }, [open, onClose]);
 
-  // Move focus into the dialog on open and restore it on close. A Tab trap
-  // keeps keyboard users inside the dialog while it is open.
+  // Focus lifecycle: move focus into the dialog on open, trap Tab inside it,
+  // and restore focus to the trigger on close *or* unmount. Callers mount
+  // the dialog conditionally (`{open && <Modal open .../>}`), so the panel
+  // often unmounts without `open` ever flipping to false — the effect
+  // cleanup below covers that path too.
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const previouslyFocused = useRef<Element | null>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    if (open) {
-      previouslyFocused.current = document.activeElement;
-      panelRef.current?.focus();
-    } else {
-      (previouslyFocused.current as HTMLElement | null)?.focus?.();
+    if (!open) return;
+    previouslyFocused.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    panelRef.current?.focus();
+    return () => {
+      const prev = previouslyFocused.current;
       previouslyFocused.current = null;
-    }
+      if (canRestoreFocus(prev)) {
+        try {
+          prev.focus();
+        } catch {
+          // Trigger detached mid-dialog: leave focus where it is.
+        }
+      }
+    };
   }, [open]);
 
   const trapTab = (e: React.KeyboardEvent) => {
     if (e.key !== "Tab" || !panelRef.current) return;
-    const items = panelRef.current.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), textarea, input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    );
-    if (items.length === 0) return;
-    const first = items[0];
-    const last = items[items.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
+    const items = panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+    if (items.length === 0) {
+      // Nothing to cycle through: hold focus on the panel itself.
       e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
+      panelRef.current.focus();
+      return;
+    }
+    const activeIndex = Array.prototype.indexOf.call(items, document.activeElement);
+    const target = resolveTrapIndex({ activeIndex, count: items.length, shiftKey: e.shiftKey });
+    if (target !== null) {
       e.preventDefault();
-      first.focus();
+      items[target]?.focus();
     }
   };
 

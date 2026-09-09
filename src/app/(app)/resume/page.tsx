@@ -304,8 +304,11 @@ export default function ResumeStudioPage() {
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
 
+  // Keep the scroll inside the chat log: scrollIntoView() would also yank the
+  // whole page (bad on mobile, where the canvas sits above the rail).
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const log = messagesEndRef.current?.parentElement;
+    if (log) log.scrollTop = log.scrollHeight;
   }, [chatMessages]);
 
   const selectedJob = useMemo(
@@ -822,6 +825,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             variant="outline"
             onClick={() => setConfigureOpen(true)}
             aria-haspopup="dialog"
+            aria-label="Configure studio settings"
             title="Studio settings: templates, zoom, history, compile actions"
             className="min-h-[44px] border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]"
           >
@@ -832,6 +836,42 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
       </div>
       {/* Studio workbench: Refine rail + document canvas (canvas first on mobile) */}
       <div className={cn("relative flex min-h-0 flex-1 flex-col gap-4", refineCollapsed ? "lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--ink)]" : "lg:grid lg:grid-cols-[minmax(320px,360px)_minmax(0,1fr)] lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--ink)] lg:shadow-[0_12px_40px_rgba(0,0,0,0.22)]")}>
+        {/* Document canvas (first on mobile) */}
+        <div
+          ref={previewContainerRef}
+          onMouseUp={handlePreviewMouseUp}
+          className="relative order-1 flex min-h-[60vh] flex-col items-center gap-5 overflow-visible bg-[var(--ink-deep)] p-4 select-text sm:p-6 lg:order-2 lg:min-h-0 lg:flex-1 lg:overflow-auto"
+          style={{
+            backgroundImage:
+              "radial-gradient(800px 500px at 50% -10%, color-mix(in srgb, var(--chartreuse) 4%, transparent), transparent 60%), radial-gradient(700px 400px at 100% 100%, color-mix(in srgb, var(--sky) 3%, transparent), transparent 55%)",
+          }}
+        >
+          {compileLatencyMs !== null && (
+            <div role="status" className="absolute top-3 left-4 flex items-center gap-2 rounded-full border border-line bg-black/60 px-3 py-1 text-[10px] font-mono text-dim backdrop-blur">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
+              <span>{engine === "typst" ? `Typst markup rendered in ${compileLatencyMs}ms · HTML approximation` : `LaTeX compiled in ${compileLatencyMs}ms`}</span>
+            </div>
+          )}
+
+          <ResumePdfPreview
+            pdfUrl={pdfUrl}
+            pdfState={pdfState}
+            pdfError={pdfError}
+            compiledTex={compiledTex}
+            latexSource={engine === "typst" ? typstSource : latexSource}
+            compileToken={compileToken}
+          />
+          <ResumeHtmlFallback
+            resume={resume}
+            selectedTemplate={selectedTemplate}
+            zoom={zoom}
+            isDragging={false}
+            htmlOpen={htmlOpen}
+            onToggle={() => setHtmlOpen((v) => !v)}
+            pdfUrl={pdfUrl}
+            pdfState={pdfState}
+          />
+        </div>
         {!refineCollapsed && (
         <section
           aria-label="Refine workspace"
@@ -1085,44 +1125,6 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             <PanelLeftClose className="h-4 w-4 rotate-180" aria-hidden />
           </button>
         )}
-
-        {/* Document canvas (first on mobile) */}
-        <div
-          ref={previewContainerRef}
-          onMouseUp={handlePreviewMouseUp}
-          className="relative order-1 flex min-h-[60vh] flex-col items-center gap-5 overflow-visible bg-[var(--ink-deep)] p-4 select-text sm:p-6 lg:order-2 lg:min-h-0 lg:flex-1 lg:overflow-auto"
-          style={{
-            backgroundImage:
-              "radial-gradient(800px 500px at 50% -10%, color-mix(in srgb, var(--chartreuse) 4%, transparent), transparent 60%), radial-gradient(700px 400px at 100% 100%, color-mix(in srgb, var(--sky) 3%, transparent), transparent 55%)",
-          }}
-        >
-          {compileLatencyMs !== null && (
-            <div role="status" className="absolute top-3 left-4 flex items-center gap-2 rounded-full border border-line bg-black/60 px-3 py-1 text-[10px] font-mono text-dim backdrop-blur">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
-              <span>{engine === "typst" ? `Typst markup rendered in ${compileLatencyMs}ms · HTML approximation` : `LaTeX compiled in ${compileLatencyMs}ms`}</span>
-            </div>
-          )}
-
-          <ResumePdfPreview
-            pdfUrl={pdfUrl}
-            pdfState={pdfState}
-            pdfError={pdfError}
-            compiledTex={compiledTex}
-            latexSource={engine === "typst" ? typstSource : latexSource}
-            compileToken={compileToken}
-          />
-          <ResumeHtmlFallback
-            resume={resume}
-            selectedTemplate={selectedTemplate}
-            zoom={zoom}
-            isDragging={false}
-            htmlOpen={htmlOpen}
-            onToggle={() => setHtmlOpen((v) => !v)}
-            pdfUrl={pdfUrl}
-            pdfState={pdfState}
-          />
-        </div>
-
 
       </div>
 

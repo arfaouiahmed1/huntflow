@@ -42,6 +42,7 @@ import ResumeDiff, { computeDiff, getChangedSections } from "@/components/resume
 import { renderTypstResume } from "@/lib/pdf/typstRenderer";
 import ResumeVariantsManager from "@/components/resume/ResumeVariantsManager";
 import Modal from "@/components/ui/Modal";
+import { resolveCompileEngine, resolveLatexLatency, resolveTypstLatency } from "@/lib/resumeCompile";
 
 interface ChatMessage {
   id: string;
@@ -358,7 +359,12 @@ export default function ResumeStudioPage() {
     updateLatexPreview(resume, selectedTemplate);
   }, [resume, selectedTemplate, updateLatexPreview]);
 
-  const compilePreview = useCallback(async () => {
+  // Engine-explicit compile. Callers switching engines pass the target
+  // engine directly: `setEngine` commits asynchronously, so compiling with
+  // captured `engine` state would run the previous pipeline on first
+  // switch (PR #22). Engine-agnostic callers omit the arg (current engine).
+  const compilePreview = useCallback(async (overrideEngine?: "latex" | "typst") => {
+    const activeEngine = resolveCompileEngine(overrideEngine, engine);
     setPdfState("compiling");
     setPdfError(null);
     const start = Date.now();
@@ -367,7 +373,7 @@ export default function ResumeStudioPage() {
     // approximation preview — never a compiled PDF (this deployment has no
     // Typst PDF toolchain). pdfUrl stays null so ResumePdfPreview renders
     // nothing and the labeled HTML fallback remains the honest preview.
-    if (engine === "typst") {
+    if (activeEngine === "typst") {
       try {
         const res = await fetch("/api/resume/compile-typst", {
           method: "POST",
@@ -377,17 +383,28 @@ export default function ResumeStudioPage() {
         const data = (await res.json()) as { ok?: boolean; success?: boolean; typstMarkup?: string; durationMs?: number };
         if (data.ok ?? data.success) {
           if (typeof data.typstMarkup === "string" && data.typstMarkup) setTypstSource(data.typstMarkup);
-          setCompileLatencyMs(typeof data.durationMs === "number" ? data.durationMs : Date.now() - start);
+          setCompileLatencyMs(resolveTypstLatency(data, Date.now() - start));
+        } else {
+          // Non-ok contract: hide the badge rather than show a stale
+          // previous-run duration next to this preview.
+          setCompileLatencyMs(null);
         }
         setPdfState("ready");
       } catch {
+        setCompileLatencyMs(null);
         setPdfState("ready");
       }
       return;
     }
 
     // LaTeX engine
-    if (!latexSource.trim()) return;
+    if (!latexSource.trim()) {
+      // Source still rendering: stay idle (badge cleared) so the idle-gated
+      // effect below retries once the render route delivers.
+      setCompileLatencyMs(null);
+      setPdfState("idle");
+      return;
+    }
     try {
       const compileRes = await fetch("/api/resume/compile", {
         method: "POST",
@@ -395,18 +412,20 @@ export default function ResumeStudioPage() {
         body: JSON.stringify({ tex: latexSource }),
       });
       const compileData = (await compileRes.json()) as { ok?: boolean; token?: string; error?: { message?: string } };
-      setCompileLatencyMs(Date.now() - start);
       if (compileData.ok && compileData.token) {
+        setCompileLatencyMs(resolveLatexLatency(true, Date.now() - start));
         setCompileToken(compileData.token);
         setPdfUrl(`/api/resume/compile?token=${compileData.token}`);
         setCompiledTex(latexSource);
         setPdfState("ready");
       } else {
+        setCompileLatencyMs(resolveLatexLatency(false, Date.now() - start));
         setPdfError(compileData.error?.message ?? "Compile failed");
         setPdfState("error");
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
+      setCompileLatencyMs(null);
       if (msg.includes("No LaTeX engine")) setPdfState("no-tex");
       else {
         setPdfError(msg);
@@ -423,9 +442,13 @@ export default function ResumeStudioPage() {
       errToast("SyncTeX needs the LaTeX engine — switch engines first, then compile.");
       return;
     }
-    await compilePreview();
+    await compilePreview(engine);
   }, [compilePreview, engine, errToast]);
 
+  // Initial render only: once latexSource arrives while idle, compile with
+  // the current engine. No duplicate loop on engine switches — the explicit
+  // switch compile below sets pdfState to "compiling" synchronously, so
+  // this idle gate stays shut after it runs.
   useEffect(() => {
     if (latexSource && pdfState === "idle") {
       void compilePreview();
@@ -750,8 +773,13 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
               type="button"
               aria-pressed={engine === "typst"}
               onClick={() => {
+                // Pass the target engine explicitly: setEngine commits
+                // async, so a bare compilePreview() would run the stale
+                // engine. Clearing the badge avoids a cross-engine stale
+                // label ("LaTeX compiled in <typst>ms") while compiling.
                 setEngine("typst");
-                void compilePreview();
+                setCompileLatencyMs(null);
+                void compilePreview("typst");
               }}
               className={cn(
                 "flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-all",
@@ -769,7 +797,8 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
               aria-pressed={engine === "latex"}
               onClick={() => {
                 setEngine("latex");
-                void compilePreview();
+                setCompileLatencyMs(null);
+                void compilePreview("latex");
               }}
               className={cn(
                 "flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-all",

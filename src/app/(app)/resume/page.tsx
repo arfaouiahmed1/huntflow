@@ -42,7 +42,7 @@ import ResumeDiff, { computeDiff, getChangedSections } from "@/components/resume
 import { renderTypstResume } from "@/lib/pdf/typstRenderer";
 import ResumeVariantsManager from "@/components/resume/ResumeVariantsManager";
 import Modal from "@/components/ui/Modal";
-import { resolveCompileEngine, resolveLatexLatency, resolveTypstLatency } from "@/lib/resumeCompile";
+import { resolveCompileEngine, resolveLatexLatency, resolveTypstOutcome, resolveTypstRequestFailure } from "@/lib/resumeCompile";
 
 interface ChatMessage {
   id: string;
@@ -371,28 +371,39 @@ export default function ResumeStudioPage() {
 
     // Typst fast path: the route returns rendered Typst *markup* for the HTML
     // approximation preview — never a compiled PDF (this deployment has no
-    // Typst PDF toolchain). pdfUrl stays null so ResumePdfPreview renders
-    // nothing and the labeled HTML fallback remains the honest preview.
+    // Typst PDF toolchain). Every LaTeX/PDF artifact clears BEFORE the
+    // request so a prior compiled PDF can never stay visible behind the
+    // Typst preview (PR #22); failures report `error`, never `ready`.
     if (activeEngine === "typst") {
+      setPdfUrl(null);
+      setCompileToken(null);
+      setCompiledTex(null);
+      setCompileLatencyMs(null);
+      setPdfError(null);
       try {
         const res = await fetch("/api/resume/compile-typst", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content: resume, templateId: selectedTemplate }),
         });
-        const data = (await res.json()) as { ok?: boolean; success?: boolean; typstMarkup?: string; durationMs?: number };
-        if (data.ok ?? data.success) {
-          if (typeof data.typstMarkup === "string" && data.typstMarkup) setTypstSource(data.typstMarkup);
-          setCompileLatencyMs(resolveTypstLatency(data, Date.now() - start));
-        } else {
-          // Non-ok contract: hide the badge rather than show a stale
-          // previous-run duration next to this preview.
-          setCompileLatencyMs(null);
+        if (!res.ok) {
+          const outcome = resolveTypstRequestFailure(`HTTP ${res.status}`);
+          setCompileLatencyMs(outcome.latencyMs);
+          setPdfError(outcome.pdfError);
+          setPdfState(outcome.pdfState);
+          return;
         }
-        setPdfState("ready");
-      } catch {
-        setCompileLatencyMs(null);
-        setPdfState("ready");
+        const data = (await res.json()) as { ok?: boolean; success?: boolean; typstMarkup?: string; durationMs?: number };
+        const outcome = resolveTypstOutcome(data, Date.now() - start);
+        if (outcome.pdfState === "ready" && outcome.markup) setTypstSource(outcome.markup);
+        setCompileLatencyMs(outcome.latencyMs);
+        setPdfError(outcome.pdfError);
+        setPdfState(outcome.pdfState);
+      } catch (e: unknown) {
+        const outcome = resolveTypstRequestFailure(e instanceof Error ? e.message : String(e));
+        setCompileLatencyMs(outcome.latencyMs);
+        setPdfError(outcome.pdfError);
+        setPdfState(outcome.pdfState);
       }
       return;
     }

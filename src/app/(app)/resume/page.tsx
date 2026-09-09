@@ -1215,7 +1215,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                         name="resume-doc-kind"
                         checked={docKind === opt.kind}
                         onChange={() => handleToggleDocKind(opt.kind)}
-                        className="h-4 w-4 shrink-0 accent-[#b9ed57]"
+                        className="h-4 w-4 shrink-0 accent-[var(--chartreuse)]"
                       />
                       <span className="text-xs font-bold text-[var(--paper)]">{opt.name}</span>
                     </span>
@@ -1254,7 +1254,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                             checked={isSelected}
                             onChange={() => handleTemplateChange(tmpl.id)}
                             aria-label={tmpl.name}
-                            className="h-4 w-4 shrink-0 accent-[#b9ed57]"
+                            className="h-4 w-4 shrink-0 accent-[var(--chartreuse)]"
                           />
                           <span className="truncate text-xs font-bold text-[var(--paper)]">{tmpl.name}</span>
                         </span>

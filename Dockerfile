@@ -3,6 +3,9 @@
 FROM node:22-bookworm-slim AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
+# postinstall (npm ci) runs scripts/copy-pdf-worker.mjs, so the script must
+# exist before install. Only this file is copied to preserve layer caching.
+COPY scripts/copy-pdf-worker.mjs ./scripts/copy-pdf-worker.mjs
 RUN npm ci
 
 FROM node:22-bookworm-slim AS builder
@@ -10,6 +13,9 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
+# Regenerate the version-pinned pdf.js worker into public/ (gitignored, so
+# it is absent from the build context) ahead of the runtime COPY below.
+RUN node scripts/copy-pdf-worker.mjs
 RUN npm run build
 
 FROM node:22-bookworm-slim AS runner

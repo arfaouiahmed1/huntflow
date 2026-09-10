@@ -3,11 +3,11 @@
 /**
  * AI Resume Copilot chat panel: status row, context inspector, quick
  * prompts, streamed message log (reasoning / tool activity / evidence),
- * and the input bar. Presentational — the Studio page owns sending.
+ * attachments, and the input bar. Presentational — the Studio page owns sending.
  */
-
 import type { FormEvent, RefObject } from "react";
-import { AlertTriangle, Archive, Bot, Check, Code2, Cpu, Send, Sparkles } from "lucide-react";
+import { useRef } from "react";
+import { AlertTriangle, Archive, Bot, Check, Code2, Cpu, Paperclip, Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +42,6 @@ const QUICK_PROMPTS = [
   { label: "Ingest vault evidence", prompt: "Scan my Profile Vault and pull in verified technical project metrics and production achievements." },
   { label: "DACH CV style", prompt: "Format this into a German Tabellarischer Lebenslauf structure." },
 ];
-
 interface ResumeCopilotPanelProps {
   messages: ChatMessage[];
   messagesEndRef: RefObject<HTMLDivElement | null>;
@@ -55,6 +54,9 @@ interface ResumeCopilotPanelProps {
   onSubmit: () => void;
   onQuickPrompt: (prompt: string) => void;
   inputRef: RefObject<HTMLInputElement | null>;
+  attachments: { name: string; size: number }[];
+  onAttachFiles: (files: File[]) => void;
+  onRemoveAttachment: (index: number) => void;
 }
 
 export default function ResumeCopilotPanel({
@@ -69,7 +71,11 @@ export default function ResumeCopilotPanel({
   onSubmit,
   onQuickPrompt,
   inputRef,
+  attachments,
+  onAttachFiles,
+  onRemoveAttachment,
 }: ResumeCopilotPanelProps) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     onSubmit();
@@ -237,9 +243,53 @@ export default function ResumeCopilotPanel({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Chat Input Bar */}
+      {/* Attachments + Chat Input Bar */}
       <div className="border-t border-[var(--line)] p-3 bg-[var(--ink-soft)]/50 backdrop-blur">
+        {attachments.length > 0 && (
+          <ul className="mb-2 flex flex-wrap gap-1.5" aria-label="Attached files">
+            {attachments.map((a, i) => (
+              <li
+                key={`${a.name}-${i}`}
+                className="flex items-center gap-1.5 rounded-full border border-[var(--sky)]/25 bg-[var(--sky)]/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-[var(--sky)]"
+              >
+                <span className="max-w-[140px] truncate" title={a.name}>{a.name}</span>
+                <span className="opacity-70">{Math.max(1, Math.round(a.size / 1024))}kB</span>
+                <button
+                  type="button"
+                  onClick={() => onRemoveAttachment(i)}
+                  aria-label={`Remove ${a.name}`}
+                  className="grid h-5 w-5 place-items-center rounded-full hover:bg-white/10"
+                >
+                  <X className="h-3 w-3" aria-hidden />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <form onSubmit={submit} className="flex items-center gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,.png,.jpg,.jpeg,.webp"
+            multiple
+            className="hidden"
+            aria-label="Attach PDF or image files"
+            onChange={(e) => {
+              const files = e.target.files ? Array.from(e.target.files) : [];
+              if (files.length > 0) onAttachFiles(files);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            aria-label="Attach PDF or image"
+            title="Attach PDF, PNG, JPEG, or WebP (max 3, 10 MB each)"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--line)] text-dim transition-colors hover:bg-white/[0.04] hover:text-[var(--paper)] disabled:opacity-50"
+          >
+            <Paperclip className="h-3.5 w-3.5" aria-hidden />
+          </button>
           <input
             ref={inputRef}
             type="text"
@@ -250,10 +300,13 @@ export default function ResumeCopilotPanel({
             aria-label="Ask the AI Copilot to rewrite, enhance metrics, or optimize"
             className="flex min-h-[44px] flex-1 rounded-xl border border-[var(--line)] bg-white/[0.04] px-3.5 py-2 text-xs text-[var(--paper)] outline-none transition-all placeholder:text-dim focus:border-[var(--chartreuse)]/50 focus:bg-white/[0.06]"
           />
-          <Button type="submit" size="sm" disabled={!input.trim() || busy} loading={busy} aria-label="Send message" className="min-h-[44px] shadow-[var(--glow)]">
+          <Button type="submit" size="sm" disabled={(!input.trim() && attachments.length === 0) || busy} loading={busy} aria-label="Send message" className="min-h-[44px] shadow-[var(--glow)]">
             <Send className="h-3.5 w-3.5" />
           </Button>
         </form>
+        <p className="mt-1.5 text-[10px] leading-relaxed text-dim">
+          PDF, PNG, JPEG, WebP · max 3 files · 10 MB each · images need a vision-capable provider
+        </p>
       </div>
     </div>
   );

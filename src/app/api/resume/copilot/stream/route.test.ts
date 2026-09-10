@@ -18,6 +18,7 @@ vi.mock("@/lib/llm/stream", () => ({
 }));
 
 import { POST } from "./route";
+import { storeAttachment } from "@/lib/copilot/attachments";
 
 function postJson(body: unknown, accept = "text/event-stream") {
   return new NextRequest("http://localhost/api/resume/copilot/stream", {
@@ -50,6 +51,21 @@ describe("POST /api/resume/copilot/stream", () => {
     expect(text).toContain("Hello ");
     const doneLine = text.split("\n").find((l) => l.includes(`"reply":"Hello there"`));
     expect(doneLine).toBeTruthy();
+  });
+
+  it("cites consumed PDF attachments in done without echoing bytes", async () => {
+    const id = storeAttachment({ name: "ref.pdf", mime: "application/pdf", size: 42, kind: "pdf", text: "Staff engineer at Acme" });
+    const res = await POST(postJson({ ...BASE, attachmentIds: [id] }));
+    const text = await res.text();
+    expect(text).toContain("ref.pdf");
+    expect(text).not.toContain("Staff engineer at Acme");
+  });
+
+  it("discloses unanalyzable images instead of dropping them", async () => {
+    const id = storeAttachment({ name: "shot.png", mime: "image/png", size: 42, kind: "image", base64: "AAA" });
+    const res = await POST(postJson({ ...BASE, attachmentIds: [id] }));
+    const text = await res.text();
+    expect(text).toContain("vision-capable");
   });
 
   it("rejects a missing message without opening a stream", async () => {

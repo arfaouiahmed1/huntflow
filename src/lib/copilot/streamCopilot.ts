@@ -14,7 +14,6 @@
  * never raw chain-of-thought (the model's private `note` is accepted
  * but never emitted).
  */
-
 import { callLLMJSON, resolveChain } from "@/lib/llm/router";
 import { generateText } from "@/lib/llm/client";
 import { generateTextStream } from "@/lib/llm/stream";
@@ -22,6 +21,10 @@ import { cleanResumeContent } from "@/lib/llm/sanitize";
 import { renderTemplate } from "@/lib/pdf/resumeTemplates";
 import { analyzeAts } from "@/lib/ats/analyze";
 import type { AtsReport } from "@/lib/ats/analyze";
+import { takeAttachments } from "./attachments";
+import type { StoredAttachment } from "./attachments";
+import { firstVisionEntry } from "@/lib/llm/vision";
+import type { VisionImage } from "@/lib/llm/vision";
 import { COMPOSE_SYSTEM_PROMPT, COPILOT_SYSTEM_PROMPT, DECISION_SYSTEM_PROMPT } from "./prompts";
 import { runCopilotTool, TOOL_NAMES } from "./tools";
 import type { CopilotToolContext, ToolName, ToolStatus } from "./tools";
@@ -44,6 +47,8 @@ export interface CopilotStreamInput {
   targetJob?: { title?: string; company?: string; description?: string } | null;
   selection?: { text: string; sourceLine?: number; pdfPage?: number } | null;
   jobId?: string | null;
+  /** Ephemeral upload ids from POST copilot/attachments (consumed once). */
+  attachmentIds?: string[] | null;
 }
 
 export interface CopilotCite {
@@ -137,6 +142,21 @@ export async function runCopilotStream(
   const usedTools: string[] = [];
   const toolSummaries: string[] = [];
   const cites: CopilotCite[] = [];
+  // Ephemeral uploads, consumed once: PDF text joins the context (cited),
+  // images ride the vision path (never described locally).
+  const attachments: StoredAttachment[] =
+    input.attachmentIds && input.attachmentIds.length > 0 ? takeAttachments(input.attachmentIds.slice(0, 3)) : [];
+  const attachedPdfs = attachments.filter((a) => a.kind === "pdf" && a.text);
+  const attachedImages: VisionImage[] = attachments
+    .filter((a) => a.kind === "image" && a.base64)
+    .map((a) => ({ mime: a.mime as VisionImage["mime"], base64: a.base64 as string }));
+  for (const pdf of attachedPdfs) {
+    cites.push({ docName: pdf.name, chunkIndex: 0 });
+    toolSummaries.push(`- attachment [pdf]: ${pdf.name} (${pdf.text?.length ?? 0} chars${pdf.truncated ? ", truncated" : ""})`);
+  }
+  if (attachedImages.length > 0) {
+    toolSummaries.push(`- attachment [image]: ${attachedImages.length} image${attachedImages.length === 1 ? "" : "s"} for vision analysis`);
+  }
   let vaultHits: { docName: string; chunkIndex: number; text: string }[] = [];
   let patchedTex: string | null = null;
   let retargetedResume: ResumeContent | null = null;
@@ -222,9 +242,14 @@ export async function runCopilotStream(
   }
 
   // 3. Compose the advisory reply as genuine streamed tokens.
+  const attachedPdfBlock =
+    attachedPdfs.length > 0
+      ? attachedPdfs.map((a) => `[Source: ${a.name}] ${(a.text ?? "").slice(0, 12000)}`).join("\n---\n")
+      : "none";
   const userContext = [
     `CURRENT RESUME:\n${JSON.stringify(input.resume).slice(0, 8000)}`,
     `VAULT EVIDENCE:\n${vaultBlock(vaultHits)}`,
+    `ATTACHED PDFS:\n${attachedPdfBlock}`,
     input.selection?.text ? `ACTIVE SELECTION:\n${input.selection.text.slice(0, 2000)}` : "ACTIVE SELECTION: none",
     toolSummaries.length > 0 ? `TOOL OUTPUTS:\n${toolSummaries.join("\n")}` : "TOOL OUTPUTS: none",
     input.targetJob?.title ? `TARGET JOB: ${input.targetJob.title} @ ${input.targetJob.company ?? ""}` : "TARGET JOB: none",
@@ -232,23 +257,36 @@ export async function runCopilotStream(
     `USER REQUEST:\n${input.message.slice(0, 3000)}`,
   ].join("\n\n");
 
+  const visionNote = (() => {
+    if (attachedImages.length === 0) return null;
+    const entry = firstVisionEntry(resolveChain());
+    return entry ? `${entry.label} (${entry.model})` : null;
+  })();
+  // Images present but unanalyzable: disclosed, never silently dropped.
+  const visionBlocked =
+    attachedImages.length > 0 && !visionNote
+      ? "I can't analyze attached images with the providers currently enabled — none is vision-capable. " +
+        "Enable an OpenAI (gpt-4o), Gemini, or Claude vision model in Settings → AI Engine, or attach the content as PDF/text."
+      : null;
+
   let reply = "";
   try {
-    emit({ kind: "reasoning", note: "Composing answer." });
+    emit({ kind: "reasoning", note: visionNote ? `Composing answer with images (${visionNote}).` : "Composing answer." });
     let full = "";
-    for await (const delta of generateTextStream(undefined, COMPOSE_SYSTEM_PROMPT, userContext)) {
+    const images = attachedImages.length > 0 && !visionBlocked ? attachedImages : [];
+    for await (const delta of generateTextStream(undefined, COMPOSE_SYSTEM_PROMPT, userContext, images)) {
       if (!delta) continue;
       full += delta;
       emit({ kind: "token", delta });
     }
     if (full.trim()) {
-      reply = full.trim();
+      reply = visionBlocked ? `${visionBlocked}\n\n${full.trim()}` : full.trim();
       llm = true;
     }
   } catch {
-    /* fall through to the non-streaming attempt below */
+    /* fall through to the non-streaming attempt below (text-only turns) */
   }
-  if (!reply) {
+  if (!reply && attachedImages.length === 0) {
     try {
       const res = await generateText(undefined, COMPOSE_SYSTEM_PROMPT, userContext);
       if (res.text.trim()) {
@@ -261,8 +299,13 @@ export async function runCopilotStream(
     }
   }
   if (!reply) {
+    // With images, a failed vision stream must not degrade into a text-only
+    // answer that pretends the images were seen.
     const parts = [
-      "No language provider is configured, so this is a deterministic summary of what ran locally.",
+      visionBlocked ??
+        (attachedImages.length > 0
+          ? "Image analysis failed for this turn — the images were not analyzed. Retry, or attach the content as PDF/text."
+          : "No language provider is configured, so this is a deterministic summary of what ran locally."),
       ...toolSummaries,
       "Add an API key in Settings → AI Engine for full rewrites.",
     ];

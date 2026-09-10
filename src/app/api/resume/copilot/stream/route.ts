@@ -50,6 +50,9 @@ export async function POST(req: NextRequest) {
   const targetJob = (body.targetJob ?? null) as CopilotTargetJob;
   const selection = (body.selection ?? null) as CopilotSelection;
   const jobId = typeof body.jobId === "string" ? body.jobId : null;
+  const attachmentIds = Array.isArray(body.attachmentIds)
+    ? (body.attachmentIds as unknown[]).filter((id): id is string => typeof id === "string").slice(0, 3)
+    : [];
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -82,7 +85,7 @@ export async function POST(req: NextRequest) {
       try {
         push("config", { stream: true, templateId });
         const result = await runCopilotStream(
-          { message, resume, tex, templateId, history, targetJob, selection, jobId },
+          { message, resume, tex, templateId, history, targetJob, selection, jobId, attachmentIds },
           (ev) => {
             switch (ev.kind) {
               case "reasoning":

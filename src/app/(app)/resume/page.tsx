@@ -38,81 +38,7 @@ import type { SsePacket } from "@/lib/sseClient";
 import ResumeCopilotPanel from "@/components/resume/ResumeCopilotPanel";
 import type { ChatMessage } from "@/components/resume/ResumeCopilotPanel";
 
-interface TemplateMeta {
-  id: string;
-  name: string;
-  desc: string;
-  badge: string;
-  kind: "resume" | "cv" | "both";
-  font: string;
-  accent: string;
-}
-
-const ALL_TEMPLATES: TemplateMeta[] = [
-  {
-    id: "classic-ats",
-    name: "Classic ATS Standard",
-    desc: "Single-column Helvetica. Predictable hierarchy and machine-readable text for parser safety.",
-    badge: "Single-column",
-    kind: "resume",
-    font: "font-sans",
-    accent: "bg-neutral-900",
-  },
-  {
-    id: "modern-professional",
-    name: "Modern Tech",
-    desc: "Clean two-tone headers with deep blue accent bar. Tech-optimized single column layout.",
-    badge: "Two-tone headers",
-    kind: "resume",
-    font: "font-sans",
-    accent: "bg-sky-700",
-  },
-  {
-    id: "technical-modern",
-    name: "Technical Modern",
-    desc: "High-density technical layout for senior software, ML, and systems engineers.",
-    badge: "High-density",
-    kind: "resume",
-    font: "font-mono",
-    accent: "bg-teal-700",
-  },
-  {
-    id: "minimal-clean",
-    name: "Minimal Clean",
-    desc: "Quiet typography, generous whitespace, single teal accent line.",
-    badge: "Whitespace",
-    kind: "resume",
-    font: "font-sans",
-    accent: "bg-emerald-700",
-  },
-  {
-    id: "executive",
-    name: "Executive Serif",
-    desc: "Times-based classic look for senior & leadership profiles. Small-caps section headers.",
-    badge: "Serif",
-    kind: "both",
-    font: "font-serif",
-    accent: "bg-stone-900",
-  },
-  {
-    id: "tabular-german",
-    name: "German Tabellarischer CV",
-    desc: "DACH standard format with date/location column and structured sections.",
-    badge: "DACH standard",
-    kind: "cv",
-    font: "font-sans",
-    accent: "bg-zinc-800",
-  },
-  {
-    id: "modern-french",
-    name: "French Standard CV",
-    desc: "Clean European format with structured competencies and detailed career timeline.",
-    badge: "European",
-    kind: "cv",
-    font: "font-sans",
-    accent: "bg-blue-800",
-  },
-];
+import { galleryTemplates } from "@/components/resume/templateGallery";
 
 function profileToResume(profile: ReturnType<typeof useApp>["profile"]): ResumeContent {
   return {
@@ -265,10 +191,9 @@ export default function ResumeStudioPage() {
     return pdfUrl ? "PDF ready · LaTeX" : "Preview ready";
   }, [pdfState, pdfUrl]);
 
-  const filteredTemplates = useMemo(
-    () => ALL_TEMPLATES.filter((t) => t.kind === docKind || t.kind === "both"),
-    [docKind]
-  );
+  // Gallery cards come from the real RESUME_TEMPLATES registry (see
+  // templateGallery.ts) — no hand-written subset, no numeric scores.
+  const filteredTemplates = useMemo(() => galleryTemplates(docKind), [docKind]);
 
   // Live LaTeX source is the diff "after" side.
   const currentTex = latexSource;
@@ -288,6 +213,9 @@ export default function ResumeStudioPage() {
   // Copilot selection context: quoted source/PDF content sent with the next
   // turn (consumed + cleared on send). Set by both quote paths below.
   const [selCtx, setSelCtx] = useState<{ text: string; sourceLine?: number } | null>(null);
+  // Pending attachment files (validated + uploaded at send time; raw bytes
+  // never enter chat state, logs, or persistence).
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   // Chat copilot state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -671,6 +599,24 @@ export default function ResumeStudioPage() {
     }, 50);
   };
 
+  // Upload pending attachments: server validates type/size/magic bytes and
+  // encryption. Returns ephemeral ids (bytes stay server-side). Throws with
+  // the server's actionable message on any rejection.
+  const uploadAttachments = async (files: File[]): Promise<string[]> => {
+    const form = new FormData();
+    for (const f of files.slice(0, 3)) form.append("files", f, f.name);
+    const res = await fetch("/api/resume/copilot/attachments", { method: "POST", body: form });
+    const data = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      attachments?: { id?: unknown }[];
+      error?: { message?: string } | string;
+    };
+    if (!res.ok || !data.ok) {
+      throw new Error(typeof data.error === "string" ? data.error : (data.error?.message ?? `Upload returned ${res.status}`));
+    }
+    return (data.attachments ?? []).map((a) => String(a.id)).filter(Boolean);
+  };
+
   // Legacy JSON Copilot path — kept as the fallback when streaming is
   // unavailable (old clients, proxies stripping SSE, pre-first-byte errors).
   const sendLegacyMessage = async (text: string) => {
@@ -776,13 +722,16 @@ export default function ResumeStudioPage() {
   };
 
   const handleSendMessage = async (customPrompt?: string) => {
-    const text = customPrompt || chatInput.trim();
-    if (!text || copilotBusy) return;
+    const text = (customPrompt || chatInput.trim()).trim();
+    if ((!text && pendingFiles.length === 0) || copilotBusy) return;
 
     if (!customPrompt) setChatInput("");
     // Consume the quoted selection exactly once.
     const selection = selCtx;
     setSelCtx(null);
+    // Uploads happen now (fail fast, before any Copilot work).
+    const filesToSend = pendingFiles;
+    setPendingFiles([]);
 
     const userMsg: ChatMessage = {
       id: `usr-${Date.now()}`,
@@ -799,8 +748,23 @@ export default function ResumeStudioPage() {
     ]);
     setCopilotBusy(true);
 
+    // Uploads first: validated server-side (type/size/magic/encryption).
+    // Any rejection aborts the turn before Copilot work starts.
+    let attachmentIds: string[] = [];
+    if (filesToSend.length > 0) {
+      try {
+        attachmentIds = await uploadAttachments(filesToSend);
+      } catch (uploadErr: unknown) {
+        setChatMessages((prev) => prev.filter((m) => m.id !== aiId));
+        errToast(uploadErr instanceof Error ? uploadErr.message : "Attachment upload failed");
+        setCopilotBusy(false);
+        setPendingFiles(filesToSend);
+        return;
+      }
+    }
+
     const payload = {
-      message: text,
+      message: text || `Review the attached file${attachmentIds.length === 1 ? "" : "s"} against my resume.`,
       resume,
       tex: latexSource,
       templateId: selectedTemplate,
@@ -812,6 +776,7 @@ export default function ResumeStudioPage() {
         ? { text: selection.text, sourceLine: selection.sourceLine ?? cursorPos?.line ?? undefined }
         : undefined,
       jobId: selectedJobId || undefined,
+      attachmentIds,
     };
 
     try {
@@ -822,7 +787,9 @@ export default function ResumeStudioPage() {
       });
       const contentType = res.headers.get("content-type") ?? "";
       if (!res.ok || !contentType.includes("text/event-stream")) {
-        // Fall back to the legacy JSON contract (same visible outcome).
+        // Fall back to the legacy JSON contract — unless attachments are
+        // involved, which legacy cannot see (never silently drop them).
+        if (attachmentIds.length > 0) throw new Error("Attachments need the streaming endpoint — retry the message.");
         setChatMessages((prev) => prev.filter((m) => m.id !== aiId));
         await sendLegacyMessage(text);
         return;
@@ -830,20 +797,24 @@ export default function ResumeStudioPage() {
       await readSseStream(res, (packet) => handleStreamPacket(aiId, packet));
       setChatMessages((prev) => prev.map((m) => (m.id === aiId && m.streaming ? { ...m, streaming: false } : m)));
     } catch (err: unknown) {
-      // Transport failure before/during the stream: try legacy once, else err.
-      try {
-        setChatMessages((prev) => prev.filter((m) => m.id !== aiId));
-        await sendLegacyMessage(text);
-      } catch (legacyErr: unknown) {
-        setChatMessages((prev) =>
-          prev.map((m) =>
-            m.id === aiId
-              ? { ...m, streaming: false, error: err instanceof Error ? err.message : "AI Copilot request failed" }
-              : m
-          )
-        );
-        errToast(legacyErr instanceof Error ? legacyErr.message : "AI Copilot request failed");
+      // Transport failure before/during the stream: try legacy once (text
+      // turns only), else surface the error on the message.
+      if (attachmentIds.length === 0) {
+        try {
+          setChatMessages((prev) => prev.filter((m) => m.id !== aiId));
+          await sendLegacyMessage(text);
+          return;
+        } catch (legacyErr: unknown) {
+          errToast(legacyErr instanceof Error ? legacyErr.message : "AI Copilot request failed");
+        }
       }
+      setChatMessages((prev) =>
+        prev.map((m) =>
+          m.id === aiId
+            ? { ...m, streaming: false, error: err instanceof Error ? err.message : "AI Copilot request failed" }
+            : m
+        )
+      );
     } finally {
       setCopilotBusy(false);
     }
@@ -867,7 +838,7 @@ export default function ResumeStudioPage() {
     if (pendingSwitch.kind === "docKind") {
       const kind = pendingSwitch.docKind;
       setDocKind(kind);
-      const target = ALL_TEMPLATES.find((t) => t.kind === kind || t.kind === "both")?.id || (kind === "cv" ? "tabular-german" : "classic-ats");
+      const target = galleryTemplates(kind)[0]?.meta.id || (kind === "cv" ? "tabular-german" : "classic-ats");
       setSelectedTemplate(target);
       setPendingSwitch(null);
       // Explicit user action: re-render the new layout even over hand edits.
@@ -1219,6 +1190,9 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
               onSubmit={() => void handleSendMessage()}
               onQuickPrompt={(prompt) => void handleSendMessage(prompt)}
               inputRef={chatInputRef}
+              attachments={pendingFiles.map((f) => ({ name: f.name, size: f.size }))}
+              onAttachFiles={(files) => setPendingFiles((prev) => [...prev, ...files].slice(0, 3))}
+              onRemoveAttachment={(index) => setPendingFiles((prev) => prev.filter((_, i) => i !== index))}
             />
           )}
           {refineTab === "ats" && (
@@ -1317,7 +1291,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           <div className="space-y-4">
             <p className="text-sm leading-relaxed text-dim">
               {pendingSwitch.kind === "template"
-                ? `Preview will switch to “${ALL_TEMPLATES.find((t) => t.id === pendingSwitch.templateId)?.name ?? pendingSwitch.templateId}”.`
+                ? `Preview will switch to “${galleryTemplates(docKind).find((t) => t.meta.id === pendingSwitch.templateId)?.meta.name ?? pendingSwitch.templateId}”.`
                 : pendingSwitch.docKind === "cv"
                   ? "Preview will switch to a multi-page CV format."
                   : "Preview will switch to a compact 1-page resume format."}{" "}
@@ -1379,17 +1353,18 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
               </p>
             </fieldset>
 
-            {/* Template gallery: real radios, honest descriptors */}
+            {/* Template gallery: real registry metadata, honest descriptors */}
             <fieldset>
               <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
                 Layout template ({filteredTemplates.length})
               </legend>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 {filteredTemplates.map((tmpl) => {
-                  const isSelected = selectedTemplate === tmpl.id;
+                  const isSelected = selectedTemplate === tmpl.meta.id;
+                  const Icon = tmpl.icon;
                   return (
                     <label
-                      key={tmpl.id}
+                      key={tmpl.meta.id}
                       className={cn(
                         "cursor-pointer rounded-xl border p-3 transition-all",
                         isSelected
@@ -1403,28 +1378,44 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                             type="radio"
                             name="resume-template"
                             checked={isSelected}
-                            onChange={() => handleTemplateChange(tmpl.id)}
-                            aria-label={tmpl.name}
+                            onChange={() => handleTemplateChange(tmpl.meta.id)}
+                            aria-label={tmpl.meta.name}
                             className="h-4 w-4 shrink-0 accent-[var(--chartreuse)]"
                           />
-                          <span className="truncate text-xs font-bold text-[var(--paper)]">{tmpl.name}</span>
+                          <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg text-white", tmpl.swatch)} aria-hidden>
+                            <Icon className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="truncate text-xs font-bold text-[var(--paper)]">{tmpl.meta.name}</span>
                         </span>
                         <span className="shrink-0 rounded-full border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/10 px-2 py-0.5 font-mono text-[9px] font-bold tracking-wide text-[var(--chartreuse)]">
                           {tmpl.badge}
                         </span>
                       </span>
-                      <span className="mt-1.5 block text-[10px] leading-relaxed text-dim">{tmpl.desc}</span>
+                      <span className="mt-1.5 block text-[10px] leading-relaxed text-dim">{tmpl.meta.description}</span>
+                      <span className="mt-1 block text-[10px] leading-relaxed text-dim/80">{tmpl.meta.recommendationReason}</span>
+                      <span className="mt-1.5 flex flex-wrap gap-1">
+                        {tmpl.meta.recommendedFor.slice(0, 3).map((audience) => (
+                          <span key={audience} className="rounded-full border border-[var(--line)] bg-white/[0.03] px-2 py-0.5 text-[9px] font-semibold text-dim">
+                            {audience}
+                          </span>
+                        ))}
+                      </span>
+                      <span className="mt-1.5 block font-mono text-[9px] text-dim/70">Type: {tmpl.meta.fontFamily}</span>
                     </label>
                   );
                 })}
               </div>
+              <p className="mt-2 text-[10px] leading-relaxed text-dim">
+                Layouts are ATS-conscious structure (predictable hierarchy, machine-readable text) — no layout guarantees
+                parsing results. The live ATS diagnostic scores your content, not the template.
+              </p>
             </fieldset>
 
             {/* Preview: the compiled PDF is the sole authoritative preview. */}
             <section aria-label="Preview" className="space-y-2 border-t border-[var(--line)] pt-4">
               <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">Preview</h3>
               <p className="text-[11px] leading-relaxed text-dim">
-                The compiled LaTeX PDF above is the typography source of truth. Pan/zoom and source-synchronized navigation arrive with the PDF viewer layer.
+                The compiled LaTeX PDF above is the typography source of truth. Zoom in the PDF header; SyncTeX jumps between the source cursor and the PDF.
               </p>
             </section>
 

@@ -82,6 +82,23 @@ describe("Resume Studio — PDF-only LaTeX primary", () => {
     expect(driver).toContain("never raw chain-of-thought");
   });
 
+  it("secures Copilot attachments and shows honest registry templates", () => {
+    const src = read("src/app/(app)/resume/page.tsx");
+    expect(src).toContain("attachmentIds");
+    expect(src).toContain("galleryTemplates");
+    expect(src).not.toContain("ALL_TEMPLATES");
+    expect(src).not.toContain("Typst preview");
+    expect(exists("src/app/api/resume/copilot/attachments/route.ts")).toBe(true);
+    expect(exists("src/components/resume/templateGallery.ts")).toBe(true);
+    expect(exists("src/lib/llm/vision.ts")).toBe(true);
+    const gallery = read("src/components/resume/templateGallery.ts");
+    expect(gallery).toContain("RESUME_TEMPLATES");
+    expect(gallery).not.toMatch(/atsScore/);
+    const upload = read("src/app/api/resume/copilot/attachments/route.ts");
+    expect(upload).toContain("ENCRYPTED_PDF");
+    expect(upload).toContain("TYPE_MISMATCH");
+  });
+
   it("keeps resume/page.tsx bounded <1600 lines and imports are clean", () => {
     const src = read("src/app/(app)/resume/page.tsx");
     const lines = src.split("\n").length;

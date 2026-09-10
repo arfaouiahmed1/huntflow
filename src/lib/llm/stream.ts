@@ -1,6 +1,9 @@
 import { getProvider, LLMSettings, ProviderKind, llmSettingsFrom } from "./providers";
+import type { LLMProvider } from "./providers";
 import { LLMError } from "./client";
 import { resolveChain } from "./router";
+import { firstVisionEntry, visionContent } from "./vision";
+import type { VisionImage } from "./vision";
 
 /**
  * Token-by-token streaming generation across the configured provider chain.
@@ -39,6 +42,11 @@ function firstUsableProvider(settings: LLMSettings | null | undefined) {
   return null;
 }
 
+/** First entry allowed to receive images (enabled, keyed, vision-capable, model-matched). */
+function firstVisionProvider(settings: LLMSettings | null | undefined): LLMProvider | null {
+  return firstVisionEntry(resolveChain(settings));
+}
+
 function requestUrl(kind: ProviderKind, settings: LLMSettings): string {
   const provider = getProvider(settings.providerId);
   const baseURL = (settings.baseURL || provider.baseURL || "").replace(/\/$/, "");
@@ -63,8 +71,13 @@ function requestHeaders(kind: ProviderKind, providerId: string, settings: LLMSet
     ...(providerId === "openrouter" ? { "X-Title": "HUNTFLOW" } : {}),
   };
 }
-
-function requestBody(kind: ProviderKind, settings: LLMSettings, system: string, user: string): Record<string, unknown> {
+function requestBody(
+  kind: ProviderKind,
+  settings: LLMSettings,
+  system: string,
+  user: string,
+  images: VisionImage[] = []
+): Record<string, unknown> {
   const temperature = settings.temperature ?? 0.7;
   if (kind === "anthropic") {
     return {
@@ -72,12 +85,12 @@ function requestBody(kind: ProviderKind, settings: LLMSettings, system: string, 
       max_tokens: MAX_OUTPUT,
       stream: true,
       system,
-      messages: [{ role: "user", content: user }],
+      messages: [{ role: "user", content: images.length > 0 ? visionContent(kind, user, images) : user }],
     };
   }
   if (kind === "gemini") {
     return {
-      contents: [{ role: "user", parts: [{ text: user }] }],
+      contents: [{ role: "user", parts: images.length > 0 ? visionContent(kind, user, images) : [{ text: user }] }],
       systemInstruction: { parts: [{ text: system }] },
       generationConfig: { temperature, maxOutputTokens: MAX_OUTPUT },
     };
@@ -88,7 +101,7 @@ function requestBody(kind: ProviderKind, settings: LLMSettings, system: string, 
     stream: true,
     messages: [
       { role: "system", content: system },
-      { role: "user", content: user },
+      { role: "user", content: images.length > 0 ? visionContent(kind, user, images) : user },
     ],
   };
 }
@@ -116,14 +129,28 @@ function extractDelta(kind: ProviderKind, frame: unknown): string {
  * Stream successive text deltas for the given prompt. Throws `LLMError` before
  * the first yield when no provider is usable or the request cannot be set up or
  * the server rejects the request. Yields normalized text fragments as they arrive.
+ *
+ * With images, the first *vision-capable* chain entry serves the turn
+ * (images are never described locally and never sent to a text-only
+ * model). Without one, throws `LLMError("NO_VISION_PROVIDER")` before
+ * the first yield so the caller can explain instead of dropping them.
  */
 export async function* generateTextStream(
   settings: LLMSettings | null | undefined,
   system: string,
-  user: string
+  user: string,
+  images: VisionImage[] = []
 ): AsyncGenerator<string> {
-  const provider = firstUsableProvider(settings);
+  const provider =
+    images.length > 0 ? firstVisionProvider(settings) : firstUsableProvider(settings);
   if (!provider) {
+    if (images.length > 0) {
+      throw new LLMError(
+        "No vision-capable provider in chain — enable an OpenAI/Gemini/Claude vision model or attach PDFs instead.",
+        undefined,
+        "NO_VISION_PROVIDER"
+      );
+    }
     throw new LLMError("No eligible streaming provider in chain", undefined, "CHAIN_EXHAUSTED");
   }
   const cfg = getProvider(provider.id);
@@ -135,7 +162,7 @@ export async function* generateTextStream(
       method: "POST",
       headers: requestHeaders(cfg.kind, provider.id, providerSettings),
       signal: timeoutSignal(),
-      body: JSON.stringify(requestBody(cfg.kind, providerSettings, system, user)),
+      body: JSON.stringify(requestBody(cfg.kind, providerSettings, system, user, images)),
     });
   } catch (err) {
     if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {

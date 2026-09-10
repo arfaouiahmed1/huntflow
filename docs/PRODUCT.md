@@ -106,7 +106,7 @@ Feature: Prepare ATS-conscious documents on /resume
   Scenario: Draft from profile and choose LaTeX template
     Given I am on "/resume" with a profile synced from "/vault" Applicant Profile
     When I choose the document kind resume or cv and select a template from RESUME_TEMPLATES filtered by kind
-    Then the A4 structure preview updates and labels Latin Modern Roman or Sans per fontFamily
+    Then the compiled PDF preview updates from LaTeX source and labels Latin Modern Roman or Sans per fontFamily
     And selecting the Classic LaTeX ATS template surfaces its ats-conscious structure without claiming guaranteed outcomes
     And switching the target job via the job selector retails the content for that role
 ```
@@ -121,7 +121,7 @@ Feature: Compile LaTeX and verify correspondence on /resume
     Then the app POSTs to /api/resume/compile and stores a compile token
     And SynctexViewer enables forward search to the preview and reverse from click to TeX line
     And ResumeDiff shows changed sections between the pinned baseline and current LaTeX
-    And "Export PDF" opens /api/resume/compile?token=&save=1 as the typography source of truth, not the HTML preview
+    And "Export PDF" opens /api/resume/compile?token=&save=1 as the typography source of truth, never an HTML screenshot
 ```
 
 ### Scenario 8 — Apply: supervise the browser agent with HITL on /agent

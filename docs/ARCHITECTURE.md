@@ -626,7 +626,7 @@ Feature: Multi-agent execution exposed per route (Discover→Rank→Analyze→Pr
   Scenario: 10.2.6 Prepare (documents) — draft and template selection on /resume
     Given I am on "/resume" with Applicant Profile synced from "/vault" and a target job selected from "/tracker" or "/jobs"
     When I set kind to resume or cv and pick a template from RESUME_TEMPLATES filtered by kind
-    Then the A4 structure preview updates with the template's fontFamily (Latin Modern Roman or Sans) while labeling the preview as structure-only
+    Then the compiled PDF preview updates from the selected template's LaTeX source while labeling the PDF as the typography source of truth
     And the AI Resume Copilot at "/resume" tailors bullets using resumeCVTailor (LLM + vault + culture) but flags invented metrics and never claims ATS guarantee
     And the ATS score badge reflects parser-friendly checks, not a guaranteed outcome
 

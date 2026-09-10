@@ -93,7 +93,9 @@ describe("Resume Studio — PDF-only LaTeX primary", () => {
     expect(exists("src/lib/llm/vision.ts")).toBe(true);
     const gallery = read("src/components/resume/templateGallery.ts");
     expect(gallery).toContain("RESUME_TEMPLATES");
-    expect(gallery).not.toMatch(/atsScore/);
+    // the word may appear only in the honesty rationale, never as data access
+    expect(gallery).not.toContain("meta.atsScore");
+    expect(gallery).not.toContain("atsScore:");
     const upload = read("src/app/api/resume/copilot/attachments/route.ts");
     expect(upload).toContain("ENCRYPTED_PDF");
     expect(upload).toContain("TYPE_MISMATCH");

@@ -272,6 +272,9 @@ export function migrate(database: DatabaseSync) {
       source_doc_id TEXT,
       target_job_id TEXT,
       auto_compile INTEGER NOT NULL DEFAULT 1,
+      last_compile_token TEXT,
+      last_compile_at TEXT,
+      editor_rev INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -487,6 +490,9 @@ export function migrate(database: DatabaseSync) {
   addColumn("jobs", "source_confidence", "source_confidence REAL");
   addColumn("jobs", "sources_count", "sources_count INTEGER");
   addColumn("jobs", "ranking_breakdown", "ranking_breakdown TEXT");
+  addColumn("resume_docs", "last_compile_token", "last_compile_token TEXT");
+  addColumn("resume_docs", "last_compile_at", "last_compile_at TEXT");
+  addColumn("resume_docs", "editor_rev", "editor_rev INTEGER NOT NULL DEFAULT 0");
   database.exec("CREATE INDEX IF NOT EXISTS idx_memory_expires_at ON memory(expires_at);");
   database.exec("CREATE INDEX IF NOT EXISTS idx_memory_embeddings_memory_id ON memory_embeddings(memory_id);");
   database.exec("CREATE INDEX IF NOT EXISTS idx_jobs_canonical_key ON jobs(canonical_key);");
@@ -2095,6 +2101,9 @@ function rowToResumeDoc(row: Record<string, unknown>): ResumeDoc {
     sourceDocId: (row.source_doc_id as string) || undefined,
     targetJobId: (row.target_job_id as string) || undefined,
     autoCompile: Boolean(row.auto_compile),
+    lastCompileToken: (row.last_compile_token as string) || undefined,
+    lastCompileAt: (row.last_compile_at as string) || undefined,
+    editorRev: Number(row.editor_rev ?? 0) || 0,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -2113,13 +2122,16 @@ export const resumeRepo = {
     getDb()
       .prepare(
         `INSERT INTO resume_docs (id, name, kind, template_id, tex, content, source,
-           source_doc_id, target_job_id, auto_compile, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           source_doc_id, target_job_id, auto_compile, last_compile_token,
+           last_compile_at, editor_rev, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            name=excluded.name, kind=excluded.kind, template_id=excluded.template_id,
            tex=excluded.tex, content=excluded.content, source=excluded.source,
            source_doc_id=excluded.source_doc_id, target_job_id=excluded.target_job_id,
-           auto_compile=excluded.auto_compile, updated_at=excluded.updated_at`
+           auto_compile=excluded.auto_compile, last_compile_token=excluded.last_compile_token,
+           last_compile_at=excluded.last_compile_at, editor_rev=excluded.editor_rev,
+           updated_at=excluded.updated_at`
       )
       .run(
         doc.id,
@@ -2132,6 +2144,9 @@ export const resumeRepo = {
         doc.sourceDocId ?? null,
         doc.targetJobId ?? null,
         doc.autoCompile ? 1 : 0,
+        doc.lastCompileToken ?? null,
+        doc.lastCompileAt ?? null,
+        doc.editorRev ?? 0,
         doc.createdAt ?? new Date().toISOString(),
         doc.updatedAt ?? new Date().toISOString()
       );

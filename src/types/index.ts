@@ -483,6 +483,12 @@ export interface ResumeDoc {
   sourceDocId?: string;
   targetJobId?: string;
   autoCompile: boolean;
+  /** Token of the last successful server compile (SyncTeX navigation). */
+  lastCompileToken?: string;
+  /** ISO timestamp of the last successful server compile. */
+  lastCompileAt?: string;
+  /** Monotonic editor revision — guards against stale overwrites. */
+  editorRev?: number;
   createdAt: string;
   updatedAt: string;
 }

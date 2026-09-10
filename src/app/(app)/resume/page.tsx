@@ -36,6 +36,9 @@ import ResumeDiff, { computeDiff, getChangedSections } from "@/components/resume
 import ResumeVariantsManager from "@/components/resume/ResumeVariantsManager";
 import Modal from "@/components/ui/Modal";
 import { resolveLatexLatency } from "@/lib/resumeCompile";
+import ResumeSourcePane from "@/components/resume/ResumeSourcePane";
+import { parseLatexErrors } from "@/lib/latexErrors";
+import type { LatexError } from "@/lib/latexErrors";
 
 interface ChatMessage {
   id: string;
@@ -204,6 +207,9 @@ function profileToResume(profile: ReturnType<typeof useApp>["profile"]): ResumeC
   };
 }
 
+// Single persisted studio document: server (SQLite) is source truth.
+const STUDIO_DOC_ID = "studio-main";
+
 export default function ResumeStudioPage() {
   const { profile, updateProfile, applications } = useApp();
   const { success, error: errToast } = useToast();
@@ -217,6 +223,23 @@ export default function ResumeStudioPage() {
   // the only authoritative preview — there is no HTML fallback and Typst
   // markup is never presented as a PDF.
   const [latexSource, setLatexSource] = useState("");
+  // Source ownership: once the user hand-edits the TeX (or loads a draft),
+  // structured re-renders must not silently clobber it — they require an
+  // explicit force (template-switch confirm, Copilot apply, draft load).
+  const [sourceTouched, setSourceTouched] = useState(false);
+  // Persistence (server is truth — never localStorage): single studio doc.
+  const [savedRev, setSavedRev] = useState<number | null>(null);
+  const [lastSavedTex, setLastSavedTex] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [savedDraft, setSavedDraft] = useState<{ updatedAt: string; rev: number } | null>(null);
+  const [draftDismissed, setDraftDismissed] = useState(false);
+  // Compile diagnostics for the log strip + editor markers.
+  const [compileLogTail, setCompileLogTail] = useState<string | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
+  const [cursorPos, setCursorPos] = useState<{ line: number; column: number } | null>(null);
+  const [revealLine, setRevealLine] = useState<{ line: number; nonce: number } | null>(null);
+  const isSourceDirty = lastSavedTex === null ? sourceTouched && latexSource.trim().length > 0 : latexSource !== lastSavedTex;
+  const compileErrors: LatexError[] = useMemo(() => parseLatexErrors(compileLogTail), [compileLogTail]);
   const [compilingPdf, setCompilingPdf] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfState, setPdfState] = useState<"idle" | "compiling" | "ready" | "no-tex" | "error">("idle");
@@ -316,22 +339,29 @@ export default function ResumeStudioPage() {
     }
   }, [resume, selectedJob]);
 
-  // Render LaTeX representation in backend
-  const updateLatexPreview = useCallback(async (content: ResumeContent, templateId: string) => {
-    try {
-      const res = await fetch("/api/resume/render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateId, content }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setLatexSource(data.tex || "");
+  // Render LaTeX representation in backend. Guarded by source ownership:
+  // hand-edited source is never overwritten unless the caller forces it
+  // (template-switch confirm, draft load). Structured edits flow through
+  // Copilot apply, which sets the source explicitly.
+  const updateLatexPreview = useCallback(
+    async (content: ResumeContent, templateId: string, force = false) => {
+      if (sourceTouched && !force) return;
+      try {
+        const res = await fetch("/api/resume/render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ templateId, content }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setLatexSource(data.tex || "");
+        }
+      } catch {
+        // Non-blocking
       }
-    } catch {
-      // Non-blocking
-    }
-  }, []);
+    },
+    [sourceTouched]
+  );
 
   useEffect(() => {
     updateLatexPreview(resume, selectedTemplate);
@@ -358,16 +388,24 @@ export default function ResumeStudioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tex: latexSource }),
       });
-      const compileData = (await compileRes.json()) as { ok?: boolean; token?: string; error?: { message?: string } };
+      const compileData = (await compileRes.json()) as {
+        ok?: boolean;
+        token?: string;
+        logTail?: string;
+        error?: { message?: string; details?: { logTail?: string } };
+      };
       if (compileData.ok && compileData.token) {
         setCompileLatencyMs(resolveLatexLatency(true, Date.now() - start));
         setCompileToken(compileData.token);
         setPdfUrl(`/api/resume/compile?token=${compileData.token}`);
         setCompiledTex(latexSource);
+        setCompileLogTail(compileData.logTail ?? null);
         setPdfState("ready");
       } else {
         setCompileLatencyMs(resolveLatexLatency(false, Date.now() - start));
         setPdfError(compileData.error?.message ?? "Compile failed");
+        setCompileLogTail(compileData.error?.details?.logTail ?? null);
+        setLogOpen(true);
         setPdfState("error");
       }
     } catch (e: unknown) {
@@ -394,13 +432,137 @@ export default function ResumeStudioPage() {
       void compilePreview();
     }
   }, [latexSource, pdfState, compilePreview]);
+  // Overleaf-style refs so the debounce timers below always see fresh
+  const pdfStateRef = useRef(pdfState);
+  const sourceTouchedRef = useRef(sourceTouched);
+  const compilePreviewRef = useRef(compilePreview);
+  useEffect(() => {
+    pdfStateRef.current = pdfState;
+    sourceTouchedRef.current = sourceTouched;
+    compilePreviewRef.current = compilePreview;
+  });
 
-  const applyUpdate = (newResume: ResumeContent, saveHistory = true) => {
-    if (saveHistory) {
-      setHistory((prev) => [resume, ...prev.slice(0, 10)]);
-    }
-    setResume(newResume);
-  };
+  // Debounced auto-compile: 900ms after the user stops editing source,
+  // recompile only when a previous artifact exists (ready) or the last
+  // attempt failed (error) — fixing errors live is the Overleaf loop.
+  // Idle/no-tex/compiling states are left for the explicit compile path.
+  useEffect(() => {
+    if (!sourceTouchedRef.current || !latexSource.trim()) return;
+    const st = pdfStateRef.current;
+    if (st !== "ready" && st !== "error") return;
+    const t = setTimeout(() => {
+      void compilePreviewRef.current();
+    }, 900);
+    return () => clearTimeout(t);
+  }, [latexSource]);
+
+  // Studio document persistence: single `studio-main` doc via POST
+  // /api/resume (upsert). First save is always explicit; autosave only
+  // runs afterwards so drafts are never created behind the user's back.
+  const saveSource = useCallback(
+    async (manual: boolean) => {
+      if (!latexSource.trim()) {
+        if (manual) errToast("Nothing to save yet — wait for the source to render.");
+        return;
+      }
+      setSaveState("saving");
+      try {
+        const res = await fetch("/api/resume", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: STUDIO_DOC_ID,
+            name: `${resume.header?.name || "Resume"} — ${selectedTemplate}`,
+            kind: docKind,
+            templateId: selectedTemplate,
+            tex: latexSource,
+            content: resume,
+            editorRev: (savedRev ?? -1) + 1,
+            lastCompileToken: compileToken,
+            lastCompileAt: compileToken ? new Date().toISOString() : undefined,
+          }),
+        });
+        if (res.status === 409) {
+          setSaveState("error");
+          errToast("Saved elsewhere — reload the draft before saving again.");
+          return;
+        }
+        if (!res.ok) throw new Error(`Save returned ${res.status}`);
+        const data = (await res.json()) as { doc?: { editorRev?: number } };
+        setSavedRev(typeof data.doc?.editorRev === "number" ? data.doc.editorRev : (savedRev ?? 0) + 1);
+        setLastSavedTex(latexSource);
+        setSaveState("saved");
+        if (manual) success("LaTeX source saved.");
+      } catch (e: unknown) {
+        setSaveState("error");
+        if (manual) errToast(e instanceof Error ? e.message : "Save failed");
+      }
+    },
+    [latexSource, resume, selectedTemplate, docKind, savedRev, compileToken, errToast, success]
+  );
+
+  // Autosave 3s after edits settle — only once a doc exists (savedRev).
+  useEffect(() => {
+    if (savedRev === null || !isSourceDirty) return;
+    const t = setTimeout(() => {
+      void saveSource(false);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [latexSource, savedRev, isSourceDirty, saveSource]);
+
+  // On mount, check for a saved studio draft. Never auto-apply: the user
+  // chooses Load (explicit mutation) or Dismiss.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/resume");
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { docs?: { id?: string; updatedAt?: string; editorRev?: number }[] };
+        const draft = (data.docs ?? []).find((d) => d.id === STUDIO_DOC_ID);
+        if (draft && !cancelled) {
+          setSavedDraft({ updatedAt: draft.updatedAt ?? "", rev: draft.editorRev ?? 0 });
+          setSavedRev(draft.editorRev ?? 0);
+        }
+      } catch {
+        // Non-blocking: studio works fine without persistence.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Editor change: take source ownership, mark dirty/stale honestly.
+  const handleSourceChange = useCallback((next: string) => {
+    setLatexSource(next);
+    setSourceTouched(true);
+    setSaveState((s) => (s === "saved" ? "idle" : s));
+  }, []);
+
+  // Quote editor/assistant selections into the Copilot input.
+  const quoteToChat = useCallback(
+    (text: string) => {
+      const quote = `Rewrite and optimize this section: "${text.slice(0, 2000)}"`;
+      setChatInput(quote);
+      setRefineTab("chat");
+      setRefineCollapsed(false);
+      setTimeout(() => {
+        chatInputRef.current?.focus();
+      }, 50);
+    },
+    []
+  );
+
+  const applyUpdate = useCallback(
+    (newResume: ResumeContent, saveHistory = true) => {
+      if (saveHistory) {
+        setHistory((prev) => [resume, ...prev.slice(0, 10)]);
+      }
+      setResume(newResume);
+    },
+    [resume]
+  );
 
   const undoLast = () => {
     if (history.length === 0) return;
@@ -409,6 +571,33 @@ export default function ResumeStudioPage() {
     setResume(previous);
     success("Reverted to previous version.");
   };
+  const loadDraft = useCallback(async () => {
+    try {
+      const res = await fetch("/api/resume");
+      if (!res.ok) throw new Error(`Load returned ${res.status}`);
+      const data = (await res.json()) as {
+        docs?: {
+          id?: string;
+          tex?: string;
+          templateId?: string;
+          content?: ResumeContent;
+          editorRev?: number;
+        }[];
+      };
+      const draft = (data.docs ?? []).find((d) => d.id === STUDIO_DOC_ID);
+      if (!draft?.tex) throw new Error("Saved draft has no source.");
+      if (draft.content) applyUpdate(draft.content);
+      if (draft.templateId) setSelectedTemplate(draft.templateId);
+      setLatexSource(draft.tex);
+      setLastSavedTex(draft.tex);
+      setSavedRev(draft.editorRev ?? 0);
+      setSourceTouched(true);
+      setSavedDraft(null);
+      success("Loaded saved LaTeX draft.");
+    } catch (e: unknown) {
+      errToast(e instanceof Error ? e.message : "Load failed");
+    }
+  }, [applyUpdate, errToast, success]);
 
   // Text selection handler on preview (mouse and keyboard alike: a
   // `selectionchange` listener below feeds keyboard-driven selections here).
@@ -515,6 +704,9 @@ export default function ResumeStudioPage() {
         success(data.actionSummary || "Resume updated by AI Copilot.");
       }
       if (data.tex) {
+        // Explicit Copilot output: takes source ownership so later
+        // structured renders cannot silently clobber it.
+        setSourceTouched(true);
         setLatexSource(data.tex);
       }
     } catch (err: unknown) {
@@ -545,6 +737,8 @@ export default function ResumeStudioPage() {
       const target = ALL_TEMPLATES.find((t) => t.kind === kind || t.kind === "both")?.id || (kind === "cv" ? "tabular-german" : "classic-ats");
       setSelectedTemplate(target);
       setPendingSwitch(null);
+      // Explicit user action: re-render the new layout even over hand edits.
+      void updateLatexPreview(resume, target, true);
       if (withAiReformat) {
         void handleSendMessage(`Switch mode to ${kind.toUpperCase()}. Rebuild and format my profile for a ${kind === "cv" ? "comprehensive, detailed multi-page curriculum vitae" : "compact 1-page high-impact industry resume"}.`);
       }
@@ -552,6 +746,8 @@ export default function ResumeStudioPage() {
       const templateId = pendingSwitch.templateId;
       setSelectedTemplate(templateId);
       setPendingSwitch(null);
+      // Explicit user action: re-render the new layout even over hand edits.
+      void updateLatexPreview(resume, templateId, true);
       if (withAiReformat) {
         void handleSendMessage(`Rebuild and format my ${docKind.toUpperCase()} according to the ${templateId} template layout.`);
       }
@@ -758,13 +954,33 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           </Button>
         </div>
       </div>
-      {/* Studio workbench: Refine rail + document canvas (canvas first on mobile) */}
-      <div className={cn("relative flex min-h-0 flex-1 flex-col gap-4", refineCollapsed ? "lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--ink)]" : "lg:grid lg:grid-cols-[minmax(320px,360px)_minmax(0,1fr)] lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--ink)] lg:shadow-[0_12px_40px_rgba(0,0,0,0.22)]")}>
-        {/* Document canvas (first on mobile) */}
+      {/* Saved-draft banner: explicit Load, never auto-applied. */}
+      {savedDraft && !draftDismissed && (
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--sky)]/30 bg-[var(--sky)]/10 px-4 py-2 text-[11px] text-[var(--paper)] shrink-0">
+          <span>
+            Saved LaTeX draft available{savedDraft.updatedAt ? ` from ${new Date(savedDraft.updatedAt).toLocaleString()}` : ""} (rev {savedDraft.rev}).
+            Loading replaces the current source and structured canvas.
+          </span>
+          <Button size="sm" variant="outline" onClick={() => void loadDraft()} className="min-h-[44px]">
+            Load draft
+          </Button>
+          <button
+            type="button"
+            onClick={() => setDraftDismissed(true)}
+            aria-label="Dismiss saved draft notice"
+            className="grid h-11 w-11 place-items-center rounded-lg text-dim transition-colors hover:bg-white/[0.06] hover:text-[var(--paper)]"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+      {/* Studio workbench: Refine rail + LaTeX source + PDF canvas (canvas first on mobile) */}
+      <div className={cn("relative flex min-h-0 flex-1 flex-col gap-4", refineCollapsed ? "lg:grid lg:grid-cols-[auto_minmax(0,5fr)_minmax(0,6fr)] lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--ink)]" : "lg:grid lg:grid-cols-[minmax(260px,300px)_minmax(0,5fr)_minmax(0,6fr)] lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--ink)] lg:shadow-[0_12px_40px_rgba(0,0,0,0.22)]")}>
+        {/* Document canvas (first on mobile, right on desktop) */}
         <div
           ref={previewContainerRef}
           onMouseUp={handlePreviewMouseUp}
-          className="relative order-1 flex min-h-[60vh] flex-col items-center gap-5 overflow-visible bg-[var(--ink-deep)] p-4 select-text sm:p-6 lg:order-2 lg:min-h-0 lg:flex-1 lg:overflow-auto"
+          className="relative order-1 flex min-h-[60vh] flex-col items-center gap-5 overflow-visible bg-[var(--ink-deep)] p-4 select-text sm:p-6 lg:order-3 lg:min-h-0 lg:flex-1 lg:overflow-auto"
           style={{
             backgroundImage:
               "radial-gradient(800px 500px at 50% -10%, color-mix(in srgb, var(--chartreuse) 4%, transparent), transparent 60%), radial-gradient(700px 400px at 100% 100%, color-mix(in srgb, var(--sky) 3%, transparent), transparent 55%)",
@@ -786,10 +1002,28 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             compileToken={compileToken}
           />
         </div>
+        {/* LaTeX source editor (second on mobile, middle on desktop) */}
+        <ResumeSourcePane
+          value={latexSource}
+          onChange={handleSourceChange}
+          errors={compileErrors}
+          saveState={saveState}
+          isDirty={isSourceDirty}
+          savedRev={savedRev}
+          cursor={cursorPos}
+          onCursor={(line, column) => setCursorPos({ line, column })}
+          onSelectionText={quoteToChat}
+          onSave={() => void saveSource(true)}
+          revealLine={revealLine}
+          logOpen={logOpen}
+          onToggleLog={() => setLogOpen((v) => !v)}
+          onRevealLine={(line) => setRevealLine({ line, nonce: Date.now() })}
+          logTail={compileLogTail}
+        />
         {!refineCollapsed && (
         <section
           aria-label="Refine workspace"
-          className="order-2 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl lg:order-1 lg:h-full lg:rounded-none lg:border-0 lg:border-r"
+          className="order-3 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl lg:order-1 lg:h-full lg:rounded-none lg:border-0 lg:border-r"
         >
           {/* Rail header: collapse + Chat / ATS / Diff tabs */}
           <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] bg-[var(--ink-soft)]/60 px-2 py-1.5">

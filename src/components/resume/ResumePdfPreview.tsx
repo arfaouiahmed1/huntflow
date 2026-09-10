@@ -1,8 +1,21 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { FileCheck2, Download, AlertTriangle, Loader2, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SynctexViewer from "./SynctexViewer";
+import type { SynctexForwardResult, SynctexReverseResult } from "./SynctexViewer";
+import type { ForwardMark } from "./ResumePdfViewer";
+
+// pdf.js needs window/canvas: never SSR the viewer.
+const ResumePdfViewer = dynamic(() => import("./ResumePdfViewer"), {
+  ssr: false,
+  loading: () => (
+    <div data-testid="pdf-viewer-loading" className="mx-auto flex max-w-[900px] items-center gap-3 px-4 py-6 text-xs text-[var(--paper)]">
+      <Loader2 className="h-4 w-4 animate-spin text-[var(--chartreuse)]" aria-hidden /> Loading PDF viewer…
+    </div>
+  ),
+});
 
 type PdfState = "idle" | "compiling" | "ready" | "no-tex" | "error";
 interface Props {
@@ -14,8 +27,13 @@ interface Props {
   compileToken: string | null;
   targetLine?: number | null;
   highlightBlock?: string | null;
-  onForward?: (r: { page: number; x: number; y: number }) => void;
-  onReverse?: (r: { line: number; column: number }) => void;
+  forwardMark?: ForwardMark | null;
+  pickReverse?: boolean;
+  reverseResult?: SynctexReverseResult | null;
+  onForward?: (r: SynctexForwardResult) => void;
+  onPickReverse: () => void;
+  onReversePick: (page: number, x: number, y: number) => void;
+  onReverseDisabledClick: () => void;
 }
 
 export default function ResumePdfPreview({
@@ -27,8 +45,13 @@ export default function ResumePdfPreview({
   compileToken,
   targetLine,
   highlightBlock,
+  forwardMark,
+  pickReverse,
+  reverseResult,
   onForward,
-  onReverse,
+  onPickReverse,
+  onReversePick,
+  onReverseDisabledClick,
 }: Props) {
   if (pdfState === "compiling") {
     return (
@@ -54,8 +77,8 @@ export default function ResumePdfPreview({
       >
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" />
         <span>
-          <strong>Compile requires local TeX</strong> — showing the HTML approximation below. Install TeX Live or MiKTeX and press
-          “Compile PDF preview” to see the real compiled output here.
+          <strong>Compile requires local TeX</strong> — no preview available without a compiled PDF. Install TeX Live
+          or MiKTeX and press “Compile PDF preview” to see the real compiled output here.
         </span>
       </div>
     );
@@ -107,9 +130,20 @@ export default function ResumePdfPreview({
         targetLine={targetLine ?? 1}
         highlightBlock={highlightBlock ?? null}
         onForwardResult={onForward}
-        onReverseResult={onReverse}
+        reverseResult={reverseResult ?? null}
+        pickingReverse={pickReverse ?? false}
+        onPickReverse={onPickReverse}
       />
-      <iframe src={pdfUrl} title="Compiled resume PDF" data-testid="compiled-pdf-frame" className="h-[860px] w-full bg-white" />
+      <div className="max-h-[880px] overflow-auto bg-neutral-100 p-3 sm:p-4">
+        <ResumePdfViewer
+          file={pdfUrl}
+          token={compileToken}
+          forwardMark={forwardMark ?? null}
+          pickReverse={pickReverse ?? false}
+          onReversePick={onReversePick}
+          onReverseDisabledClick={onReverseDisabledClick}
+        />
+      </div>
     </section>
   );
 }

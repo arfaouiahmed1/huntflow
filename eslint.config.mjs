@@ -17,6 +17,8 @@ const eslintConfig = defineConfig([
     ".claude/**",
     "scripts/**",
     "data/**",
+    // Generated pdf.js worker bundle (postinstall output, not source):
+    "public/pdf/**",
   ]),
 ]);
 

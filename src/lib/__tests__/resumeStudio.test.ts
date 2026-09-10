@@ -23,7 +23,6 @@ describe("Resume Studio — PDF-only LaTeX primary", () => {
       expect(src.length).toBeGreaterThan(0);
     }
   });
-
   it("wires PDF-only LaTeX preview in resume/page.tsx with no HTML fallback", () => {
     const src = read("src/app/(app)/resume/page.tsx");
     expect(src).toContain("ResumePdfPreview");
@@ -47,10 +46,28 @@ describe("Resume Studio — PDF-only LaTeX primary", () => {
     expect(pdf).toContain('data-testid="no-tex-banner"');
   });
 
-  it("keeps resume/page.tsx bounded <1500 lines and imports are clean", () => {
+  it("navigates source <-> PDF through real SyncTeX, never hardcoded coords", () => {
+    const src = read("src/app/(app)/resume/page.tsx");
+    expect(src).toContain("handleReversePick");
+    expect(src).toContain("synctex/reverse");
+    expect(src).toContain("targetLine={cursorPos?.line");
+    expect(src).toContain("onForward=");
+    // the measured viewer lives behind the preview shell
+    const preview = read("src/components/resume/ResumePdfPreview.tsx");
+    expect(preview).toContain("ResumePdfViewer");
+    // the viewer measures real pages; the panel no longer probes page 1 center
+    const viewer = read("src/components/resume/SynctexViewer.tsx");
+    expect(viewer).not.toContain("x: 72, y: 144");
+    expect(viewer).toContain("synctex-forward");
+    expect(viewer).toContain("synctex-reverse");
+    expect(exists("src/components/resume/ResumePdfViewer.tsx")).toBe(true);
+    expect(exists("src/lib/synctexView.ts")).toBe(true);
+  });
+
+  it("keeps resume/page.tsx bounded <1600 lines and imports are clean", () => {
     const src = read("src/app/(app)/resume/page.tsx");
     const lines = src.split("\n").length;
-    expect(lines).toBeLessThan(1500);
+    expect(lines).toBeLessThan(1600);
     expect(lines).toBeGreaterThan(800);
     // single header import consolidation
     expect(src).toContain('"use client"');

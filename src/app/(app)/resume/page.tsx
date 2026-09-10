@@ -238,6 +238,11 @@ export default function ResumeStudioPage() {
   const [logOpen, setLogOpen] = useState(false);
   const [cursorPos, setCursorPos] = useState<{ line: number; column: number } | null>(null);
   const [revealLine, setRevealLine] = useState<{ line: number; nonce: number } | null>(null);
+  // Bidirectional SyncTeX: forward mark from source cursor, reverse pick
+  // from real PDF clicks. Both require a live compile token.
+  const [forwardMark, setForwardMark] = useState<{ page: number; x: number; y: number; nonce: number } | null>(null);
+  const [pickReverse, setPickReverse] = useState(false);
+  const [reverseResult, setReverseResult] = useState<{ line: number; column: number } | null>(null);
   const isSourceDirty = lastSavedTex === null ? sourceTouched && latexSource.trim().length > 0 : latexSource !== lastSavedTex;
   const compileErrors: LatexError[] = useMemo(() => parseLatexErrors(compileLogTail), [compileLogTail]);
   const [compilingPdf, setCompilingPdf] = useState(false);
@@ -432,6 +437,34 @@ export default function ResumeStudioPage() {
       void compilePreview();
     }
   }, [latexSource, pdfState, compilePreview]);
+  // Reverse SyncTeX from a real PDF click: PDF point -> source line,
+  // revealed in the editor. Disarmed after one use.
+  const handleReversePick = useCallback(
+    async (page: number, x: number, y: number) => {
+      if (!compileToken) {
+        errToast("Compile first to enable SyncTeX — no build token yet.");
+        return;
+      }
+      try {
+        const res = await fetch("/api/resume/synctex/reverse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: compileToken, page, x, y }),
+        });
+        const data = (await res.json()) as { ok?: boolean; line?: number; column?: number; error?: { message?: string } };
+        if (!res.ok || !data.ok || typeof data.line !== "number") {
+          throw new Error(data.error?.message ?? "SyncTeX reverse failed");
+        }
+        setReverseResult({ line: data.line, column: data.column ?? 0 });
+        setRevealLine({ line: data.line, nonce: Date.now() });
+        setPickReverse(false);
+        success(`PDF page ${page} maps to source line ${data.line}.`);
+      } catch (e: unknown) {
+        errToast(e instanceof Error ? e.message : "SyncTeX reverse failed");
+      }
+    },
+    [compileToken, errToast, success]
+  );
   // Overleaf-style refs so the debounce timers below always see fresh
   const pdfStateRef = useRef(pdfState);
   const sourceTouchedRef = useRef(sourceTouched);
@@ -1000,6 +1033,14 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             compiledTex={compiledTex}
             latexSource={latexSource}
             compileToken={compileToken}
+            targetLine={cursorPos?.line ?? 1}
+            forwardMark={forwardMark}
+            pickReverse={pickReverse}
+            reverseResult={reverseResult}
+            onForward={(r) => setForwardMark({ page: r.page, x: r.x, y: r.y, nonce: Date.now() })}
+            onPickReverse={() => setPickReverse((v) => !v)}
+            onReversePick={(page, x, y) => void handleReversePick(page, x, y)}
+            onReverseDisabledClick={() => errToast("Compile first to enable SyncTeX — no build token yet.")}
           />
         </div>
         {/* LaTeX source editor (second on mobile, middle on desktop) */}

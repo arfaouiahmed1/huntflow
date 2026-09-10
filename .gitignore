@@ -20,6 +20,9 @@
 # production
 /build
 
+# generated pdf.js worker (postinstall copies the version-pinned bundle)
+/public/pdf/
+
 # misc
 .DS_Store
 *.pem

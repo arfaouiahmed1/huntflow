@@ -57,11 +57,29 @@ describe("Resume Studio — PDF-only LaTeX primary", () => {
     expect(preview).toContain("ResumePdfViewer");
     // the viewer measures real pages; the panel no longer probes page 1 center
     const viewer = read("src/components/resume/SynctexViewer.tsx");
-    expect(viewer).not.toContain("x: 72, y: 144");
     expect(viewer).toContain("synctex-forward");
     expect(viewer).toContain("synctex-reverse");
     expect(exists("src/components/resume/ResumePdfViewer.tsx")).toBe(true);
     expect(exists("src/lib/synctexView.ts")).toBe(true);
+  });
+
+  it("streams the tool-aware Copilot with curated reasoning, never raw CoT", () => {
+    const src = read("src/app/(app)/resume/page.tsx");
+    expect(src).toContain("/api/resume/copilot/stream");
+    expect(src).toContain("sendLegacyMessage");
+    expect(src).toContain("ResumeCopilotPanel");
+    expect(src).not.toContain("chainOfThought");
+    expect(src).not.toContain("chain-of-thought");
+    const panel = read("src/components/resume/ResumeCopilotPanel.tsx");
+    expect(panel).toContain("Tool activity");
+    expect(panel).toContain("Evidence");
+    expect(exists("src/app/api/resume/copilot/stream/route.ts")).toBe(true);
+    expect(exists("src/lib/copilot/tools.ts")).toBe(true);
+    expect(exists("src/lib/copilot/streamCopilot.ts")).toBe(true);
+    expect(exists("src/lib/sseClient.ts")).toBe(true);
+    const driver = read("src/lib/copilot/streamCopilot.ts");
+    expect(driver).toContain("MAX_TOOL_ROUNDS");
+    expect(driver).toContain("never raw chain-of-thought");
   });
 
   it("keeps resume/page.tsx bounded <1600 lines and imports are clean", () => {

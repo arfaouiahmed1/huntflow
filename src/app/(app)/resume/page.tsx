@@ -1,13 +1,9 @@
 "use client";
 import Select from "@/components/ui/Select";
-/* eslint-disable react-hooks/set-state-in-effect, react-hooks/purity */
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
   FileText,
-  Sparkles,
-  Bot,
-  Send,
   Download,
   Check,
   Copy,
@@ -15,10 +11,7 @@ import {
   Save,
   Undo2,
   MessageSquarePlus,
-  Archive,
   SlidersHorizontal,
-  Code2,
-  Cpu,
   ShieldCheck,
   AlertTriangle,
   PanelLeftClose,
@@ -39,14 +32,11 @@ import { resolveLatexLatency } from "@/lib/resumeCompile";
 import ResumeSourcePane from "@/components/resume/ResumeSourcePane";
 import { parseLatexErrors } from "@/lib/latexErrors";
 import type { LatexError } from "@/lib/latexErrors";
+import { readSseStream } from "@/lib/sseClient";
+import type { SsePacket } from "@/lib/sseClient";
 
-interface ChatMessage {
-  id: string;
-  sender: "user" | "assistant";
-  text: string;
-  actionSummary?: string;
-  timestamp: string;
-}
+import ResumeCopilotPanel from "@/components/resume/ResumeCopilotPanel";
+import type { ChatMessage } from "@/components/resume/ResumeCopilotPanel";
 
 interface TemplateMeta {
   id: string;
@@ -122,14 +112,6 @@ const ALL_TEMPLATES: TemplateMeta[] = [
     font: "font-sans",
     accent: "bg-blue-800",
   },
-];
-
-const QUICK_PROMPTS = [
-  { label: "ATS keyword polish", prompt: "Analyze this resume against modern ATS algorithms and optimize keyword density without keyword stuffing." },
-  { label: "Quantify achievements", prompt: "Rewrite work experience bullets using the Google XYZ formula (Accomplished [X], measured by [Y], by doing [Z])." },
-  { label: "Cut to exact 1-page", prompt: "Tighten spacing and condense bullet points so this resume fits perfectly on a single page." },
-  { label: "Ingest vault evidence", prompt: "Scan my Profile Vault and pull in verified technical project metrics and production achievements." },
-  { label: "DACH CV style", prompt: "Format this into a German Tabellarischer Lebenslauf structure." },
 ];
 
 function profileToResume(profile: ReturnType<typeof useApp>["profile"]): ResumeContent {
@@ -303,6 +285,9 @@ export default function ResumeStudioPage() {
     x: number;
     y: number;
   }>({ visible: false, text: "", x: 0, y: 0 });
+  // Copilot selection context: quoted source/PDF content sent with the next
+  // turn (consumed + cleared on send). Set by both quote paths below.
+  const [selCtx, setSelCtx] = useState<{ text: string; sourceLine?: number } | null>(null);
 
   // Chat copilot state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -578,13 +563,14 @@ export default function ResumeStudioPage() {
     (text: string) => {
       const quote = `Rewrite and optimize this section: "${text.slice(0, 2000)}"`;
       setChatInput(quote);
+      setSelCtx({ text: text.slice(0, 4000), sourceLine: cursorPos?.line });
       setRefineTab("chat");
       setRefineCollapsed(false);
       setTimeout(() => {
         chatInputRef.current?.focus();
       }, 50);
     },
-    []
+    [cursorPos?.line]
   );
 
   const applyUpdate = useCallback(
@@ -685,11 +671,118 @@ export default function ResumeStudioPage() {
     }, 50);
   };
 
+  // Legacy JSON Copilot path — kept as the fallback when streaming is
+  // unavailable (old clients, proxies stripping SSE, pre-first-byte errors).
+  const sendLegacyMessage = async (text: string) => {
+    const res = await fetch("/api/resume/copilot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: text,
+        resume,
+        templateId: selectedTemplate,
+        history: chatMessages.slice(-6).map((m) => ({ role: m.sender, content: m.text })),
+        targetJob: selectedJob ? { title: selectedJob.title, company: selectedJob.company, description: selectedJob.jobDescription } : undefined,
+      }),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `Agent returned ${res.status}`);
+    }
+    const data = await res.json();
+    const updated = data.updatedResume as ResumeContent;
+    const aiMsg: ChatMessage = {
+      id: `ai-${Date.now()}`,
+      sender: "assistant",
+      text: data.reply,
+      actionSummary: data.actionSummary,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    setChatMessages((prev) => [...prev, aiMsg]);
+    if (updated) {
+      applyUpdate(updated);
+      success(data.actionSummary || "Resume updated by AI Copilot.");
+    }
+    if (data.tex) {
+      // Explicit Copilot output: takes source ownership so later
+      // structured renders cannot silently clobber it.
+      setSourceTouched(true);
+      setLatexSource(data.tex);
+    }
+  };
+
+  const applyStreamDone = (aiId: string, done: Record<string, unknown>) => {
+    const reply = typeof done.reply === "string" && done.reply ? done.reply : "Done.";
+    const cites = Array.isArray(done.cites)
+      ? (done.cites as { docName?: unknown; chunkIndex?: unknown }[])
+          .filter((c) => typeof c.docName === "string")
+          .map((c) => ({ doc: c.docName as string, chunk: typeof c.chunkIndex === "number" ? c.chunkIndex : 0 }))
+      : [];
+    setChatMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: reply, streaming: false, cites } : m)));
+    const updated = done.updatedResume as ResumeContent | null;
+    if (updated) {
+      applyUpdate(updated);
+      success(typeof done.actionSummary === "string" && done.actionSummary ? done.actionSummary : "Resume updated by AI Copilot.");
+    }
+    const tex = typeof done.tex === "string" && done.tex ? done.tex : null;
+    if (tex) {
+      setSourceTouched(true);
+      setLatexSource(tex);
+      if (!updated) success(typeof done.actionSummary === "string" && done.actionSummary ? done.actionSummary : "Source updated by AI Copilot.");
+    }
+  };
+
+  const handleStreamPacket = (aiId: string, packet: SsePacket) => {
+    const data = (packet.data ?? {}) as Record<string, unknown>;
+    switch (packet.event) {
+      case "reasoning": {
+        const note = typeof data.note === "string" ? data.note : "";
+        if (!note) break;
+        setChatMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, reasoning: [...(m.reasoning ?? []), note].slice(-8) } : m)));
+        break;
+      }
+      case "tool_call": {
+        const tool = typeof data.tool === "string" ? data.tool : "tool";
+        const detail = typeof data.detail === "string" ? data.detail : "";
+        const status = data.status === "error" || data.status === "partial" ? data.status : "ok";
+        setChatMessages((prev) =>
+          prev.map((m) => (m.id === aiId ? { ...m, tools: [...(m.tools ?? []), { tool, detail, status }] } : m))
+        );
+        break;
+      }
+      case "token": {
+        const delta = typeof data.delta === "string" ? data.delta : "";
+        if (!delta) break;
+        setChatMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: `${m.text}${delta}` } : m)));
+        break;
+      }
+      case "latex_log": {
+        const tail = typeof data.logTail === "string" ? data.logTail : "";
+        if (tail) setCompileLogTail(tail);
+        break;
+      }
+      case "done":
+        applyStreamDone(aiId, data);
+        break;
+      case "error": {
+        const message = typeof data.message === "string" ? data.message : "Copilot stream failed";
+        setChatMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, streaming: false, error: message } : m)));
+        errToast(message);
+        break;
+      }
+      default:
+        break;
+    }
+  };
+
   const handleSendMessage = async (customPrompt?: string) => {
     const text = customPrompt || chatInput.trim();
     if (!text || copilotBusy) return;
 
     if (!customPrompt) setChatInput("");
+    // Consume the quoted selection exactly once.
+    const selection = selCtx;
+    setSelCtx(null);
 
     const userMsg: ChatMessage = {
       id: `usr-${Date.now()}`,
@@ -697,53 +790,60 @@ export default function ResumeStudioPage() {
       text,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
+    const aiId = `ai-${Date.now()}`;
 
-    setChatMessages((prev) => [...prev, userMsg]);
+    setChatMessages((prev) => [
+      ...prev,
+      userMsg,
+      { id: aiId, sender: "assistant", text: "", streaming: true, timestamp: userMsg.timestamp },
+    ]);
     setCopilotBusy(true);
 
+    const payload = {
+      message: text,
+      resume,
+      tex: latexSource,
+      templateId: selectedTemplate,
+      history: chatMessages.slice(-6).map((m) => ({ role: m.sender, content: m.text })),
+      targetJob: selectedJob
+        ? { title: selectedJob.title, company: selectedJob.company, description: selectedJob.jobDescription }
+        : undefined,
+      selection: selection
+        ? { text: selection.text, sourceLine: selection.sourceLine ?? cursorPos?.line ?? undefined }
+        : undefined,
+      jobId: selectedJobId || undefined,
+    };
+
     try {
-      const res = await fetch("/api/resume/copilot", {
+      const res = await fetch("/api/resume/copilot/stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          resume,
-          templateId: selectedTemplate,
-          history: chatMessages.slice(-6).map((m) => ({ role: m.sender, content: m.text })),
-          targetJob: selectedJob ? { title: selectedJob.title, company: selectedJob.company, description: selectedJob.jobDescription } : undefined,
-        }),
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify(payload),
       });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Agent returned ${res.status}`);
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!res.ok || !contentType.includes("text/event-stream")) {
+        // Fall back to the legacy JSON contract (same visible outcome).
+        setChatMessages((prev) => prev.filter((m) => m.id !== aiId));
+        await sendLegacyMessage(text);
+        return;
       }
-
-      const data = await res.json();
-      const updated = data.updatedResume as ResumeContent;
-
-      const aiMsg: ChatMessage = {
-        id: `ai-${Date.now()}`,
-        sender: "assistant",
-        text: data.reply,
-        actionSummary: data.actionSummary,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      };
-
-      setChatMessages((prev) => [...prev, aiMsg]);
-
-      if (updated) {
-        applyUpdate(updated);
-        success(data.actionSummary || "Resume updated by AI Copilot.");
-      }
-      if (data.tex) {
-        // Explicit Copilot output: takes source ownership so later
-        // structured renders cannot silently clobber it.
-        setSourceTouched(true);
-        setLatexSource(data.tex);
-      }
+      await readSseStream(res, (packet) => handleStreamPacket(aiId, packet));
+      setChatMessages((prev) => prev.map((m) => (m.id === aiId && m.streaming ? { ...m, streaming: false } : m)));
     } catch (err: unknown) {
-      errToast(err instanceof Error ? err.message : "AI Copilot request failed");
+      // Transport failure before/during the stream: try legacy once, else err.
+      try {
+        setChatMessages((prev) => prev.filter((m) => m.id !== aiId));
+        await sendLegacyMessage(text);
+      } catch (legacyErr: unknown) {
+        setChatMessages((prev) =>
+          prev.map((m) =>
+            m.id === aiId
+              ? { ...m, streaming: false, error: err instanceof Error ? err.message : "AI Copilot request failed" }
+              : m
+          )
+        );
+        errToast(legacyErr instanceof Error ? legacyErr.message : "AI Copilot request failed");
+      }
     } finally {
       setCopilotBusy(false);
     }
@@ -1101,130 +1201,25 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           </div>
 
           {refineTab === "chat" && (
-          <div role="tabpanel" id="refine-panel-chat" aria-labelledby="refine-tab-chat" className="flex min-h-0 flex-1 flex-col">
-          {/* Copilot status row */}
-          <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--ink-soft)]/60 px-4 py-2.5">
-            <div className="flex items-center gap-2">
-              <div className="relative grid h-7 w-7 place-items-center rounded-lg border border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10">
-                <Bot className="h-3.5 w-3.5 text-[var(--chartreuse)]" aria-hidden />
-                <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--chartreuse)]" aria-hidden />
-              </div>
-              <div>
-                <p className="font-display text-xs font-bold text-[var(--paper)]">AI Resume Copilot</p>
-                <p className="flex items-center gap-1 text-[10px] text-dim">
-                  <Archive className="h-2.5 w-2.5 text-[var(--chartreuse)]" aria-hidden /> Vault RAG connected
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setPromptInspectorOpen(!promptInspectorOpen)}
-                aria-expanded={promptInspectorOpen}
-                aria-label="Toggle context inspector"
-                title="Toggle context inspector"
-                className={cn(
-                  "grid h-11 w-11 place-items-center rounded-lg border text-xs transition-colors",
-                  promptInspectorOpen
-                    ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/15 text-[var(--chartreuse)]"
-                    : "border-[var(--line)] text-dim hover:text-[var(--paper)] hover:bg-white/[0.04]"
-                )}
-              >
-                <Code2 className="h-3.5 w-3.5" aria-hidden />
-              </button>
-              {copilotBusy && (
-                <span role="status" className="flex items-center gap-1.5 font-mono text-[10px] text-[var(--chartreuse)] animate-pulse">
-                  <Sparkles className="h-3 w-3" aria-hidden /> Optimizing…
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Real-time Prompt Inspector Panel */}
-          {promptInspectorOpen && (
-            <div className="border-b border-[var(--line)] bg-black/60 p-3 text-[11px] font-mono text-dim space-y-1.5 max-h-48 overflow-y-auto">
-              <div className="flex items-center justify-between text-[var(--chartreuse)]">
-                <span className="font-bold flex items-center gap-1"><Cpu className="h-3 w-3" /> Context Inspector</span>
-                <span>live session</span>
-              </div>
-              <p className="text-white/80">Copilot: HUNTFLOW Elite Resume Strategist, grounded in your vault.</p>
-              <p className="text-white/60">Template: {selectedTemplate} | Mode: {docKind} | Engine: LaTeX PDF</p>
-              <p className="text-white/40 truncate">Active context: {resume.experience?.length || 0} roles, {resume.skills?.length || 0} skills{selectedJob ? ` · target: ${selectedJob.company} — ${selectedJob.title}` : ""}</p>
-              <p className="text-white/40">Sampling parameters live server-side; nothing is hidden here.</p>
-            </div>
-          )}
-
-          {/* Quick Prompts Chips */}
-          <div className="flex gap-1.5 overflow-x-auto border-b border-[var(--line)] p-2.5 bg-black/20 no-scrollbar">
-            {QUICK_PROMPTS.map((qp, idx) => (
-              <button
-                key={idx}
-                disabled={copilotBusy}
-                onClick={() => handleSendMessage(qp.prompt)}
-                className="shrink-0 rounded-full border border-[var(--line)] bg-white/[0.03] px-3 py-1 text-[10px] font-semibold tracking-tight text-[var(--paper)] transition-all hover:border-[var(--chartreuse)]/40 hover:bg-[var(--chartreuse)]/10 hover:text-[var(--chartreuse)] active:scale-[0.98] disabled:opacity-50 cursor-pointer shadow-sm"
-              >
-                {qp.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Chat Messages */}
-          <div role="log" aria-label="Copilot conversation" className="max-h-[50vh] min-h-0 flex-1 space-y-4 overflow-y-auto p-4 lg:max-h-none">
-            {chatMessages.map((msg) => {
-              const isAssistant = msg.sender === "assistant";
-              return (
-                <div
-                  key={msg.id}
-                  className={cn("flex flex-col space-y-1", isAssistant ? "items-start" : "items-end")}
-                >
-                  <div
-                    className={cn(
-                      "max-w-[92%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-sm",
-                      isAssistant
-                        ? "border border-[var(--line)] bg-white/[0.04] text-[var(--paper)] backdrop-blur"
-                        : "bg-[var(--chartreuse)] text-neutral-950 font-medium shadow-[0_4px_16px_rgba(185,237,87,0.22)]"
-                    )}
-                  >
-                    <div className="whitespace-pre-wrap">{msg.text}</div>
-
-                    {msg.actionSummary && (
-                      <div className="mt-2.5 flex items-center gap-1.5 rounded-xl border border-[var(--chartreuse)]/25 bg-[var(--chartreuse)]/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-[var(--chartreuse)]">
-                        <Check className="h-3 w-3" /> {msg.actionSummary}
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-[10px] font-medium tracking-tight text-dim/70 px-1">{msg.timestamp}</span>
-                </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Chat Input Bar */}
-          <div className="border-t border-[var(--line)] p-3 bg-[var(--ink-soft)]/50 backdrop-blur">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendMessage();
+            <ResumeCopilotPanel
+              messages={chatMessages}
+              messagesEndRef={messagesEndRef}
+              inspectorOpen={promptInspectorOpen}
+              onToggleInspector={() => setPromptInspectorOpen((v) => !v)}
+              busy={copilotBusy}
+              contextLine={{
+                templateId: selectedTemplate,
+                docKind,
+                roles: resume.experience?.length || 0,
+                skills: resume.skills?.length || 0,
+                target: selectedJob ? `${selectedJob.company} — ${selectedJob.title}` : null,
               }}
-              className="flex items-center gap-2"
-            >
-              <input
-                ref={chatInputRef}
-                type="text"
-                value={chatInput}
-                disabled={copilotBusy}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask AI Copilot to rewrite, enhance metrics, or optimize..."
-                aria-label="Ask the AI Copilot to rewrite, enhance metrics, or optimize"
-                className="flex min-h-[44px] flex-1 rounded-xl border border-[var(--line)] bg-white/[0.04] px-3.5 py-2 text-xs text-[var(--paper)] outline-none transition-all placeholder:text-dim focus:border-[var(--chartreuse)]/50 focus:bg-white/[0.06]"
-              />
-              <Button type="submit" size="sm" disabled={!chatInput.trim() || copilotBusy} loading={copilotBusy} aria-label="Send message" className="min-h-[44px] shadow-[var(--glow)]">
-                <Send className="h-3.5 w-3.5" />
-              </Button>
-            </form>
-          </div>
-          </div>
+              input={chatInput}
+              onInputChange={setChatInput}
+              onSubmit={() => void handleSendMessage()}
+              onQuickPrompt={(prompt) => void handleSendMessage(prompt)}
+              inputRef={chatInputRef}
+            />
           )}
           {refineTab === "ats" && (
           <div role="tabpanel" id="refine-panel-ats" aria-labelledby="refine-tab-ats" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">

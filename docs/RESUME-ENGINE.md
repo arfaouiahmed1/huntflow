@@ -2,12 +2,19 @@
 
 ## Rendering model
 
-Resume Studio has two distinct renderers:
+Resume Studio is PDF-only. There is exactly one preview:
 
-1. The **browser structure preview** provides quick feedback while editing.
-2. The **LaTeX compiler** produces the downloadable PDF from the selected `.tex` template.
+1. The **LaTeX source editor** (Monaco: line numbers, find, LaTeX
+   highlighting, command snippets, Ctrl+S) holds the editable `.tex`.
+2. The **LaTeX compiler** produces the downloadable PDF from that source.
+3. The **PDF viewer** (pdf.js, same-origin worker) renders the compiled
+   artifact with zoom and SyncTeX navigation.
 
-The preview is not a pixel-perfect PDF emulator. It mirrors hierarchy, density, and font category, while LaTeX remains the source of truth for line breaking, pagination, spacing, and final glyph rendering.
+There is no HTML fallback and no markup-as-PDF: without a compiled PDF
+the Studio shows explicit `no-tex` / `error` / `compiling` states, never
+a stale artifact or a fabricated document. Typst markup survives only as
+an internal markup API (`POST /api/resume/compile-typst`) with no Studio
+surface and no PDF claims.
 
 ## Typography
 
@@ -15,7 +22,7 @@ The default Classic LaTeX ATS template uses **Latin Modern Roman**. Latin Modern
 
 Templates that intentionally use a sans-serif voice load **Latin Modern Sans**. Template metadata shown in the UI must match the actual preamble so the chosen visual language is explicit.
 
-The web preview uses STIX Two Text as a self-hosted document serif. It is a browser-safe structural approximation with a scholarly texture; it is not falsely presented as the compiled LaTeX font.
+The Studio gallery shows real registry metadata (description, audiences, LaTeX font) with icons and token swatches. It shows no numeric scores and no thumbnails — only previews rendered from real compiled PDFs would be honest, so the gallery ships none rather than mockups.
 
 ## Template principles
 
@@ -87,6 +94,53 @@ retry — max 3 patches, then error with full log tail
   `error` — with keepalives and client-abort wiring. Input is capped at
   200k characters of TeX (HTTP 413 beyond) and `maxPatches` is clamped
   server-side.
+
+## Source ownership & persistence
+
+- Hand edits, Copilot output, draft loads, and confirmed template switches
+  are explicit: background re-renders never clobber edited source.
+- Debounced auto-compile (900ms) runs on `ready`/`error` states; explicit
+  Save persists to a single `studio-main` row in `resume_docs` (server
+  SQLite is truth — never localStorage), with autosave after the first
+  explicit save and a `409 STALE_REV` guard against stale overwrites.
+- Additive columns `last_compile_token`, `last_compile_at`, `editor_rev`
+  migrate idempotently; old installs backfill defaults in place.
+
+## SyncTeX navigation
+
+- Forward: the live editor cursor line → `POST /api/resume/synctex/forward`
+  → measured PDF point → scrolled, flashing marker.
+- Reverse: arming reverse (`Jump to source`) makes the next PDF click map
+  through measured page geometry → `POST /api/resume/synctex/reverse` →
+  source line revealed in the editor. No hardcoded coordinates anywhere;
+  without a live compile token SyncTeX stays disabled with a reason.
+
+## Copilot streaming & tools
+
+- `POST /api/resume/copilot/stream` (Next.js SSE, `nodejs` + `force-dynamic`,
+  keepalive + abort wiring) emits `config | reasoning | tool_call | token |
+  patch | latex_log | ats_score | done | error`. The legacy JSON route is
+  preserved as the fallback. Reasoning frames are server-curated
+  operational summaries — raw chain-of-thought never leaves the server.
+- Whitelisted tools with `status / summary / next_actions / artifacts`:
+  `search_vault`, `read_selection`, `patch_tex` (exact unique anchors;
+  preamble/shell constructs refused), `compile_check` (real compile +
+  ATS), `retarget` (deterministic JD-overlap re-rank, facts untouched).
+  At most 2 tool rounds, 1 streamed composition, 1 structured edit call.
+
+## Attachments & viewer worker
+
+- `POST /api/resume/copilot/attachments` accepts PDF/PNG/JPEG/WebP only
+  (MIME + extension + magic bytes, encrypted-PDF probe): max 3 files,
+  10 MB each, 25 MB total. PDFs are extracted server-side (bounded,
+  cited); images travel base64 to the first vision-capable chain entry
+  (registry `vision` capability + model match) and are never described
+  locally. Bytes live in an ephemeral consume-once cache (10-min TTL) —
+  descriptors only reach the client.
+- The pdf.js worker loads same-origin from `public/pdf/` (postinstall
+  copies the version-pinned bundle; gitignored). The Monaco editor
+  runtime loads from its CDN on first use and reports an honest offline
+  failure instead of a fake editor.
 
 ## Verification checklist
 

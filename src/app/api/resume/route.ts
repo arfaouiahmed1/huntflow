@@ -30,6 +30,9 @@ function normalizeDoc(body: Partial<ResumeDoc> & { content?: unknown }): ResumeD
     sourceDocId: typeof body.sourceDocId === "string" ? body.sourceDocId : existing?.sourceDocId,
     targetJobId: typeof body.targetJobId === "string" ? body.targetJobId : existing?.targetJobId,
     autoCompile: typeof body.autoCompile === "boolean" ? body.autoCompile : (existing?.autoCompile ?? true),
+    lastCompileToken: typeof body.lastCompileToken === "string" && body.lastCompileToken ? body.lastCompileToken : existing?.lastCompileToken,
+    lastCompileAt: typeof body.lastCompileAt === "string" && body.lastCompileAt ? body.lastCompileAt : existing?.lastCompileAt,
+    editorRev: Number.isFinite(body.editorRev) ? Math.max(0, Math.floor(body.editorRev as number)) : (existing?.editorRev ?? 0),
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -49,6 +52,16 @@ export async function POST(req: NextRequest) {
     const doc = normalizeDoc((raw ?? {}) as Partial<ResumeDoc>);
     if (!doc) return jsonError("Invalid resume payload.", 400, "BAD_BODY");
     if (!doc.tex && !doc.content) return jsonError("tex or content is required.", 400, "BAD_BODY");
+    // Stale-write guard: an explicit editorRev older than the stored one
+    // means the client edited from a stale snapshot — refuse instead of
+    // silently clobbering newer source.
+    const incomingRev = (raw as Partial<ResumeDoc> | null)?.editorRev;
+    if (typeof incomingRev === "number") {
+      const stored = resumeRepo.get(doc.id);
+      if (stored && incomingRev < (stored.editorRev ?? 0)) {
+        return jsonError("Stale document revision — reload and reapply your edits.", 409, "STALE_REV");
+      }
+    }
     resumeRepo.upsert(doc);
     return Response.json({ ok: true, doc });
   } catch (err) {
@@ -86,6 +99,7 @@ export async function PUT(req: NextRequest) {
       tex: "",
       source: "scratch",
       autoCompile: true,
+      editorRev: 0,
       createdAt: now,
       updatedAt: now,
     };

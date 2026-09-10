@@ -7,7 +7,11 @@ export interface ResumeTemplateMeta {
   recommendationReason: string;
   recommendedFor: string[];
   fontFamily: string;
-  /** 100 = maximally ATS-safe (single column, standard headers, no tables). */
+  /**
+   * Design heuristic 0-100 (single column, standard headers, no tables).
+   * NOT a measurement from any ATS vendor: never display it as a score
+   * or guarantee. The Studio shows only the live computed ATS diagnostic.
+   */
   atsScore: number;
   kinds: ResumeDocKind[];
   fileName: string;

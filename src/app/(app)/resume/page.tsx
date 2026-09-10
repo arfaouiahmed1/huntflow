@@ -1,29 +1,17 @@
 "use client";
 import Select from "@/components/ui/Select";
-/* eslint-disable react-hooks/set-state-in-effect, react-hooks/purity */
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
   FileText,
-  Sparkles,
-  Bot,
-  Send,
   Download,
   Check,
   Copy,
   Layers,
-  Zap,
   Save,
   Undo2,
   MessageSquarePlus,
-  FileCode,
-  Archive,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
   SlidersHorizontal,
-  Code2,
-  Cpu,
   ShieldCheck,
   AlertTriangle,
   PanelLeftClose,
@@ -36,105 +24,21 @@ import { ResumeContent } from "@/types";
 import { cn } from "@/lib/utils";
 import { analyzeAts } from "@/lib/ats/analyze";
 import ResumePdfPreview from "@/components/resume/ResumePdfPreview";
-import ResumeHtmlFallback from "@/components/resume/ResumeHtmlFallback";
 import ResumeCompileControls from "@/components/resume/ResumeCompileControls";
 import ResumeDiff, { computeDiff, getChangedSections } from "@/components/resume/ResumeDiff";
-import { renderTypstResume } from "@/lib/pdf/typstRenderer";
 import ResumeVariantsManager from "@/components/resume/ResumeVariantsManager";
 import Modal from "@/components/ui/Modal";
-import { resolveCompileEngine, resolveLatexLatency, resolveTypstOutcome, resolveTypstRequestFailure } from "@/lib/resumeCompile";
+import { resolveLatexLatency } from "@/lib/resumeCompile";
+import ResumeSourcePane from "@/components/resume/ResumeSourcePane";
+import { parseLatexErrors } from "@/lib/latexErrors";
+import type { LatexError } from "@/lib/latexErrors";
+import { readSseStream } from "@/lib/sseClient";
+import type { SsePacket } from "@/lib/sseClient";
 
-interface ChatMessage {
-  id: string;
-  sender: "user" | "assistant";
-  text: string;
-  actionSummary?: string;
-  timestamp: string;
-}
+import ResumeCopilotPanel from "@/components/resume/ResumeCopilotPanel";
+import type { ChatMessage } from "@/components/resume/ResumeCopilotPanel";
 
-interface TemplateMeta {
-  id: string;
-  name: string;
-  desc: string;
-  badge: string;
-  kind: "resume" | "cv" | "both";
-  font: string;
-  accent: string;
-}
-
-const ALL_TEMPLATES: TemplateMeta[] = [
-  {
-    id: "classic-ats",
-    name: "Classic ATS Standard",
-    desc: "Single-column Helvetica. Predictable hierarchy and machine-readable text for parser safety.",
-    badge: "Single-column",
-    kind: "resume",
-    font: "font-sans",
-    accent: "bg-neutral-900",
-  },
-  {
-    id: "modern-professional",
-    name: "Modern Tech",
-    desc: "Clean two-tone headers with deep blue accent bar. Tech-optimized single column layout.",
-    badge: "Two-tone headers",
-    kind: "resume",
-    font: "font-sans",
-    accent: "bg-sky-700",
-  },
-  {
-    id: "technical-modern",
-    name: "Technical Modern",
-    desc: "High-density technical layout for senior software, ML, and systems engineers.",
-    badge: "High-density",
-    kind: "resume",
-    font: "font-mono",
-    accent: "bg-teal-700",
-  },
-  {
-    id: "minimal-clean",
-    name: "Minimal Clean",
-    desc: "Quiet typography, generous whitespace, single teal accent line.",
-    badge: "Whitespace",
-    kind: "resume",
-    font: "font-sans",
-    accent: "bg-emerald-700",
-  },
-  {
-    id: "executive",
-    name: "Executive Serif",
-    desc: "Times-based classic look for senior & leadership profiles. Small-caps section headers.",
-    badge: "Serif",
-    kind: "both",
-    font: "font-serif",
-    accent: "bg-stone-900",
-  },
-  {
-    id: "tabular-german",
-    name: "German Tabellarischer CV",
-    desc: "DACH standard format with date/location column and structured sections.",
-    badge: "DACH standard",
-    kind: "cv",
-    font: "font-sans",
-    accent: "bg-zinc-800",
-  },
-  {
-    id: "modern-french",
-    name: "French Standard CV",
-    desc: "Clean European format with structured competencies and detailed career timeline.",
-    badge: "European",
-    kind: "cv",
-    font: "font-sans",
-    accent: "bg-blue-800",
-  },
-];
-
-const QUICK_PROMPTS = [
-  { label: "ATS keyword polish", prompt: "Analyze this resume against modern ATS algorithms and optimize keyword density without keyword stuffing." },
-  { label: "Quantify achievements", prompt: "Rewrite work experience bullets using the Google XYZ formula (Accomplished [X], measured by [Y], by doing [Z])." },
-  { label: "Cut to exact 1-page", prompt: "Tighten spacing and condense bullet points so this resume fits perfectly on a single page." },
-  { label: "Ingest vault evidence", prompt: "Scan my Profile Vault and pull in verified technical project metrics and production achievements." },
-  { label: "DACH CV style", prompt: "Format this into a German Tabellarischer Lebenslauf structure." },
-];
+import { galleryTemplates } from "@/components/resume/templateGallery";
 
 function profileToResume(profile: ReturnType<typeof useApp>["profile"]): ResumeContent {
   return {
@@ -201,15 +105,18 @@ function profileToResume(profile: ReturnType<typeof useApp>["profile"]): ResumeC
     projects: [
       {
         name: "HuntFlow Career Engine",
-        tech: "Next.js, TypeScript, SQLite, Typst",
+        tech: "Next.js, TypeScript, SQLite, LaTeX",
         link: "github.com/huntflow/core",
         bullets: [
-          "Built high-performance local-first career operating system with instant <30ms Typst typesetting engine.",
+          "Built high-performance local-first career operating system with compiled LaTeX PDF typesetting.",
         ],
       },
     ],
   };
 }
+
+// Single persisted studio document: server (SQLite) is source truth.
+const STUDIO_DOC_ID = "studio-main";
 
 export default function ResumeStudioPage() {
   const { profile, updateProfile, applications } = useApp();
@@ -220,9 +127,32 @@ export default function ResumeStudioPage() {
   const [selectedJobId, setSelectedJobId] = useState<string>("");
   const [selectedTemplate, setSelectedTemplate] = useState<string>("classic-ats");
   const [docKind, setDocKind] = useState<"resume" | "cv">("resume");
-  const [engine, setEngine] = useState<"latex" | "typst">("typst");
+  // PDF-first Studio: LaTeX is the sole compile engine. The compiled PDF is
+  // the only authoritative preview — there is no HTML fallback and Typst
+  // markup is never presented as a PDF.
   const [latexSource, setLatexSource] = useState("");
-  const [typstSource, setTypstSource] = useState("");
+  // Source ownership: once the user hand-edits the TeX (or loads a draft),
+  // structured re-renders must not silently clobber it — they require an
+  // explicit force (template-switch confirm, Copilot apply, draft load).
+  const [sourceTouched, setSourceTouched] = useState(false);
+  // Persistence (server is truth — never localStorage): single studio doc.
+  const [savedRev, setSavedRev] = useState<number | null>(null);
+  const [lastSavedTex, setLastSavedTex] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [savedDraft, setSavedDraft] = useState<{ updatedAt: string; rev: number } | null>(null);
+  const [draftDismissed, setDraftDismissed] = useState(false);
+  // Compile diagnostics for the log strip + editor markers.
+  const [compileLogTail, setCompileLogTail] = useState<string | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
+  const [cursorPos, setCursorPos] = useState<{ line: number; column: number } | null>(null);
+  const [revealLine, setRevealLine] = useState<{ line: number; nonce: number } | null>(null);
+  // Bidirectional SyncTeX: forward mark from source cursor, reverse pick
+  // from real PDF clicks. Both require a live compile token.
+  const [forwardMark, setForwardMark] = useState<{ page: number; x: number; y: number; nonce: number } | null>(null);
+  const [pickReverse, setPickReverse] = useState(false);
+  const [reverseResult, setReverseResult] = useState<{ line: number; column: number } | null>(null);
+  const isSourceDirty = lastSavedTex === null ? sourceTouched && latexSource.trim().length > 0 : latexSource !== lastSavedTex;
+  const compileErrors: LatexError[] = useMemo(() => parseLatexErrors(compileLogTail), [compileLogTail]);
   const [compilingPdf, setCompilingPdf] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfState, setPdfState] = useState<"idle" | "compiling" | "ready" | "no-tex" | "error">("idle");
@@ -230,12 +160,11 @@ export default function ResumeStudioPage() {
   const [compiledTex, setCompiledTex] = useState<string | null>(null);
   const [compileToken, setCompileToken] = useState<string | null>(null);
   const [compileLatencyMs, setCompileLatencyMs] = useState<number | null>(null);
-  const [htmlOpen, setHtmlOpen] = useState(true);
   const [diffCollapsed, setDiffCollapsed] = useState(true);
   // Pinned source snapshot for the TeX diff viewer. Null until the user pins
   // a baseline — the diff viewer and the changed-sections chip stay hidden
   // until then, instead of advertising dead controls.
-  const [baseline, setBaseline] = useState<{ tex: string; engine: "latex" | "typst" } | null>(null);
+  const [baseline, setBaseline] = useState<{ tex: string } | null>(null);
   // Pending template/mode switch awaiting explicit user confirmation (see
   // confirmPendingSwitch — layout switches never silently mutate content).
   const [pendingSwitch, setPendingSwitch] = useState<
@@ -250,33 +179,27 @@ export default function ResumeStudioPage() {
   const [refineTab, setRefineTab] = useState<"chat" | "ats" | "diff">("chat");
   const [refineCollapsed, setRefineCollapsed] = useState(false);
   const [configureOpen, setConfigureOpen] = useState(false);
-  const [zoom, setZoom] = useState(100);
   // Dirty tracking: snapshot of the last profile-synced content so the UI can
   // say honestly whether the canvas holds unsynced changes.
   const [lastSyncedJson, setLastSyncedJson] = useState(() => JSON.stringify(profileToResume(profile)));
   const isDirty = useMemo(() => JSON.stringify(resume) !== lastSyncedJson, [resume, lastSyncedJson]);
   // Honest one-line compile status for the header chip (role=status).
   const compileStatus = useMemo(() => {
-    if (pdfState === "compiling") return engine === "typst" ? "Rendering Typst preview…" : "Compiling LaTeX…";
+    if (pdfState === "compiling") return "Compiling LaTeX…";
     if (pdfState === "no-tex") return "TeX unavailable";
     if (pdfState === "error") return "Compile failed";
-    if (engine === "typst") return "Typst preview · HTML approximation";
     return pdfUrl ? "PDF ready · LaTeX" : "Preview ready";
-  }, [pdfState, engine, pdfUrl]);
+  }, [pdfState, pdfUrl]);
 
-  const filteredTemplates = useMemo(
-    () => ALL_TEMPLATES.filter((t) => t.kind === docKind || t.kind === "both"),
-    [docKind]
-  );
+  // Gallery cards come from the real RESUME_TEMPLATES registry (see
+  // templateGallery.ts) — no hand-written subset, no numeric scores.
+  const filteredTemplates = useMemo(() => galleryTemplates(docKind), [docKind]);
 
-  // Live source for the active engine (the diff "after" side). A baseline
-  // only diffs against the same engine that pinned it — Typst markup versus
-  // LaTeX source would be noise, so cross-engine comparisons stay hidden.
-  const currentTex = engine === "typst" ? typstSource : latexSource;
-  const baselineMatchesEngine = baseline !== null && baseline.engine === engine;
+  // Live LaTeX source is the diff "after" side.
+  const currentTex = latexSource;
   const changedSections = useMemo(
-    () => (baseline && baseline.engine === engine ? getChangedSections(computeDiff(baseline.tex, currentTex)) : []),
-    [baseline, engine, currentTex]
+    () => (baseline ? getChangedSections(computeDiff(baseline.tex, currentTex)) : []),
+    [baseline, currentTex]
   );
 
 
@@ -287,13 +210,19 @@ export default function ResumeStudioPage() {
     x: number;
     y: number;
   }>({ visible: false, text: "", x: 0, y: 0 });
+  // Copilot selection context: quoted source/PDF content sent with the next
+  // turn (consumed + cleared on send). Set by both quote paths below.
+  const [selCtx, setSelCtx] = useState<{ text: string; sourceLine?: number } | null>(null);
+  // Pending attachment files (validated + uploaded at send time; raw bytes
+  // never enter chat state, logs, or persistence).
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   // Chat copilot state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       id: "msg-0",
       sender: "assistant",
-      text: "**Welcome to the LaTeX & Typst Resume Studio!**\n\nI operate across your live document canvas. You can ask me to rewrite bullet points with quantifiable impact, sync data from your **Vault**, or switch typesetting engines.\n\n*Tip: Highlight any text on the preview canvas (mouse or keyboard) to instantly quote and edit with AI.*",
+      text: "**Welcome to the LaTeX Resume Studio!**\n\nI operate across your live document canvas. You can ask me to rewrite bullet points with quantifiable impact, sync data from your **Vault**, or tailor for a target role.\n\n*Tip: Highlight any text on the preview canvas (mouse or keyboard) to instantly quote and edit with AI.*",
       timestamp: "Just now",
     },
   ]);
@@ -328,87 +257,42 @@ export default function ResumeStudioPage() {
     }
   }, [resume, selectedJob]);
 
-  // Update Typst markup
-  useEffect(() => {
-    try {
-      const markup = renderTypstResume(selectedTemplate, resume);
-      setTypstSource(markup);
-    } catch {
-      // safe fallback
-    }
-  }, [resume, selectedTemplate]);
-
-  // Render LaTeX representation in backend
-  const updateLatexPreview = useCallback(async (content: ResumeContent, templateId: string) => {
-    try {
-      const res = await fetch("/api/resume/render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateId, content }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setLatexSource(data.tex || "");
+  // Render LaTeX representation in backend. Guarded by source ownership:
+  // hand-edited source is never overwritten unless the caller forces it
+  // (template-switch confirm, draft load). Structured edits flow through
+  // Copilot apply, which sets the source explicitly.
+  const updateLatexPreview = useCallback(
+    async (content: ResumeContent, templateId: string, force = false) => {
+      if (sourceTouched && !force) return;
+      try {
+        const res = await fetch("/api/resume/render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ templateId, content }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setLatexSource(data.tex || "");
+        }
+      } catch {
+        // Non-blocking
       }
-    } catch {
-      // Non-blocking
-    }
-  }, []);
+    },
+    [sourceTouched]
+  );
 
   useEffect(() => {
     updateLatexPreview(resume, selectedTemplate);
   }, [resume, selectedTemplate, updateLatexPreview]);
 
-  // Engine-explicit compile. Callers switching engines pass the target
-  // engine directly: `setEngine` commits asynchronously, so compiling with
-  // captured `engine` state would run the previous pipeline on first
-  // switch (PR #22). Engine-agnostic callers omit the arg (current engine).
-  const compilePreview = useCallback(async (overrideEngine?: "latex" | "typst") => {
-    const activeEngine = resolveCompileEngine(overrideEngine, engine);
+  // LaTeX-only compile. The compiled PDF is the sole authoritative preview;
+  // there is no markup-preview fallback — failures report `error` or
+  // `no-tex`, never a stale artifact.
+  const compilePreview = useCallback(async () => {
     setPdfState("compiling");
     setPdfError(null);
     const start = Date.now();
 
-    // Typst fast path: the route returns rendered Typst *markup* for the HTML
-    // approximation preview — never a compiled PDF (this deployment has no
-    // Typst PDF toolchain). Every LaTeX/PDF artifact clears BEFORE the
-    // request so a prior compiled PDF can never stay visible behind the
-    // Typst preview (PR #22); failures report `error`, never `ready`.
-    if (activeEngine === "typst") {
-      setPdfUrl(null);
-      setCompileToken(null);
-      setCompiledTex(null);
-      setCompileLatencyMs(null);
-      setPdfError(null);
-      try {
-        const res = await fetch("/api/resume/compile-typst", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: resume, templateId: selectedTemplate }),
-        });
-        if (!res.ok) {
-          const outcome = resolveTypstRequestFailure(`HTTP ${res.status}`);
-          setCompileLatencyMs(outcome.latencyMs);
-          setPdfError(outcome.pdfError);
-          setPdfState(outcome.pdfState);
-          return;
-        }
-        const data = (await res.json()) as { ok?: boolean; success?: boolean; typstMarkup?: string; durationMs?: number };
-        const outcome = resolveTypstOutcome(data, Date.now() - start);
-        if (outcome.pdfState === "ready" && outcome.markup) setTypstSource(outcome.markup);
-        setCompileLatencyMs(outcome.latencyMs);
-        setPdfError(outcome.pdfError);
-        setPdfState(outcome.pdfState);
-      } catch (e: unknown) {
-        const outcome = resolveTypstRequestFailure(e instanceof Error ? e.message : String(e));
-        setCompileLatencyMs(outcome.latencyMs);
-        setPdfError(outcome.pdfError);
-        setPdfState(outcome.pdfState);
-      }
-      return;
-    }
-
-    // LaTeX engine
     if (!latexSource.trim()) {
       // Source still rendering: stay idle (badge cleared) so the idle-gated
       // effect below retries once the render route delivers.
@@ -422,16 +306,24 @@ export default function ResumeStudioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tex: latexSource }),
       });
-      const compileData = (await compileRes.json()) as { ok?: boolean; token?: string; error?: { message?: string } };
+      const compileData = (await compileRes.json()) as {
+        ok?: boolean;
+        token?: string;
+        logTail?: string;
+        error?: { message?: string; details?: { logTail?: string } };
+      };
       if (compileData.ok && compileData.token) {
         setCompileLatencyMs(resolveLatexLatency(true, Date.now() - start));
         setCompileToken(compileData.token);
         setPdfUrl(`/api/resume/compile?token=${compileData.token}`);
         setCompiledTex(latexSource);
+        setCompileLogTail(compileData.logTail ?? null);
         setPdfState("ready");
       } else {
         setCompileLatencyMs(resolveLatexLatency(false, Date.now() - start));
         setPdfError(compileData.error?.message ?? "Compile failed");
+        setCompileLogTail(compileData.error?.details?.logTail ?? null);
+        setLogOpen(true);
         setPdfState("error");
       }
     } catch (e: unknown) {
@@ -443,35 +335,181 @@ export default function ResumeStudioPage() {
         setPdfState("error");
       }
     }
-  }, [engine, resume, selectedTemplate, latexSource]);
+  }, [latexSource]);
 
-  // "Compile for SyncTeX" only means something on the LaTeX engine, where a
-  // compile mints the token SyncTeX navigates with. On Typst there is no
-  // token to mint, so explain instead of silently recompiling markup.
+  // Compile mints the token SyncTeX navigates with.
   const compileSynctex = useCallback(async () => {
-    if (engine !== "latex") {
-      errToast("SyncTeX needs the LaTeX engine — switch engines first, then compile.");
-      return;
-    }
-    await compilePreview(engine);
-  }, [compilePreview, engine, errToast]);
+    await compilePreview();
+  }, [compilePreview]);
 
-  // Initial render only: once latexSource arrives while idle, compile with
-  // the current engine. No duplicate loop on engine switches — the explicit
-  // switch compile below sets pdfState to "compiling" synchronously, so
+  // Initial render only: once latexSource arrives while idle, compile.
+  // The explicit compile sets pdfState to "compiling" synchronously, so
   // this idle gate stays shut after it runs.
   useEffect(() => {
     if (latexSource && pdfState === "idle") {
       void compilePreview();
     }
   }, [latexSource, pdfState, compilePreview]);
+  // Reverse SyncTeX from a real PDF click: PDF point -> source line,
+  // revealed in the editor. Disarmed after one use.
+  const handleReversePick = useCallback(
+    async (page: number, x: number, y: number) => {
+      if (!compileToken) {
+        errToast("Compile first to enable SyncTeX — no build token yet.");
+        return;
+      }
+      try {
+        const res = await fetch("/api/resume/synctex/reverse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: compileToken, page, x, y }),
+        });
+        const data = (await res.json()) as { ok?: boolean; line?: number; column?: number; error?: { message?: string } };
+        if (!res.ok || !data.ok || typeof data.line !== "number") {
+          throw new Error(data.error?.message ?? "SyncTeX reverse failed");
+        }
+        setReverseResult({ line: data.line, column: data.column ?? 0 });
+        setRevealLine({ line: data.line, nonce: Date.now() });
+        setPickReverse(false);
+        success(`PDF page ${page} maps to source line ${data.line}.`);
+      } catch (e: unknown) {
+        errToast(e instanceof Error ? e.message : "SyncTeX reverse failed");
+      }
+    },
+    [compileToken, errToast, success]
+  );
+  // Overleaf-style refs so the debounce timers below always see fresh
+  const pdfStateRef = useRef(pdfState);
+  const sourceTouchedRef = useRef(sourceTouched);
+  const compilePreviewRef = useRef(compilePreview);
+  useEffect(() => {
+    pdfStateRef.current = pdfState;
+    sourceTouchedRef.current = sourceTouched;
+    compilePreviewRef.current = compilePreview;
+  });
 
-  const applyUpdate = (newResume: ResumeContent, saveHistory = true) => {
-    if (saveHistory) {
-      setHistory((prev) => [resume, ...prev.slice(0, 10)]);
-    }
-    setResume(newResume);
-  };
+  // Debounced auto-compile: 900ms after the user stops editing source,
+  // recompile only when a previous artifact exists (ready) or the last
+  // attempt failed (error) — fixing errors live is the Overleaf loop.
+  // Idle/no-tex/compiling states are left for the explicit compile path.
+  useEffect(() => {
+    if (!sourceTouchedRef.current || !latexSource.trim()) return;
+    const st = pdfStateRef.current;
+    if (st !== "ready" && st !== "error") return;
+    const t = setTimeout(() => {
+      void compilePreviewRef.current();
+    }, 900);
+    return () => clearTimeout(t);
+  }, [latexSource]);
+
+  // Studio document persistence: single `studio-main` doc via POST
+  // /api/resume (upsert). First save is always explicit; autosave only
+  // runs afterwards so drafts are never created behind the user's back.
+  const saveSource = useCallback(
+    async (manual: boolean) => {
+      if (!latexSource.trim()) {
+        if (manual) errToast("Nothing to save yet — wait for the source to render.");
+        return;
+      }
+      setSaveState("saving");
+      try {
+        const res = await fetch("/api/resume", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: STUDIO_DOC_ID,
+            name: `${resume.header?.name || "Resume"} — ${selectedTemplate}`,
+            kind: docKind,
+            templateId: selectedTemplate,
+            tex: latexSource,
+            content: resume,
+            editorRev: (savedRev ?? -1) + 1,
+            lastCompileToken: compileToken,
+            lastCompileAt: compileToken ? new Date().toISOString() : undefined,
+          }),
+        });
+        if (res.status === 409) {
+          setSaveState("error");
+          errToast("Saved elsewhere — reload the draft before saving again.");
+          return;
+        }
+        if (!res.ok) throw new Error(`Save returned ${res.status}`);
+        const data = (await res.json()) as { doc?: { editorRev?: number } };
+        setSavedRev(typeof data.doc?.editorRev === "number" ? data.doc.editorRev : (savedRev ?? 0) + 1);
+        setLastSavedTex(latexSource);
+        setSaveState("saved");
+        if (manual) success("LaTeX source saved.");
+      } catch (e: unknown) {
+        setSaveState("error");
+        if (manual) errToast(e instanceof Error ? e.message : "Save failed");
+      }
+    },
+    [latexSource, resume, selectedTemplate, docKind, savedRev, compileToken, errToast, success]
+  );
+
+  // Autosave 3s after edits settle — only once a doc exists (savedRev).
+  useEffect(() => {
+    if (savedRev === null || !isSourceDirty) return;
+    const t = setTimeout(() => {
+      void saveSource(false);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [latexSource, savedRev, isSourceDirty, saveSource]);
+
+  // On mount, check for a saved studio draft. Never auto-apply: the user
+  // chooses Load (explicit mutation) or Dismiss.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/resume");
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { docs?: { id?: string; updatedAt?: string; editorRev?: number }[] };
+        const draft = (data.docs ?? []).find((d) => d.id === STUDIO_DOC_ID);
+        if (draft && !cancelled) {
+          setSavedDraft({ updatedAt: draft.updatedAt ?? "", rev: draft.editorRev ?? 0 });
+          setSavedRev(draft.editorRev ?? 0);
+        }
+      } catch {
+        // Non-blocking: studio works fine without persistence.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Editor change: take source ownership, mark dirty/stale honestly.
+  const handleSourceChange = useCallback((next: string) => {
+    setLatexSource(next);
+    setSourceTouched(true);
+    setSaveState((s) => (s === "saved" ? "idle" : s));
+  }, []);
+
+  // Quote editor/assistant selections into the Copilot input.
+  const quoteToChat = useCallback(
+    (text: string) => {
+      const quote = `Rewrite and optimize this section: "${text.slice(0, 2000)}"`;
+      setChatInput(quote);
+      setSelCtx({ text: text.slice(0, 4000), sourceLine: cursorPos?.line });
+      setRefineTab("chat");
+      setRefineCollapsed(false);
+      setTimeout(() => {
+        chatInputRef.current?.focus();
+      }, 50);
+    },
+    [cursorPos?.line]
+  );
+
+  const applyUpdate = useCallback(
+    (newResume: ResumeContent, saveHistory = true) => {
+      if (saveHistory) {
+        setHistory((prev) => [resume, ...prev.slice(0, 10)]);
+      }
+      setResume(newResume);
+    },
+    [resume]
+  );
 
   const undoLast = () => {
     if (history.length === 0) return;
@@ -480,6 +518,33 @@ export default function ResumeStudioPage() {
     setResume(previous);
     success("Reverted to previous version.");
   };
+  const loadDraft = useCallback(async () => {
+    try {
+      const res = await fetch("/api/resume");
+      if (!res.ok) throw new Error(`Load returned ${res.status}`);
+      const data = (await res.json()) as {
+        docs?: {
+          id?: string;
+          tex?: string;
+          templateId?: string;
+          content?: ResumeContent;
+          editorRev?: number;
+        }[];
+      };
+      const draft = (data.docs ?? []).find((d) => d.id === STUDIO_DOC_ID);
+      if (!draft?.tex) throw new Error("Saved draft has no source.");
+      if (draft.content) applyUpdate(draft.content);
+      if (draft.templateId) setSelectedTemplate(draft.templateId);
+      setLatexSource(draft.tex);
+      setLastSavedTex(draft.tex);
+      setSavedRev(draft.editorRev ?? 0);
+      setSourceTouched(true);
+      setSavedDraft(null);
+      success("Loaded saved LaTeX draft.");
+    } catch (e: unknown) {
+      errToast(e instanceof Error ? e.message : "Load failed");
+    }
+  }, [applyUpdate, errToast, success]);
 
   // Text selection handler on preview (mouse and keyboard alike: a
   // `selectionchange` listener below feeds keyboard-driven selections here).
@@ -534,11 +599,139 @@ export default function ResumeStudioPage() {
     }, 50);
   };
 
+  // Upload pending attachments: server validates type/size/magic bytes and
+  // encryption. Returns ephemeral ids (bytes stay server-side). Throws with
+  // the server's actionable message on any rejection.
+  const uploadAttachments = async (files: File[]): Promise<string[]> => {
+    const form = new FormData();
+    for (const f of files.slice(0, 3)) form.append("files", f, f.name);
+    const res = await fetch("/api/resume/copilot/attachments", { method: "POST", body: form });
+    const data = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      attachments?: { id?: unknown }[];
+      error?: { message?: string } | string;
+    };
+    if (!res.ok || !data.ok) {
+      throw new Error(typeof data.error === "string" ? data.error : (data.error?.message ?? `Upload returned ${res.status}`));
+    }
+    return (data.attachments ?? []).map((a) => String(a.id)).filter(Boolean);
+  };
+
+  // Legacy JSON Copilot path — kept as the fallback when streaming is
+  // unavailable (old clients, proxies stripping SSE, pre-first-byte errors).
+  const sendLegacyMessage = async (text: string) => {
+    const res = await fetch("/api/resume/copilot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: text,
+        resume,
+        templateId: selectedTemplate,
+        history: chatMessages.slice(-6).map((m) => ({ role: m.sender, content: m.text })),
+        targetJob: selectedJob ? { title: selectedJob.title, company: selectedJob.company, description: selectedJob.jobDescription } : undefined,
+      }),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `Agent returned ${res.status}`);
+    }
+    const data = await res.json();
+    const updated = data.updatedResume as ResumeContent;
+    const aiMsg: ChatMessage = {
+      id: `ai-${Date.now()}`,
+      sender: "assistant",
+      text: data.reply,
+      actionSummary: data.actionSummary,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    setChatMessages((prev) => [...prev, aiMsg]);
+    if (updated) {
+      applyUpdate(updated);
+      success(data.actionSummary || "Resume updated by AI Copilot.");
+    }
+    if (data.tex) {
+      // Explicit Copilot output: takes source ownership so later
+      // structured renders cannot silently clobber it.
+      setSourceTouched(true);
+      setLatexSource(data.tex);
+    }
+  };
+
+  const applyStreamDone = (aiId: string, done: Record<string, unknown>) => {
+    const reply = typeof done.reply === "string" && done.reply ? done.reply : "Done.";
+    const cites = Array.isArray(done.cites)
+      ? (done.cites as { docName?: unknown; chunkIndex?: unknown }[])
+          .filter((c) => typeof c.docName === "string")
+          .map((c) => ({ doc: c.docName as string, chunk: typeof c.chunkIndex === "number" ? c.chunkIndex : 0 }))
+      : [];
+    setChatMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: reply, streaming: false, cites } : m)));
+    const updated = done.updatedResume as ResumeContent | null;
+    if (updated) {
+      applyUpdate(updated);
+      success(typeof done.actionSummary === "string" && done.actionSummary ? done.actionSummary : "Resume updated by AI Copilot.");
+    }
+    const tex = typeof done.tex === "string" && done.tex ? done.tex : null;
+    if (tex) {
+      setSourceTouched(true);
+      setLatexSource(tex);
+      if (!updated) success(typeof done.actionSummary === "string" && done.actionSummary ? done.actionSummary : "Source updated by AI Copilot.");
+    }
+  };
+
+  const handleStreamPacket = (aiId: string, packet: SsePacket) => {
+    const data = (packet.data ?? {}) as Record<string, unknown>;
+    switch (packet.event) {
+      case "reasoning": {
+        const note = typeof data.note === "string" ? data.note : "";
+        if (!note) break;
+        setChatMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, reasoning: [...(m.reasoning ?? []), note].slice(-8) } : m)));
+        break;
+      }
+      case "tool_call": {
+        const tool = typeof data.tool === "string" ? data.tool : "tool";
+        const detail = typeof data.detail === "string" ? data.detail : "";
+        const status = data.status === "error" || data.status === "partial" ? data.status : "ok";
+        setChatMessages((prev) =>
+          prev.map((m) => (m.id === aiId ? { ...m, tools: [...(m.tools ?? []), { tool, detail, status }] } : m))
+        );
+        break;
+      }
+      case "token": {
+        const delta = typeof data.delta === "string" ? data.delta : "";
+        if (!delta) break;
+        setChatMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: `${m.text}${delta}` } : m)));
+        break;
+      }
+      case "latex_log": {
+        const tail = typeof data.logTail === "string" ? data.logTail : "";
+        if (tail) setCompileLogTail(tail);
+        break;
+      }
+      case "done":
+        applyStreamDone(aiId, data);
+        break;
+      case "error": {
+        const message = typeof data.message === "string" ? data.message : "Copilot stream failed";
+        setChatMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, streaming: false, error: message } : m)));
+        errToast(message);
+        break;
+      }
+      default:
+        break;
+    }
+  };
+
   const handleSendMessage = async (customPrompt?: string) => {
-    const text = customPrompt || chatInput.trim();
-    if (!text || copilotBusy) return;
+    const text = (customPrompt || chatInput.trim()).trim();
+    if ((!text && pendingFiles.length === 0) || copilotBusy) return;
 
     if (!customPrompt) setChatInput("");
+    // Consume the quoted selection exactly once.
+    const selection = selCtx;
+    setSelCtx(null);
+    // Uploads happen now (fail fast, before any Copilot work).
+    const filesToSend = pendingFiles;
+    setPendingFiles([]);
 
     const userMsg: ChatMessage = {
       id: `usr-${Date.now()}`,
@@ -546,50 +739,82 @@ export default function ResumeStudioPage() {
       text,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
+    const aiId = `ai-${Date.now()}`;
 
-    setChatMessages((prev) => [...prev, userMsg]);
+    setChatMessages((prev) => [
+      ...prev,
+      userMsg,
+      { id: aiId, sender: "assistant", text: "", streaming: true, timestamp: userMsg.timestamp },
+    ]);
     setCopilotBusy(true);
 
+    // Uploads first: validated server-side (type/size/magic/encryption).
+    // Any rejection aborts the turn before Copilot work starts.
+    let attachmentIds: string[] = [];
+    if (filesToSend.length > 0) {
+      try {
+        attachmentIds = await uploadAttachments(filesToSend);
+      } catch (uploadErr: unknown) {
+        setChatMessages((prev) => prev.filter((m) => m.id !== aiId));
+        errToast(uploadErr instanceof Error ? uploadErr.message : "Attachment upload failed");
+        setCopilotBusy(false);
+        setPendingFiles(filesToSend);
+        return;
+      }
+    }
+
+    const payload = {
+      message: text || `Review the attached file${attachmentIds.length === 1 ? "" : "s"} against my resume.`,
+      resume,
+      tex: latexSource,
+      templateId: selectedTemplate,
+      history: chatMessages.slice(-6).map((m) => ({ role: m.sender, content: m.text })),
+      targetJob: selectedJob
+        ? { title: selectedJob.title, company: selectedJob.company, description: selectedJob.jobDescription }
+        : undefined,
+      selection: selection
+        ? { text: selection.text, sourceLine: selection.sourceLine ?? cursorPos?.line ?? undefined }
+        : undefined,
+      jobId: selectedJobId || undefined,
+      attachmentIds,
+    };
+
     try {
-      const res = await fetch("/api/resume/copilot", {
+      const res = await fetch("/api/resume/copilot/stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          resume,
-          templateId: selectedTemplate,
-          history: chatMessages.slice(-6).map((m) => ({ role: m.sender, content: m.text })),
-          targetJob: selectedJob ? { title: selectedJob.title, company: selectedJob.company, description: selectedJob.jobDescription } : undefined,
-        }),
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify(payload),
       });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Agent returned ${res.status}`);
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!res.ok || !contentType.includes("text/event-stream")) {
+        // Fall back to the legacy JSON contract — unless attachments are
+        // involved, which legacy cannot see (never silently drop them).
+        if (attachmentIds.length > 0) throw new Error("Attachments need the streaming endpoint — retry the message.");
+        setChatMessages((prev) => prev.filter((m) => m.id !== aiId));
+        await sendLegacyMessage(text);
+        return;
       }
-
-      const data = await res.json();
-      const updated = data.updatedResume as ResumeContent;
-
-      const aiMsg: ChatMessage = {
-        id: `ai-${Date.now()}`,
-        sender: "assistant",
-        text: data.reply,
-        actionSummary: data.actionSummary,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      };
-
-      setChatMessages((prev) => [...prev, aiMsg]);
-
-      if (updated) {
-        applyUpdate(updated);
-        success(data.actionSummary || "Resume updated by AI Copilot.");
-      }
-      if (data.tex) {
-        setLatexSource(data.tex);
-      }
+      await readSseStream(res, (packet) => handleStreamPacket(aiId, packet));
+      setChatMessages((prev) => prev.map((m) => (m.id === aiId && m.streaming ? { ...m, streaming: false } : m)));
     } catch (err: unknown) {
-      errToast(err instanceof Error ? err.message : "AI Copilot request failed");
+      // Transport failure before/during the stream: try legacy once (text
+      // turns only), else surface the error on the message.
+      if (attachmentIds.length === 0) {
+        try {
+          setChatMessages((prev) => prev.filter((m) => m.id !== aiId));
+          await sendLegacyMessage(text);
+          return;
+        } catch (legacyErr: unknown) {
+          errToast(legacyErr instanceof Error ? legacyErr.message : "AI Copilot request failed");
+        }
+      }
+      setChatMessages((prev) =>
+        prev.map((m) =>
+          m.id === aiId
+            ? { ...m, streaming: false, error: err instanceof Error ? err.message : "AI Copilot request failed" }
+            : m
+        )
+      );
     } finally {
       setCopilotBusy(false);
     }
@@ -613,9 +838,11 @@ export default function ResumeStudioPage() {
     if (pendingSwitch.kind === "docKind") {
       const kind = pendingSwitch.docKind;
       setDocKind(kind);
-      const target = ALL_TEMPLATES.find((t) => t.kind === kind || t.kind === "both")?.id || (kind === "cv" ? "tabular-german" : "classic-ats");
+      const target = galleryTemplates(kind)[0]?.meta.id || (kind === "cv" ? "tabular-german" : "classic-ats");
       setSelectedTemplate(target);
       setPendingSwitch(null);
+      // Explicit user action: re-render the new layout even over hand edits.
+      void updateLatexPreview(resume, target, true);
       if (withAiReformat) {
         void handleSendMessage(`Switch mode to ${kind.toUpperCase()}. Rebuild and format my profile for a ${kind === "cv" ? "comprehensive, detailed multi-page curriculum vitae" : "compact 1-page high-impact industry resume"}.`);
       }
@@ -623,6 +850,8 @@ export default function ResumeStudioPage() {
       const templateId = pendingSwitch.templateId;
       setSelectedTemplate(templateId);
       setPendingSwitch(null);
+      // Explicit user action: re-render the new layout even over hand edits.
+      void updateLatexPreview(resume, templateId, true);
       if (withAiReformat) {
         void handleSendMessage(`Rebuild and format my ${docKind.toUpperCase()} according to the ${templateId} template layout.`);
       }
@@ -632,11 +861,8 @@ export default function ResumeStudioPage() {
   const downloadPdf = async () => {
     setCompilingPdf(true);
     try {
-      // Export always produces a real PDF through the LaTeX toolchain: the
-      // Typst fast path renders markup only and has no PDF backend, so there
-      // is nothing to download from it directly. Fall through to render +
-      // compile below regardless of the preview engine.
-      // Fallback or LaTeX compile
+      // Export always produces a real PDF through the LaTeX toolchain —
+      // the sole authoritative artifact. Render + compile below.
       let tex = latexSource;
       if (!tex) {
         const r = await fetch("/api/resume/render", {
@@ -725,17 +951,17 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
     setTimeout(() => setCopied(false), 2000);
     success("Copied clean markdown to clipboard!");
   };
-  // Pin the live engine source as the diff baseline (shared by the compile
+  // Pin the live LaTeX source as the diff baseline (shared by the compile
   // controls and the Diff tab).
   const pinBaseline = () => {
-    const src = engine === "typst" ? typstSource : latexSource;
+    const src = latexSource;
     if (!src.trim()) {
       errToast("Nothing to pin yet — wait for the preview to render.");
       return;
     }
-    setBaseline({ tex: src, engine });
+    setBaseline({ tex: src });
     setDiffCollapsed(false);
-    success(`Baseline pinned on ${engine === "typst" ? "Typst markup" : "LaTeX source"} — diff is live.`);
+    success("Baseline pinned on LaTeX source — diff is live.");
   };
 
   return (
@@ -762,7 +988,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         </div>
       )}
 
-      {/* Studio Header: engine, target job, compile status, export, configure */}
+      {/* Studio Header: target job, compile status, export, configure */}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/80 px-4 py-2.5 backdrop-blur shrink-0">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="font-display flex items-center gap-2 text-[15px] font-bold tracking-tight text-[var(--paper)]">
@@ -778,52 +1004,10 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             )}
           </h1>
 
-          {/* Engine selector: Typst fast markup preview vs authoritative LaTeX PDF */}
-          <div role="group" aria-label="Typesetting engine" className="flex items-center rounded-xl border border-[var(--line)] bg-black/40 p-0.5 shadow-inner">
-            <button
-              type="button"
-              aria-pressed={engine === "typst"}
-              onClick={() => {
-                // Pass the target engine explicitly: setEngine commits
-                // async, so a bare compilePreview() would run the stale
-                // engine. Clearing the badge avoids a cross-engine stale
-                // label ("LaTeX compiled in <typst>ms") while compiling.
-                setEngine("typst");
-                setCompileLatencyMs(null);
-                void compilePreview("typst");
-              }}
-              className={cn(
-                "flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-all",
-                engine === "typst"
-                  ? "bg-sky-500 font-bold text-neutral-950 shadow-sm"
-                  : "text-dim hover:text-[var(--paper)]"
-              )}
-              title="Typst fast preview (HTML approximation — no compiled PDF)"
-            >
-              <Zap className="h-3 w-3" aria-hidden />
-              <span>Typst</span>
-            </button>
-            <button
-              type="button"
-              aria-pressed={engine === "latex"}
-              onClick={() => {
-                setEngine("latex");
-                setCompileLatencyMs(null);
-                void compilePreview("latex");
-              }}
-              className={cn(
-                "flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-all",
-                engine === "latex"
-                  ? "bg-emerald-500 font-bold text-neutral-950 shadow-sm"
-                  : "text-dim hover:text-[var(--paper)]"
-              )}
-              title="LaTeX compiler (authoritative PDF + SyncTeX)"
-            >
-              <FileCode className="h-3 w-3" aria-hidden />
-              <span>LaTeX</span>
-            </button>
-          </div>
-
+          {/* Sole engine badge: LaTeX compiles the authoritative PDF. */}
+          <span className="flex min-h-[44px] items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-200" title="LaTeX compiler (authoritative PDF + SyncTeX)">
+            <span>LaTeX PDF</span>
+          </span>
           {/* Target job (compact readout — full tailoring context lives here too) */}
           <div className="w-44 sm:w-56">
             <Select
@@ -866,7 +1050,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             onClick={() => setConfigureOpen(true)}
             aria-haspopup="dialog"
             aria-label="Configure studio settings"
-            title="Studio settings: templates, zoom, history, compile actions"
+            title="Studio settings: templates, history, compile actions"
             className="min-h-[44px] border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]"
           >
             <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
@@ -874,13 +1058,33 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           </Button>
         </div>
       </div>
-      {/* Studio workbench: Refine rail + document canvas (canvas first on mobile) */}
-      <div className={cn("relative flex min-h-0 flex-1 flex-col gap-4", refineCollapsed ? "lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--ink)]" : "lg:grid lg:grid-cols-[minmax(320px,360px)_minmax(0,1fr)] lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--ink)] lg:shadow-[0_12px_40px_rgba(0,0,0,0.22)]")}>
-        {/* Document canvas (first on mobile) */}
+      {/* Saved-draft banner: explicit Load, never auto-applied. */}
+      {savedDraft && !draftDismissed && (
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--sky)]/30 bg-[var(--sky)]/10 px-4 py-2 text-[11px] text-[var(--paper)] shrink-0">
+          <span>
+            Saved LaTeX draft available{savedDraft.updatedAt ? ` from ${new Date(savedDraft.updatedAt).toLocaleString()}` : ""} (rev {savedDraft.rev}).
+            Loading replaces the current source and structured canvas.
+          </span>
+          <Button size="sm" variant="outline" onClick={() => void loadDraft()} className="min-h-[44px]">
+            Load draft
+          </Button>
+          <button
+            type="button"
+            onClick={() => setDraftDismissed(true)}
+            aria-label="Dismiss saved draft notice"
+            className="grid h-11 w-11 place-items-center rounded-lg text-dim transition-colors hover:bg-white/[0.06] hover:text-[var(--paper)]"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+      {/* Studio workbench: Refine rail + LaTeX source + PDF canvas (canvas first on mobile) */}
+      <div className={cn("relative flex min-h-0 flex-1 flex-col gap-4", refineCollapsed ? "lg:grid lg:grid-cols-[auto_minmax(0,5fr)_minmax(0,6fr)] lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--ink)]" : "lg:grid lg:grid-cols-[minmax(260px,300px)_minmax(0,5fr)_minmax(0,6fr)] lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-[var(--line)] lg:bg-[var(--ink)] lg:shadow-[0_12px_40px_rgba(0,0,0,0.22)]")}>
+        {/* Document canvas (first on mobile, right on desktop) */}
         <div
           ref={previewContainerRef}
           onMouseUp={handlePreviewMouseUp}
-          className="relative order-1 flex min-h-[60vh] flex-col items-center gap-5 overflow-visible bg-[var(--ink-deep)] p-4 select-text sm:p-6 lg:order-2 lg:min-h-0 lg:flex-1 lg:overflow-auto"
+          className="relative order-1 flex min-h-[60vh] flex-col items-center gap-5 overflow-visible bg-[var(--ink-deep)] p-4 select-text sm:p-6 lg:order-3 lg:min-h-0 lg:flex-1 lg:overflow-auto"
           style={{
             backgroundImage:
               "radial-gradient(800px 500px at 50% -10%, color-mix(in srgb, var(--chartreuse) 4%, transparent), transparent 60%), radial-gradient(700px 400px at 100% 100%, color-mix(in srgb, var(--sky) 3%, transparent), transparent 55%)",
@@ -889,7 +1093,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           {compileLatencyMs !== null && (
             <div role="status" className="absolute top-3 left-4 flex items-center gap-2 rounded-full border border-line bg-black/60 px-3 py-1 text-[10px] font-mono text-dim backdrop-blur">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
-              <span>{engine === "typst" ? `Typst markup rendered in ${compileLatencyMs}ms · HTML approximation` : `LaTeX compiled in ${compileLatencyMs}ms`}</span>
+              <span>{`LaTeX compiled in ${compileLatencyMs}ms`}</span>
             </div>
           )}
 
@@ -898,24 +1102,40 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             pdfState={pdfState}
             pdfError={pdfError}
             compiledTex={compiledTex}
-            latexSource={engine === "typst" ? typstSource : latexSource}
+            latexSource={latexSource}
             compileToken={compileToken}
-          />
-          <ResumeHtmlFallback
-            resume={resume}
-            selectedTemplate={selectedTemplate}
-            zoom={zoom}
-            isDragging={false}
-            htmlOpen={htmlOpen}
-            onToggle={() => setHtmlOpen((v) => !v)}
-            pdfUrl={pdfUrl}
-            pdfState={pdfState}
+            targetLine={cursorPos?.line ?? 1}
+            forwardMark={forwardMark}
+            pickReverse={pickReverse}
+            reverseResult={reverseResult}
+            onForward={(r) => setForwardMark({ page: r.page, x: r.x, y: r.y, nonce: Date.now() })}
+            onPickReverse={() => setPickReverse((v) => !v)}
+            onReversePick={(page, x, y) => void handleReversePick(page, x, y)}
+            onReverseDisabledClick={() => errToast("Compile first to enable SyncTeX — no build token yet.")}
           />
         </div>
+        {/* LaTeX source editor (second on mobile, middle on desktop) */}
+        <ResumeSourcePane
+          value={latexSource}
+          onChange={handleSourceChange}
+          errors={compileErrors}
+          saveState={saveState}
+          isDirty={isSourceDirty}
+          savedRev={savedRev}
+          cursor={cursorPos}
+          onCursor={(line, column) => setCursorPos({ line, column })}
+          onSelectionText={quoteToChat}
+          onSave={() => void saveSource(true)}
+          revealLine={revealLine}
+          logOpen={logOpen}
+          onToggleLog={() => setLogOpen((v) => !v)}
+          onRevealLine={(line) => setRevealLine({ line, nonce: Date.now() })}
+          logTail={compileLogTail}
+        />
         {!refineCollapsed && (
         <section
           aria-label="Refine workspace"
-          className="order-2 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl lg:order-1 lg:h-full lg:rounded-none lg:border-0 lg:border-r"
+          className="order-3 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/90 backdrop-blur-xl lg:order-1 lg:h-full lg:rounded-none lg:border-0 lg:border-r"
         >
           {/* Rail header: collapse + Chat / ATS / Diff tabs */}
           <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] bg-[var(--ink-soft)]/60 px-2 py-1.5">
@@ -952,130 +1172,28 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           </div>
 
           {refineTab === "chat" && (
-          <div role="tabpanel" id="refine-panel-chat" aria-labelledby="refine-tab-chat" className="flex min-h-0 flex-1 flex-col">
-          {/* Copilot status row */}
-          <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--ink-soft)]/60 px-4 py-2.5">
-            <div className="flex items-center gap-2">
-              <div className="relative grid h-7 w-7 place-items-center rounded-lg border border-[var(--chartreuse)]/40 bg-[var(--chartreuse)]/10">
-                <Bot className="h-3.5 w-3.5 text-[var(--chartreuse)]" aria-hidden />
-                <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--chartreuse)]" aria-hidden />
-              </div>
-              <div>
-                <p className="font-display text-xs font-bold text-[var(--paper)]">AI Resume Copilot</p>
-                <p className="flex items-center gap-1 text-[10px] text-dim">
-                  <Archive className="h-2.5 w-2.5 text-[var(--chartreuse)]" aria-hidden /> Vault RAG connected
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setPromptInspectorOpen(!promptInspectorOpen)}
-                aria-expanded={promptInspectorOpen}
-                aria-label="Toggle context inspector"
-                title="Toggle context inspector"
-                className={cn(
-                  "grid h-11 w-11 place-items-center rounded-lg border text-xs transition-colors",
-                  promptInspectorOpen
-                    ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/15 text-[var(--chartreuse)]"
-                    : "border-[var(--line)] text-dim hover:text-[var(--paper)] hover:bg-white/[0.04]"
-                )}
-              >
-                <Code2 className="h-3.5 w-3.5" aria-hidden />
-              </button>
-              {copilotBusy && (
-                <span role="status" className="flex items-center gap-1.5 font-mono text-[10px] text-[var(--chartreuse)] animate-pulse">
-                  <Sparkles className="h-3 w-3" aria-hidden /> Optimizing…
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Real-time Prompt Inspector Panel */}
-          {promptInspectorOpen && (
-            <div className="border-b border-[var(--line)] bg-black/60 p-3 text-[11px] font-mono text-dim space-y-1.5 max-h-48 overflow-y-auto">
-              <div className="flex items-center justify-between text-[var(--chartreuse)]">
-                <span className="font-bold flex items-center gap-1"><Cpu className="h-3 w-3" /> Context Inspector</span>
-                <span>live session</span>
-              </div>
-              <p className="text-white/80">Copilot: HUNTFLOW Elite Resume Strategist, grounded in your vault.</p>
-              <p className="text-white/60">Template: {selectedTemplate} | Mode: {docKind} | Engine: {engine}</p>
-              <p className="text-white/40 truncate">Active context: {resume.experience?.length || 0} roles, {resume.skills?.length || 0} skills{selectedJob ? ` · target: ${selectedJob.company} — ${selectedJob.title}` : ""}</p>
-              <p className="text-white/40">Sampling parameters live server-side; nothing is hidden here.</p>
-            </div>
-          )}
-
-          {/* Quick Prompts Chips */}
-          <div className="flex gap-1.5 overflow-x-auto border-b border-[var(--line)] p-2.5 bg-black/20 no-scrollbar">
-            {QUICK_PROMPTS.map((qp, idx) => (
-              <button
-                key={idx}
-                disabled={copilotBusy}
-                onClick={() => handleSendMessage(qp.prompt)}
-                className="shrink-0 rounded-full border border-[var(--line)] bg-white/[0.03] px-3 py-1 text-[10px] font-semibold tracking-tight text-[var(--paper)] transition-all hover:border-[var(--chartreuse)]/40 hover:bg-[var(--chartreuse)]/10 hover:text-[var(--chartreuse)] active:scale-[0.98] disabled:opacity-50 cursor-pointer shadow-sm"
-              >
-                {qp.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Chat Messages */}
-          <div role="log" aria-label="Copilot conversation" className="max-h-[50vh] min-h-0 flex-1 space-y-4 overflow-y-auto p-4 lg:max-h-none">
-            {chatMessages.map((msg) => {
-              const isAssistant = msg.sender === "assistant";
-              return (
-                <div
-                  key={msg.id}
-                  className={cn("flex flex-col space-y-1", isAssistant ? "items-start" : "items-end")}
-                >
-                  <div
-                    className={cn(
-                      "max-w-[92%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-sm",
-                      isAssistant
-                        ? "border border-[var(--line)] bg-white/[0.04] text-[var(--paper)] backdrop-blur"
-                        : "bg-[var(--chartreuse)] text-neutral-950 font-medium shadow-[0_4px_16px_rgba(185,237,87,0.22)]"
-                    )}
-                  >
-                    <div className="whitespace-pre-wrap">{msg.text}</div>
-
-                    {msg.actionSummary && (
-                      <div className="mt-2.5 flex items-center gap-1.5 rounded-xl border border-[var(--chartreuse)]/25 bg-[var(--chartreuse)]/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-[var(--chartreuse)]">
-                        <Check className="h-3 w-3" /> {msg.actionSummary}
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-[10px] font-medium tracking-tight text-dim/70 px-1">{msg.timestamp}</span>
-                </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Chat Input Bar */}
-          <div className="border-t border-[var(--line)] p-3 bg-[var(--ink-soft)]/50 backdrop-blur">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendMessage();
+            <ResumeCopilotPanel
+              messages={chatMessages}
+              messagesEndRef={messagesEndRef}
+              inspectorOpen={promptInspectorOpen}
+              onToggleInspector={() => setPromptInspectorOpen((v) => !v)}
+              busy={copilotBusy}
+              contextLine={{
+                templateId: selectedTemplate,
+                docKind,
+                roles: resume.experience?.length || 0,
+                skills: resume.skills?.length || 0,
+                target: selectedJob ? `${selectedJob.company} — ${selectedJob.title}` : null,
               }}
-              className="flex items-center gap-2"
-            >
-              <input
-                ref={chatInputRef}
-                type="text"
-                value={chatInput}
-                disabled={copilotBusy}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask AI Copilot to rewrite, enhance metrics, or optimize..."
-                aria-label="Ask the AI Copilot to rewrite, enhance metrics, or optimize"
-                className="flex min-h-[44px] flex-1 rounded-xl border border-[var(--line)] bg-white/[0.04] px-3.5 py-2 text-xs text-[var(--paper)] outline-none transition-all placeholder:text-dim focus:border-[var(--chartreuse)]/50 focus:bg-white/[0.06]"
-              />
-              <Button type="submit" size="sm" disabled={!chatInput.trim() || copilotBusy} loading={copilotBusy} aria-label="Send message" className="min-h-[44px] shadow-[var(--glow)]">
-                <Send className="h-3.5 w-3.5" />
-              </Button>
-            </form>
-          </div>
-          </div>
+              input={chatInput}
+              onInputChange={setChatInput}
+              onSubmit={() => void handleSendMessage()}
+              onQuickPrompt={(prompt) => void handleSendMessage(prompt)}
+              inputRef={chatInputRef}
+              attachments={pendingFiles.map((f) => ({ name: f.name, size: f.size }))}
+              onAttachFiles={(files) => setPendingFiles((prev) => [...prev, ...files].slice(0, 3))}
+              onRemoveAttachment={(index) => setPendingFiles((prev) => prev.filter((_, i) => i !== index))}
+            />
           )}
           {refineTab === "ats" && (
           <div role="tabpanel" id="refine-panel-ats" aria-labelledby="refine-tab-ats" className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
@@ -1143,10 +1261,6 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
               <p className="mt-3 rounded-xl border border-[var(--line)] bg-black/30 px-3.5 py-2.5 text-[11px] leading-relaxed text-dim">
                 No baseline pinned yet. Pin one to compare every later edit line-by-line, per section.
               </p>
-            ) : !baselineMatchesEngine ? (
-              <p role="status" className="mt-3 rounded-xl border border-[var(--line)] bg-black/30 px-3.5 py-2.5 text-[11px] leading-relaxed text-dim">
-                Baseline was pinned on {baseline.engine === "typst" ? "Typst markup" : "LaTeX source"} — switch back to that engine or pin a fresh baseline to compare.
-              </p>
             ) : (
               <ResumeDiff beforeTex={baseline.tex} afterTex={currentTex} className="mt-3" />
             )}
@@ -1177,7 +1291,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           <div className="space-y-4">
             <p className="text-sm leading-relaxed text-dim">
               {pendingSwitch.kind === "template"
-                ? `Preview will switch to “${ALL_TEMPLATES.find((t) => t.id === pendingSwitch.templateId)?.name ?? pendingSwitch.templateId}”.`
+                ? `Preview will switch to “${galleryTemplates(docKind).find((t) => t.meta.id === pendingSwitch.templateId)?.meta.name ?? pendingSwitch.templateId}”.`
                 : pendingSwitch.docKind === "cv"
                   ? "Preview will switch to a multi-page CV format."
                   : "Preview will switch to a compact 1-page resume format."}{" "}
@@ -1239,17 +1353,18 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
               </p>
             </fieldset>
 
-            {/* Template gallery: real radios, honest descriptors */}
+            {/* Template gallery: real registry metadata, honest descriptors */}
             <fieldset>
               <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
                 Layout template ({filteredTemplates.length})
               </legend>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 {filteredTemplates.map((tmpl) => {
-                  const isSelected = selectedTemplate === tmpl.id;
+                  const isSelected = selectedTemplate === tmpl.meta.id;
+                  const Icon = tmpl.icon;
                   return (
                     <label
-                      key={tmpl.id}
+                      key={tmpl.meta.id}
                       className={cn(
                         "cursor-pointer rounded-xl border p-3 transition-all",
                         isSelected
@@ -1263,66 +1378,45 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                             type="radio"
                             name="resume-template"
                             checked={isSelected}
-                            onChange={() => handleTemplateChange(tmpl.id)}
-                            aria-label={tmpl.name}
+                            onChange={() => handleTemplateChange(tmpl.meta.id)}
+                            aria-label={tmpl.meta.name}
                             className="h-4 w-4 shrink-0 accent-[var(--chartreuse)]"
                           />
-                          <span className="truncate text-xs font-bold text-[var(--paper)]">{tmpl.name}</span>
+                          <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg text-white", tmpl.swatch)} aria-hidden>
+                            <Icon className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="truncate text-xs font-bold text-[var(--paper)]">{tmpl.meta.name}</span>
                         </span>
                         <span className="shrink-0 rounded-full border border-[var(--chartreuse)]/20 bg-[var(--chartreuse)]/10 px-2 py-0.5 font-mono text-[9px] font-bold tracking-wide text-[var(--chartreuse)]">
                           {tmpl.badge}
                         </span>
                       </span>
-                      <span className="mt-1.5 block text-[10px] leading-relaxed text-dim">{tmpl.desc}</span>
+                      <span className="mt-1.5 block text-[10px] leading-relaxed text-dim">{tmpl.meta.description}</span>
+                      <span className="mt-1 block text-[10px] leading-relaxed text-dim/80">{tmpl.meta.recommendationReason}</span>
+                      <span className="mt-1.5 flex flex-wrap gap-1">
+                        {tmpl.meta.recommendedFor.slice(0, 3).map((audience) => (
+                          <span key={audience} className="rounded-full border border-[var(--line)] bg-white/[0.03] px-2 py-0.5 text-[9px] font-semibold text-dim">
+                            {audience}
+                          </span>
+                        ))}
+                      </span>
+                      <span className="mt-1.5 block font-mono text-[9px] text-dim/70">Type: {tmpl.meta.fontFamily}</span>
                     </label>
                   );
                 })}
               </div>
+              <p className="mt-2 text-[10px] leading-relaxed text-dim">
+                Layouts are ATS-conscious structure (predictable hierarchy, machine-readable text) — no layout guarantees
+                parsing results. The live ATS diagnostic scores your content, not the template.
+              </p>
             </fieldset>
 
-            {/* Preview controls */}
-            <section aria-label="Preview controls" className="space-y-2 border-t border-[var(--line)] pt-4">
+            {/* Preview: the compiled PDF is the sole authoritative preview. */}
+            <section aria-label="Preview" className="space-y-2 border-t border-[var(--line)] pt-4">
               <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">Preview</h3>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 rounded-xl border border-[var(--line)] bg-black/40 px-1.5 py-1 shadow-inner">
-                  <button
-                    type="button"
-                    onClick={() => setZoom((z) => Math.max(z - 10, 50))}
-                    aria-label="Zoom out"
-                    className="grid h-11 w-11 place-items-center rounded-md text-dim transition-colors hover:bg-white/[0.06] hover:text-[var(--paper)]"
-                  >
-                    <ZoomOut className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                  <span aria-live="polite" className="min-w-[44px] text-center font-mono text-[11px] font-semibold tabular-nums text-[var(--paper)]">
-                    {zoom}%
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setZoom((z) => Math.min(z + 10, 150))}
-                    aria-label="Zoom in"
-                    className="grid h-11 w-11 place-items-center rounded-md text-dim transition-colors hover:bg-white/[0.06] hover:text-[var(--paper)]"
-                  >
-                    <ZoomIn className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setZoom(100)}
-                    aria-label="Reset zoom to 100 percent"
-                    className="grid h-11 w-11 place-items-center rounded-md text-dim transition-colors hover:bg-white/[0.06] hover:text-[var(--paper)]"
-                  >
-                    <RotateCcw className="h-3 w-3" aria-hidden />
-                  </button>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setHtmlOpen((v) => !v)}
-                  aria-expanded={htmlOpen}
-                  className="min-h-[44px] border-[var(--line)] bg-white/[0.04]"
-                >
-                  {htmlOpen ? "Hide structure preview" : "Show structure preview"}
-                </Button>
-              </div>
+              <p className="text-[11px] leading-relaxed text-dim">
+                The compiled LaTeX PDF above is the typography source of truth. Zoom in the PDF header; SyncTeX jumps between the source cursor and the PDF.
+              </p>
             </section>
 
             {/* History & sharing */}

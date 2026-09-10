@@ -2,7 +2,7 @@
 
 import { forwardRef, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { Crosshair, FileCode, ArrowLeftRight, Loader2, MapPin } from "lucide-react";
+import { Crosshair, FileCode, ArrowLeftRight, Loader2, MapPin, MousePointerClick } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 export type SynctexForwardResult = {
@@ -23,18 +23,31 @@ interface SynctexViewerProps {
   className?: string;
   highlightBlock?: string | null;
   onForwardResult?: (res: SynctexForwardResult) => void;
-  onReverseResult?: (res: SynctexReverseResult) => void;
-  onHighlightRequest?: (line: number) => void;
-  /** Line to forward-sync (typically first changed line). */
+  /** Reverse result produced by a real PDF click (owned by the page). */
+  reverseResult?: SynctexReverseResult | null;
+  /** Source line to forward-sync (live editor cursor). */
   targetLine?: number | null;
+  /** Reverse pick mode: the next PDF click reverse-syncs. */
+  pickingReverse?: boolean;
+  onPickReverse?: () => void;
 }
 
 const SynctexViewer = forwardRef<HTMLDivElement, SynctexViewerProps>(
-  ({ token, className, highlightBlock, onForwardResult, onReverseResult, onHighlightRequest, targetLine }, ref) => {
+  (
+    {
+      token,
+      className,
+      highlightBlock,
+      onForwardResult,
+      reverseResult,
+      targetLine,
+      pickingReverse,
+      onPickReverse,
+    },
+    ref
+  ) => {
     const [forwardBusy, setForwardBusy] = useState(false);
-    const [reverseBusy, setReverseBusy] = useState(false);
     const [forwardRes, setForwardRes] = useState<SynctexForwardResult | null>(null);
-    const [reverseRes, setReverseRes] = useState<SynctexReverseResult | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const handleForward = useCallback(async () => {
@@ -63,32 +76,14 @@ const SynctexViewer = forwardRef<HTMLDivElement, SynctexViewerProps>(
       }
     }, [token, targetLine, onForwardResult]);
 
-    const handleReverse = useCallback(async () => {
+    const handlePickReverse = useCallback(() => {
       if (!token) {
         setError("Compile first to enable SyncTeX — no build token yet.");
         return;
       }
-      // Reverse from center of page 1 — representative hit; user can click preview for precise pos
-      setReverseBusy(true);
       setError(null);
-      try {
-        const res = await fetch("/api/resume/synctex/reverse", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token, page: 1, x: 72, y: 144 }),
-        });
-        const data = await res.json();
-        if (!res.ok || !data.ok) throw new Error(data.error?.message || data.error || "SyncTeX reverse failed");
-        const r: SynctexReverseResult = { line: data.line, column: data.column };
-        setReverseRes(r);
-        onReverseResult?.(r);
-        if (r.line) onHighlightRequest?.(r.line);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Reverse sync failed");
-      } finally {
-        setReverseBusy(false);
-      }
-    }, [token, onReverseResult, onHighlightRequest]);
+      onPickReverse?.();
+    }, [token, onPickReverse]);
 
     return (
       <div
@@ -130,18 +125,21 @@ const SynctexViewer = forwardRef<HTMLDivElement, SynctexViewerProps>(
             size="sm"
             variant="outline"
             data-testid="synctex-reverse"
-            onClick={handleReverse}
-            disabled={reverseBusy}
-            title={token ? "Reverse sync PDF → source" : "Compile first"}
+            onClick={handlePickReverse}
+            title={token ? "Arm reverse sync, then click the PDF" : "Compile first"}
             className="gap-1.5"
           >
-            {reverseBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileCode className="h-3.5 w-3.5" />}
-            <span>Jump to source</span>
+            {pickingReverse ? (
+              <MousePointerClick className="h-3.5 w-3.5 animate-pulse" />
+            ) : (
+              <FileCode className="h-3.5 w-3.5" />
+            )}
+            <span>{pickingReverse ? "Click the PDF…" : "Jump to source"}</span>
             <span className="hidden font-mono text-[10px] opacity-60 sm:inline">reverse</span>
           </Button>
         </div>
 
-        {(forwardRes || reverseRes) && (
+        {(forwardRes || reverseResult) && (
           <div className="mt-2 grid grid-cols-2 gap-2 font-mono text-[10px] leading-relaxed">
             {forwardRes && (
               <div
@@ -154,13 +152,13 @@ const SynctexViewer = forwardRef<HTMLDivElement, SynctexViewerProps>(
                 </div>
               </div>
             )}
-            {reverseRes && (
+            {reverseResult && (
               <div
                 data-testid="synctex-reverse-result"
                 className="rounded-lg border border-[var(--sky)]/30 bg-[var(--sky)]/10 px-2 py-1.5 text-[var(--sky)]"
               >
-                <div className="font-bold">reverse → line {reverseRes.line}</div>
-                <div>col {reverseRes.column}</div>
+                <div className="font-bold">reverse → line {reverseResult.line}</div>
+                <div>col {reverseResult.column}</div>
               </div>
             )}
           </div>
@@ -174,7 +172,14 @@ const SynctexViewer = forwardRef<HTMLDivElement, SynctexViewerProps>(
 
         {!token && (
           <p className="mt-2 font-mono text-[10px] leading-relaxed text-dim">
-            Compile the document to get a SyncTeX token. Forward jumps source line → PDF page; reverse jumps PDF point → source line.
+            Compile the document to get a SyncTeX token. Forward jumps the editor cursor line → PDF; reverse jumps a
+            PDF click → source line.
+          </p>
+        )}
+
+        {pickingReverse && token && (
+          <p role="status" className="mt-2 font-mono text-[10px] leading-relaxed text-[var(--sky)]">
+            Reverse armed — click anywhere on the PDF.
           </p>
         )}
       </div>

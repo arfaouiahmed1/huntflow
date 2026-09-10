@@ -54,7 +54,7 @@ Feature: Product loop Discover→Rank→Analyze→Prepare→Apply→Track→Lear
     Given I am on "/resume" with Applicant Profile synced from "/vault"
     And a target role selected from "/tracker" or "/jobs"
     When I choose kind resume or cv and a template from RESUME_TEMPLATES (e.g., Classic LaTeX ATS or tabular-german)
-    Then the A4 structure preview updates with the template's fontFamily while noting the PDF is the typography source of truth
+    Then the compiled PDF preview updates from the template's LaTeX source, noting the PDF is the typography source of truth
     And the AI Resume Copilot tailors content grounded in vault evidence and flags invented metrics for confirmation
     And ATS readiness score at "/resume" reflects parser-friendly structure without guaranteeing outcomes
 

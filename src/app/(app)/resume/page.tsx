@@ -12,15 +12,10 @@ import {
   Check,
   Copy,
   Layers,
-  Zap,
   Save,
   Undo2,
   MessageSquarePlus,
-  FileCode,
   Archive,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
   SlidersHorizontal,
   Code2,
   Cpu,
@@ -36,13 +31,11 @@ import { ResumeContent } from "@/types";
 import { cn } from "@/lib/utils";
 import { analyzeAts } from "@/lib/ats/analyze";
 import ResumePdfPreview from "@/components/resume/ResumePdfPreview";
-import ResumeHtmlFallback from "@/components/resume/ResumeHtmlFallback";
 import ResumeCompileControls from "@/components/resume/ResumeCompileControls";
 import ResumeDiff, { computeDiff, getChangedSections } from "@/components/resume/ResumeDiff";
-import { renderTypstResume } from "@/lib/pdf/typstRenderer";
 import ResumeVariantsManager from "@/components/resume/ResumeVariantsManager";
 import Modal from "@/components/ui/Modal";
-import { resolveCompileEngine, resolveLatexLatency, resolveTypstOutcome, resolveTypstRequestFailure } from "@/lib/resumeCompile";
+import { resolveLatexLatency } from "@/lib/resumeCompile";
 
 interface ChatMessage {
   id: string;
@@ -201,10 +194,10 @@ function profileToResume(profile: ReturnType<typeof useApp>["profile"]): ResumeC
     projects: [
       {
         name: "HuntFlow Career Engine",
-        tech: "Next.js, TypeScript, SQLite, Typst",
+        tech: "Next.js, TypeScript, SQLite, LaTeX",
         link: "github.com/huntflow/core",
         bullets: [
-          "Built high-performance local-first career operating system with instant <30ms Typst typesetting engine.",
+          "Built high-performance local-first career operating system with compiled LaTeX PDF typesetting.",
         ],
       },
     ],
@@ -220,9 +213,10 @@ export default function ResumeStudioPage() {
   const [selectedJobId, setSelectedJobId] = useState<string>("");
   const [selectedTemplate, setSelectedTemplate] = useState<string>("classic-ats");
   const [docKind, setDocKind] = useState<"resume" | "cv">("resume");
-  const [engine, setEngine] = useState<"latex" | "typst">("typst");
+  // PDF-first Studio: LaTeX is the sole compile engine. The compiled PDF is
+  // the only authoritative preview — there is no HTML fallback and Typst
+  // markup is never presented as a PDF.
   const [latexSource, setLatexSource] = useState("");
-  const [typstSource, setTypstSource] = useState("");
   const [compilingPdf, setCompilingPdf] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfState, setPdfState] = useState<"idle" | "compiling" | "ready" | "no-tex" | "error">("idle");
@@ -230,12 +224,11 @@ export default function ResumeStudioPage() {
   const [compiledTex, setCompiledTex] = useState<string | null>(null);
   const [compileToken, setCompileToken] = useState<string | null>(null);
   const [compileLatencyMs, setCompileLatencyMs] = useState<number | null>(null);
-  const [htmlOpen, setHtmlOpen] = useState(true);
   const [diffCollapsed, setDiffCollapsed] = useState(true);
   // Pinned source snapshot for the TeX diff viewer. Null until the user pins
   // a baseline — the diff viewer and the changed-sections chip stay hidden
   // until then, instead of advertising dead controls.
-  const [baseline, setBaseline] = useState<{ tex: string; engine: "latex" | "typst" } | null>(null);
+  const [baseline, setBaseline] = useState<{ tex: string } | null>(null);
   // Pending template/mode switch awaiting explicit user confirmation (see
   // confirmPendingSwitch — layout switches never silently mutate content).
   const [pendingSwitch, setPendingSwitch] = useState<
@@ -250,33 +243,28 @@ export default function ResumeStudioPage() {
   const [refineTab, setRefineTab] = useState<"chat" | "ats" | "diff">("chat");
   const [refineCollapsed, setRefineCollapsed] = useState(false);
   const [configureOpen, setConfigureOpen] = useState(false);
-  const [zoom, setZoom] = useState(100);
   // Dirty tracking: snapshot of the last profile-synced content so the UI can
   // say honestly whether the canvas holds unsynced changes.
   const [lastSyncedJson, setLastSyncedJson] = useState(() => JSON.stringify(profileToResume(profile)));
   const isDirty = useMemo(() => JSON.stringify(resume) !== lastSyncedJson, [resume, lastSyncedJson]);
   // Honest one-line compile status for the header chip (role=status).
   const compileStatus = useMemo(() => {
-    if (pdfState === "compiling") return engine === "typst" ? "Rendering Typst preview…" : "Compiling LaTeX…";
+    if (pdfState === "compiling") return "Compiling LaTeX…";
     if (pdfState === "no-tex") return "TeX unavailable";
     if (pdfState === "error") return "Compile failed";
-    if (engine === "typst") return "Typst preview · HTML approximation";
     return pdfUrl ? "PDF ready · LaTeX" : "Preview ready";
-  }, [pdfState, engine, pdfUrl]);
+  }, [pdfState, pdfUrl]);
 
   const filteredTemplates = useMemo(
     () => ALL_TEMPLATES.filter((t) => t.kind === docKind || t.kind === "both"),
     [docKind]
   );
 
-  // Live source for the active engine (the diff "after" side). A baseline
-  // only diffs against the same engine that pinned it — Typst markup versus
-  // LaTeX source would be noise, so cross-engine comparisons stay hidden.
-  const currentTex = engine === "typst" ? typstSource : latexSource;
-  const baselineMatchesEngine = baseline !== null && baseline.engine === engine;
+  // Live LaTeX source is the diff "after" side.
+  const currentTex = latexSource;
   const changedSections = useMemo(
-    () => (baseline && baseline.engine === engine ? getChangedSections(computeDiff(baseline.tex, currentTex)) : []),
-    [baseline, engine, currentTex]
+    () => (baseline ? getChangedSections(computeDiff(baseline.tex, currentTex)) : []),
+    [baseline, currentTex]
   );
 
 
@@ -293,7 +281,7 @@ export default function ResumeStudioPage() {
     {
       id: "msg-0",
       sender: "assistant",
-      text: "**Welcome to the LaTeX & Typst Resume Studio!**\n\nI operate across your live document canvas. You can ask me to rewrite bullet points with quantifiable impact, sync data from your **Vault**, or switch typesetting engines.\n\n*Tip: Highlight any text on the preview canvas (mouse or keyboard) to instantly quote and edit with AI.*",
+      text: "**Welcome to the LaTeX Resume Studio!**\n\nI operate across your live document canvas. You can ask me to rewrite bullet points with quantifiable impact, sync data from your **Vault**, or tailor for a target role.\n\n*Tip: Highlight any text on the preview canvas (mouse or keyboard) to instantly quote and edit with AI.*",
       timestamp: "Just now",
     },
   ]);
@@ -328,16 +316,6 @@ export default function ResumeStudioPage() {
     }
   }, [resume, selectedJob]);
 
-  // Update Typst markup
-  useEffect(() => {
-    try {
-      const markup = renderTypstResume(selectedTemplate, resume);
-      setTypstSource(markup);
-    } catch {
-      // safe fallback
-    }
-  }, [resume, selectedTemplate]);
-
   // Render LaTeX representation in backend
   const updateLatexPreview = useCallback(async (content: ResumeContent, templateId: string) => {
     try {
@@ -359,56 +337,14 @@ export default function ResumeStudioPage() {
     updateLatexPreview(resume, selectedTemplate);
   }, [resume, selectedTemplate, updateLatexPreview]);
 
-  // Engine-explicit compile. Callers switching engines pass the target
-  // engine directly: `setEngine` commits asynchronously, so compiling with
-  // captured `engine` state would run the previous pipeline on first
-  // switch (PR #22). Engine-agnostic callers omit the arg (current engine).
-  const compilePreview = useCallback(async (overrideEngine?: "latex" | "typst") => {
-    const activeEngine = resolveCompileEngine(overrideEngine, engine);
+  // LaTeX-only compile. The compiled PDF is the sole authoritative preview;
+  // there is no markup-preview fallback — failures report `error` or
+  // `no-tex`, never a stale artifact.
+  const compilePreview = useCallback(async () => {
     setPdfState("compiling");
     setPdfError(null);
     const start = Date.now();
 
-    // Typst fast path: the route returns rendered Typst *markup* for the HTML
-    // approximation preview — never a compiled PDF (this deployment has no
-    // Typst PDF toolchain). Every LaTeX/PDF artifact clears BEFORE the
-    // request so a prior compiled PDF can never stay visible behind the
-    // Typst preview (PR #22); failures report `error`, never `ready`.
-    if (activeEngine === "typst") {
-      setPdfUrl(null);
-      setCompileToken(null);
-      setCompiledTex(null);
-      setCompileLatencyMs(null);
-      setPdfError(null);
-      try {
-        const res = await fetch("/api/resume/compile-typst", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: resume, templateId: selectedTemplate }),
-        });
-        if (!res.ok) {
-          const outcome = resolveTypstRequestFailure(`HTTP ${res.status}`);
-          setCompileLatencyMs(outcome.latencyMs);
-          setPdfError(outcome.pdfError);
-          setPdfState(outcome.pdfState);
-          return;
-        }
-        const data = (await res.json()) as { ok?: boolean; success?: boolean; typstMarkup?: string; durationMs?: number };
-        const outcome = resolveTypstOutcome(data, Date.now() - start);
-        if (outcome.pdfState === "ready" && outcome.markup) setTypstSource(outcome.markup);
-        setCompileLatencyMs(outcome.latencyMs);
-        setPdfError(outcome.pdfError);
-        setPdfState(outcome.pdfState);
-      } catch (e: unknown) {
-        const outcome = resolveTypstRequestFailure(e instanceof Error ? e.message : String(e));
-        setCompileLatencyMs(outcome.latencyMs);
-        setPdfError(outcome.pdfError);
-        setPdfState(outcome.pdfState);
-      }
-      return;
-    }
-
-    // LaTeX engine
     if (!latexSource.trim()) {
       // Source still rendering: stay idle (badge cleared) so the idle-gated
       // effect below retries once the render route delivers.
@@ -443,22 +379,15 @@ export default function ResumeStudioPage() {
         setPdfState("error");
       }
     }
-  }, [engine, resume, selectedTemplate, latexSource]);
+  }, [latexSource]);
 
-  // "Compile for SyncTeX" only means something on the LaTeX engine, where a
-  // compile mints the token SyncTeX navigates with. On Typst there is no
-  // token to mint, so explain instead of silently recompiling markup.
+  // Compile mints the token SyncTeX navigates with.
   const compileSynctex = useCallback(async () => {
-    if (engine !== "latex") {
-      errToast("SyncTeX needs the LaTeX engine — switch engines first, then compile.");
-      return;
-    }
-    await compilePreview(engine);
-  }, [compilePreview, engine, errToast]);
+    await compilePreview();
+  }, [compilePreview]);
 
-  // Initial render only: once latexSource arrives while idle, compile with
-  // the current engine. No duplicate loop on engine switches — the explicit
-  // switch compile below sets pdfState to "compiling" synchronously, so
+  // Initial render only: once latexSource arrives while idle, compile.
+  // The explicit compile sets pdfState to "compiling" synchronously, so
   // this idle gate stays shut after it runs.
   useEffect(() => {
     if (latexSource && pdfState === "idle") {
@@ -632,11 +561,8 @@ export default function ResumeStudioPage() {
   const downloadPdf = async () => {
     setCompilingPdf(true);
     try {
-      // Export always produces a real PDF through the LaTeX toolchain: the
-      // Typst fast path renders markup only and has no PDF backend, so there
-      // is nothing to download from it directly. Fall through to render +
-      // compile below regardless of the preview engine.
-      // Fallback or LaTeX compile
+      // Export always produces a real PDF through the LaTeX toolchain —
+      // the sole authoritative artifact. Render + compile below.
       let tex = latexSource;
       if (!tex) {
         const r = await fetch("/api/resume/render", {
@@ -725,17 +651,17 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
     setTimeout(() => setCopied(false), 2000);
     success("Copied clean markdown to clipboard!");
   };
-  // Pin the live engine source as the diff baseline (shared by the compile
+  // Pin the live LaTeX source as the diff baseline (shared by the compile
   // controls and the Diff tab).
   const pinBaseline = () => {
-    const src = engine === "typst" ? typstSource : latexSource;
+    const src = latexSource;
     if (!src.trim()) {
       errToast("Nothing to pin yet — wait for the preview to render.");
       return;
     }
-    setBaseline({ tex: src, engine });
+    setBaseline({ tex: src });
     setDiffCollapsed(false);
-    success(`Baseline pinned on ${engine === "typst" ? "Typst markup" : "LaTeX source"} — diff is live.`);
+    success("Baseline pinned on LaTeX source — diff is live.");
   };
 
   return (
@@ -762,7 +688,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
         </div>
       )}
 
-      {/* Studio Header: engine, target job, compile status, export, configure */}
+      {/* Studio Header: target job, compile status, export, configure */}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-[var(--line)] bg-[var(--ink-card)]/80 px-4 py-2.5 backdrop-blur shrink-0">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="font-display flex items-center gap-2 text-[15px] font-bold tracking-tight text-[var(--paper)]">
@@ -778,52 +704,10 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             )}
           </h1>
 
-          {/* Engine selector: Typst fast markup preview vs authoritative LaTeX PDF */}
-          <div role="group" aria-label="Typesetting engine" className="flex items-center rounded-xl border border-[var(--line)] bg-black/40 p-0.5 shadow-inner">
-            <button
-              type="button"
-              aria-pressed={engine === "typst"}
-              onClick={() => {
-                // Pass the target engine explicitly: setEngine commits
-                // async, so a bare compilePreview() would run the stale
-                // engine. Clearing the badge avoids a cross-engine stale
-                // label ("LaTeX compiled in <typst>ms") while compiling.
-                setEngine("typst");
-                setCompileLatencyMs(null);
-                void compilePreview("typst");
-              }}
-              className={cn(
-                "flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-all",
-                engine === "typst"
-                  ? "bg-sky-500 font-bold text-neutral-950 shadow-sm"
-                  : "text-dim hover:text-[var(--paper)]"
-              )}
-              title="Typst fast preview (HTML approximation — no compiled PDF)"
-            >
-              <Zap className="h-3 w-3" aria-hidden />
-              <span>Typst</span>
-            </button>
-            <button
-              type="button"
-              aria-pressed={engine === "latex"}
-              onClick={() => {
-                setEngine("latex");
-                setCompileLatencyMs(null);
-                void compilePreview("latex");
-              }}
-              className={cn(
-                "flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-all",
-                engine === "latex"
-                  ? "bg-emerald-500 font-bold text-neutral-950 shadow-sm"
-                  : "text-dim hover:text-[var(--paper)]"
-              )}
-              title="LaTeX compiler (authoritative PDF + SyncTeX)"
-            >
-              <FileCode className="h-3 w-3" aria-hidden />
-              <span>LaTeX</span>
-            </button>
-          </div>
-
+          {/* Sole engine badge: LaTeX compiles the authoritative PDF. */}
+          <span className="flex min-h-[44px] items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-200" title="LaTeX compiler (authoritative PDF + SyncTeX)">
+            <span>LaTeX PDF</span>
+          </span>
           {/* Target job (compact readout — full tailoring context lives here too) */}
           <div className="w-44 sm:w-56">
             <Select
@@ -866,7 +750,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             onClick={() => setConfigureOpen(true)}
             aria-haspopup="dialog"
             aria-label="Configure studio settings"
-            title="Studio settings: templates, zoom, history, compile actions"
+            title="Studio settings: templates, history, compile actions"
             className="min-h-[44px] border-[var(--line)] bg-white/[0.04] hover:bg-white/[0.06]"
           >
             <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
@@ -889,7 +773,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
           {compileLatencyMs !== null && (
             <div role="status" className="absolute top-3 left-4 flex items-center gap-2 rounded-full border border-line bg-black/60 px-3 py-1 text-[10px] font-mono text-dim backdrop-blur">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
-              <span>{engine === "typst" ? `Typst markup rendered in ${compileLatencyMs}ms · HTML approximation` : `LaTeX compiled in ${compileLatencyMs}ms`}</span>
+              <span>{`LaTeX compiled in ${compileLatencyMs}ms`}</span>
             </div>
           )}
 
@@ -898,18 +782,8 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
             pdfState={pdfState}
             pdfError={pdfError}
             compiledTex={compiledTex}
-            latexSource={engine === "typst" ? typstSource : latexSource}
+            latexSource={latexSource}
             compileToken={compileToken}
-          />
-          <ResumeHtmlFallback
-            resume={resume}
-            selectedTemplate={selectedTemplate}
-            zoom={zoom}
-            isDragging={false}
-            htmlOpen={htmlOpen}
-            onToggle={() => setHtmlOpen((v) => !v)}
-            pdfUrl={pdfUrl}
-            pdfState={pdfState}
           />
         </div>
         {!refineCollapsed && (
@@ -999,7 +873,7 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
                 <span>live session</span>
               </div>
               <p className="text-white/80">Copilot: HUNTFLOW Elite Resume Strategist, grounded in your vault.</p>
-              <p className="text-white/60">Template: {selectedTemplate} | Mode: {docKind} | Engine: {engine}</p>
+              <p className="text-white/60">Template: {selectedTemplate} | Mode: {docKind} | Engine: LaTeX PDF</p>
               <p className="text-white/40 truncate">Active context: {resume.experience?.length || 0} roles, {resume.skills?.length || 0} skills{selectedJob ? ` · target: ${selectedJob.company} — ${selectedJob.title}` : ""}</p>
               <p className="text-white/40">Sampling parameters live server-side; nothing is hidden here.</p>
             </div>
@@ -1143,10 +1017,6 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
               <p className="mt-3 rounded-xl border border-[var(--line)] bg-black/30 px-3.5 py-2.5 text-[11px] leading-relaxed text-dim">
                 No baseline pinned yet. Pin one to compare every later edit line-by-line, per section.
               </p>
-            ) : !baselineMatchesEngine ? (
-              <p role="status" className="mt-3 rounded-xl border border-[var(--line)] bg-black/30 px-3.5 py-2.5 text-[11px] leading-relaxed text-dim">
-                Baseline was pinned on {baseline.engine === "typst" ? "Typst markup" : "LaTeX source"} — switch back to that engine or pin a fresh baseline to compare.
-              </p>
             ) : (
               <ResumeDiff beforeTex={baseline.tex} afterTex={currentTex} className="mt-3" />
             )}
@@ -1280,49 +1150,12 @@ ${resume.projects && resume.projects.length > 0 ? `## PROJECTS\n${resume.project
               </div>
             </fieldset>
 
-            {/* Preview controls */}
-            <section aria-label="Preview controls" className="space-y-2 border-t border-[var(--line)] pt-4">
+            {/* Preview: the compiled PDF is the sole authoritative preview. */}
+            <section aria-label="Preview" className="space-y-2 border-t border-[var(--line)] pt-4">
               <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">Preview</h3>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 rounded-xl border border-[var(--line)] bg-black/40 px-1.5 py-1 shadow-inner">
-                  <button
-                    type="button"
-                    onClick={() => setZoom((z) => Math.max(z - 10, 50))}
-                    aria-label="Zoom out"
-                    className="grid h-11 w-11 place-items-center rounded-md text-dim transition-colors hover:bg-white/[0.06] hover:text-[var(--paper)]"
-                  >
-                    <ZoomOut className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                  <span aria-live="polite" className="min-w-[44px] text-center font-mono text-[11px] font-semibold tabular-nums text-[var(--paper)]">
-                    {zoom}%
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setZoom((z) => Math.min(z + 10, 150))}
-                    aria-label="Zoom in"
-                    className="grid h-11 w-11 place-items-center rounded-md text-dim transition-colors hover:bg-white/[0.06] hover:text-[var(--paper)]"
-                  >
-                    <ZoomIn className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setZoom(100)}
-                    aria-label="Reset zoom to 100 percent"
-                    className="grid h-11 w-11 place-items-center rounded-md text-dim transition-colors hover:bg-white/[0.06] hover:text-[var(--paper)]"
-                  >
-                    <RotateCcw className="h-3 w-3" aria-hidden />
-                  </button>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setHtmlOpen((v) => !v)}
-                  aria-expanded={htmlOpen}
-                  className="min-h-[44px] border-[var(--line)] bg-white/[0.04]"
-                >
-                  {htmlOpen ? "Hide structure preview" : "Show structure preview"}
-                </Button>
-              </div>
+              <p className="text-[11px] leading-relaxed text-dim">
+                The compiled LaTeX PDF above is the typography source of truth. Pan/zoom and source-synchronized navigation arrive with the PDF viewer layer.
+              </p>
             </section>
 
             {/* History & sharing */}

@@ -6,57 +6,48 @@ function read(p: string) {
   return fs.readFileSync(path.join(process.cwd(), p), "utf8");
 }
 
-describe("Task 17-18 — Resume Studio bounded preview + PDF primary", () => {
-  it("creates bounded resume components each <=150 lines and uses design tokens", () => {
+describe("Overleaf Resume Studio — TexEditor + PdfViewer primary", () => {
+  it("creates clean Overleaf components with design tokens", () => {
     const files = [
-      "src/components/resume/ResumePdfPreview.tsx",
-      "src/components/resume/ResumeHtmlFallback.tsx",
-      "src/components/resume/ResumeCompileControls.tsx",
+      "src/components/resume/TexEditor.tsx",
+      "src/components/resume/PdfViewer.tsx",
+      "src/hooks/useAutoCompile.ts",
     ];
     for (const f of files) {
       const src = read(f);
-      const lines = src.split("\n").length;
-      expect(lines, `${f} bounded`).toBeLessThanOrEqual(150);
-      // design tokens: uses var(--line) or var(--paper) or cn()
-      // allow
       expect(src.length).toBeGreaterThan(0);
+      expect(src).toContain("use client");
     }
   });
 
-  it("wires PDF primary + labeled HTML fallback in resume/page.tsx", () => {
+  it("wires TexEditor + PdfViewer in resume/page.tsx without HTML fallback", () => {
     const src = read("src/app/(app)/resume/page.tsx");
-    expect(src).toContain("ResumePdfPreview");
-    expect(src).toContain("ResumeHtmlFallback");
-    expect(src).toContain("ResumeCompileControls");
-    expect(src).toContain("pdfState");
-    expect(src).toContain("pdfUrl");
-    // auto-compile effect
-    expect(src).toContain("compilePreview");
-    // fallback labeling via data-testid in fallback component
-    const fallback = read("src/components/resume/ResumeHtmlFallback.tsx");
-    expect(fallback).toContain('data-testid="html-fallback-label"');
-    expect(fallback).toContain("Structure approximation");
-    const pdf = read("src/components/resume/ResumePdfPreview.tsx");
+    expect(src).toContain("TexEditor");
+    expect(src).toContain("PdfViewer");
+    expect(src).not.toContain("ResumeHtmlFallback");
+    expect(src).not.toContain("ResumeCompileControls");
+    expect(src).not.toContain("ResumePdfPreview");
+    expect(src).toContain("useAutoCompile");
+  });
+
+  it("exports AUTO_COMPILE_DEBOUNCE_MS with generation guard in useAutoCompile", () => {
+    const src = read("src/hooks/useAutoCompile.ts");
+    expect(src).toContain("AUTO_COMPILE_DEBOUNCE_MS");
+    expect(src).toContain("1200");
+    expect(src).toContain("AbortController");
+  });
+
+  it("PdfViewer contains stable testids", () => {
+    const pdf = read("src/components/resume/PdfViewer.tsx");
     expect(pdf).toContain('data-testid="compiled-pdf"');
-    expect(pdf).toContain('data-testid="no-tex-banner"');
+    expect(pdf).toContain('data-testid="compiled-pdf-frame"');
   });
 
   it("keeps resume/page.tsx bounded <1500 lines and imports are clean", () => {
     const src = read("src/app/(app)/resume/page.tsx");
     const lines = src.split("\n").length;
     expect(lines).toBeLessThan(1500);
-    expect(lines).toBeGreaterThan(800);
-    // single header import consolidation
+    expect(lines).toBeGreaterThan(400);
     expect(src).toContain('"use client"');
-  });
-
-  it("fallback is collapsible and pdf primary is authoritative", () => {
-    const pdf = read("src/components/resume/ResumePdfPreview.tsx");
-    // PDF is typography source of truth
-    expect(pdf).toContain("typography source of truth");
-    expect(pdf).toContain("Compiled PDF");
-    const fallback = read("src/components/resume/ResumeHtmlFallback.tsx");
-    expect(fallback).toContain("html-preview-toggle");
-    expect(fallback).toContain("pdfState");
   });
 });

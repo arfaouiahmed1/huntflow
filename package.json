@@ -6,6 +6,7 @@
     "node": ">=22 <23"
   },
   "scripts": {
+    "postinstall": "node -e \"const fs = require('fs'); fs.copyFileSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs', 'public/pdf.worker.min.mjs');\"",
     "predev": "node scripts/predev.mjs",
     "dev": "concurrently -n \"next,scrapling\" -c \"green,magenta\" \"next dev\" \"cd scrapling-agent && uv run uvicorn server:app --port 8001\"",
     "dev:all": "npm run dev",
@@ -30,9 +31,11 @@
     "quality:react-doctor": "react-doctor --no-telemetry"
   },
   "dependencies": {
+    "@codemirror/legacy-modes": "^6.5.4",
     "@langchain/langgraph": "^1.4.8",
     "@types/canvas-confetti": "^1.9.0",
     "@types/pdf-parse": "^1.1.5",
+    "@uiw/react-codemirror": "^4.25.11",
     "canvas-confetti": "^1.9.4",
     "cheerio": "^1.2.0",
     "clsx": "^2.1.1",
@@ -44,6 +47,7 @@
     "next": "^16.3.1",
     "nodemailer": "^9.0.3",
     "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^6.3.289",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwind-merge": "^3.6.0",

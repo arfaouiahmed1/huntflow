@@ -71,6 +71,83 @@ export interface CompileWithSynctexResult {
   logTail: string;
 }
 
+export const DEFAULT_AVATAR_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+export function isValidPngBuffer(buf: Buffer): boolean {
+  if (!buf || buf.length < 24) return false;
+  const magic = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  for (let i = 0; i < 8; i++) {
+    if (buf[i] !== magic[i]) return false;
+  }
+  return buf.subarray(12, 16).toString("ascii") === "IHDR";
+}
+
+interface CachedAsset {
+  buffer: Buffer;
+  expiresAt: number;
+}
+
+const remoteAssetCache = new Map<string, CachedAsset>();
+const ASSET_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes (aligns with BUILD_TTL_MS)
+
+async function fetchRemoteAssetWithCache(url: string): Promise<Buffer | null> {
+  const normalized = url.trim();
+  const now = Date.now();
+  const cached = remoteAssetCache.get(normalized);
+  if (cached && cached.expiresAt > now) {
+    return cached.buffer;
+  }
+
+  try {
+    const res = await fetch(normalized, { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const ab = await res.arrayBuffer();
+      const buf = Buffer.from(ab);
+      if (isValidPngBuffer(buf)) {
+        remoteAssetCache.set(normalized, {
+          buffer: buf,
+          expiresAt: now + ASSET_CACHE_TTL_MS,
+        });
+        return buf;
+      }
+    }
+  } catch {
+    // Non-blocking fallback to placeholder
+  }
+
+  return null;
+}
+
+async function prepareAssets(dir: string, tex: string): Promise<void> {
+  const imgMatches = [...tex.matchAll(/\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}/g)];
+  if (!imgMatches.length) return;
+
+  const photoUrlMatch = tex.match(/%\s*HUNTFLOW_PHOTO_SOURCE:\s*(https?:\/\/[^\s\n]+)/i);
+  let fetchedBuffer: Buffer | null = null;
+
+  if (photoUrlMatch) {
+    fetchedBuffer = await fetchRemoteAssetWithCache(photoUrlMatch[1]);
+  }
+  let fallbackBuffer: Buffer;
+  if (fetchedBuffer && isValidPngBuffer(fetchedBuffer)) {
+    fallbackBuffer = fetchedBuffer;
+  } else {
+    fallbackBuffer = Buffer.from(DEFAULT_AVATAR_PNG_BASE64, "base64");
+  }
+
+  if (!isValidPngBuffer(fallbackBuffer)) {
+    throw new PdfError("Invalid avatar image asset: missing PNG header.");
+  }
+
+  for (const m of imgMatches) {
+    let filename = m[1].trim();
+    if (!filename.includes(".")) filename += ".png";
+    const targetPath = join(dir, filename);
+    await writeFile(targetPath, fallbackBuffer).catch(() => {});
+  }
+}
+
 /**
  * Compile a LaTeX document to a PDF buffer in a throwaway temp dir.
  * Runs twice when the document contains references/titles (stability).
@@ -85,6 +162,7 @@ export async function compileLatex(
   const dir = await mkdtemp(join(tmpdir(), "huntflow-tex-"));
   try {
     await writeFile(join(dir, "doc.tex"), tex, "utf8");
+    await prepareAssets(dir, tex);
     await runRuns(engine, dir, runs);
     return await readFile(join(dir, "doc.pdf"));
   } finally {
@@ -123,7 +201,7 @@ export async function compileWithSynctex(
 
   try {
     await writeFile(join(dir, "doc.tex"), tex, "utf8");
-
+    await prepareAssets(dir, tex);
     const args = [
       "-interaction=nonstopmode",
       "-halt-on-error",
@@ -164,17 +242,7 @@ export async function compileWithSynctex(
   }
 }
 
-/** Parse a latexmk/pdflatex log tail into structured error lines (for SSE). */
-export function parseLatexLog(logTail: string): string[] {
-  if (!logTail) return [];
-  const compact = logTail.replace(/\s+/g, " ").replace(/con trol/i, "control");
-  if (/Undefined/i.test(compact)) return [compact.match(/Undefined[^.!]*[.!]?/i)?.[0]?.trim() || "Undefined control sequence"].slice(0, 20);
-  return logTail
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => /! |^l\.\d+|Error|Undefined|Missing|Runaway|File ended|Fatal/i.test(l))
-    .slice(0, 20);
-}
+export { parseLatexLog } from "./sanitize";
 
 /* ------------------------------------------------------------------ *
  * Build cache — keeps the compiled artifact dir alive for SyncTeX.

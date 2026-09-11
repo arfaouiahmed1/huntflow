@@ -162,23 +162,40 @@ export async function POST(req: NextRequest) {
       }
 
       const userPrompt = `CURRENT .tex DOCUMENT:\n${inputTex}\n${vaultContext}\n${targetJobContext}${historyContext}\n\nUSER REQUEST / INSTRUCTION:\n${body.message}\n\nReturn JSON with 'reply', 'actionSummary', and 'tex' (complete edited file).`;
-      const parsed = await callLLMJSON<{
-        reply: string;
-        actionSummary: string;
-        tex: string;
-      }>(
-        {
-          system: COPILOT_TEX_SYSTEM_PROMPT,
-          user: userPrompt,
-          agent: "resume",
-        },
-        chain
-      );
+      let parsed: { reply?: string; actionSummary?: string; tex?: string } | null = null;
+      let providerFailed = false;
+      try {
+        parsed = await callLLMJSON<{
+          reply: string;
+          actionSummary: string;
+          tex: string;
+        }>(
+          {
+            system: COPILOT_TEX_SYSTEM_PROMPT,
+            user: userPrompt,
+            agent: "resume",
+          },
+          chain
+        );
+      } catch {
+        // Provider unreachable (bad key, network, model retired) — degrade
+        // gracefully instead of 500ing; the editor keeps the current buffer.
+        providerFailed = true;
+      }
       const tex = sanitizeTex(parsed?.tex || "");
+      if (providerFailed || !parsed) {
+        return NextResponse.json({
+          ok: true,
+          degraded: true,
+          reply: "The configured AI provider is unreachable right now (check the API key in Settings → LLM Providers), so I left your document unchanged. Your current LaTeX is preserved below — retry once the provider is healthy.",
+          actionSummary: "No changes applied (AI provider unreachable).",
+          tex: inputTex,
+        });
+      }
       return NextResponse.json({
         ok: true,
-        reply: parsed?.reply || "I've reviewed and updated your LaTeX based on your request.",
-        actionSummary: parsed?.actionSummary || "Updated LaTeX content.",
+        reply: parsed.reply || "I've reviewed and updated your LaTeX based on your request.",
+        actionSummary: parsed.actionSummary || "Updated LaTeX content.",
         tex: tex || inputTex,
       });
     }
@@ -205,18 +222,35 @@ Please analyze the resume against their vault info and request, execute the requ
       });
     }
 
-    const parsed = await callLLMJSON<{
-      reply: string;
-      actionSummary: string;
-      updatedResume: ResumeContent;
-    }>(
-      {
-        system: COPILOT_SYSTEM_PROMPT,
-        user: userPrompt,
-        agent: "resume",
-      },
-      chain
-    );
+    let legacyParsed: { reply?: string; actionSummary?: string; updatedResume?: ResumeContent } | null = null;
+    try {
+      legacyParsed = await callLLMJSON<{
+        reply: string;
+        actionSummary: string;
+        updatedResume: ResumeContent;
+      }>(
+        {
+          system: COPILOT_SYSTEM_PROMPT,
+          user: userPrompt,
+          agent: "resume",
+        },
+        chain
+      );
+    } catch {
+      // Provider unreachable — fall through to the offline response below.
+      legacyParsed = null;
+    }
+    if (!legacyParsed) {
+      return NextResponse.json({
+        ok: true,
+        degraded: true,
+        reply: "The configured AI provider is unreachable right now (check the API key in Settings → LLM Providers), so I left your resume unchanged.",
+        actionSummary: "No changes applied (AI provider unreachable).",
+        updatedResume: currentResume,
+        tex: renderTemplate(body.templateId || "classic-ats", currentResume),
+      });
+    }
+    const parsed = legacyParsed;
     void history;
     const sanitizedResume = (parsed?.updatedResume ? cleanResumeContent(parsed.updatedResume) : null) || currentResume;
 

@@ -290,4 +290,42 @@ Spearheaded payment pipeline redesign, cutting p99 latency by 42% ($2M annual sa
     expect(data.reply).toContain("offline mode");
     expect(data.tex).toContain("Managed deployments");
   });
+
+  it("degrades gracefully when the provider rejects on the tex path", async () => {
+    mockCallLLMJSON.mockRejectedValueOnce(new Error("401 Unauthorized"));
+
+    const inputTex = "\\documentclass{article}\\begin{document}Original content\\end{document}";
+    const req = makePostRequest({ message: "Rewrite everything", tex: inputTex });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+
+    expect(data.ok).toBe(true);
+    expect(data.degraded).toBe(true);
+    expect(data.tex).toBe(inputTex);
+    expect(data.actionSummary).toContain("No changes applied");
+  });
+
+  it("degrades gracefully when the provider rejects on the legacy resume path", async () => {
+    mockCallLLMJSON.mockRejectedValueOnce(new Error("model retired"));
+
+    const req = makePostRequest({
+      message: "Polish phrasing",
+      resume: {
+        header: { name: "Alex Rivera", title: "SRE", email: "a@x.dev", phone: "", location: "", linkedin: "", github: "", portfolio: "" },
+        skills: ["Go"],
+      },
+      templateId: "classic-ats",
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+
+    expect(data.ok).toBe(true);
+    expect(data.degraded).toBe(true);
+    expect(data.updatedResume.skills).toContain("Go");
+    expect(data.tex).toContain("\\documentclass");
+  });
 });

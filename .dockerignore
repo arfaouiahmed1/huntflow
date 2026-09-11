@@ -9,6 +9,6 @@ output
 .env
 .env.*
 !.env.local.example
-scrapling-agent/.venv
-scrapling-agent/.agent_runs
-scrapling-agent/__pycache__
+scrapling-agent
+wiki-staging
+.claude

@@ -78,3 +78,4 @@ vitest*.log
 fix_*.py
 new_readme_snippet.txt
 old_readme_snippet.txt
+wiki-staging/

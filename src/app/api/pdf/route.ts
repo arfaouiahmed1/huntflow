@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
       profile?: UserProfile;
       job?: Partial<JobApplication>;
       templateId?: string;
+      format?: string;
     };
 
     const { docType, content, profile, job, templateId } = body;
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
 
     const jobLike = (job || { title: "", company: "" }) as JobApplication;
     const tex = texForTemplate(templateId, docType, profile, jobLike, content);
-
+    if (body.format === "tex") return Response.json({ ok: true, tex });
     const engine = await resolveEngine();
     const pdf = await compileLatex(tex, { engine: engine === "xelatex" ? "xelatex" : engine === "lualatex" ? "lualatex" : "pdflatex" });
 

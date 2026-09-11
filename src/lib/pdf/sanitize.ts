@@ -167,4 +167,14 @@ export function texToText(tex: string): string {
     .trim();
 }
 
-
+/** Parse a latexmk/pdflatex log tail into structured error lines (for SSE/editor). */
+export function parseLatexLog(logTail: string): string[] {
+  if (!logTail) return [];
+  const compact = logTail.replace(/\s+/g, " ").replace(/con trol/i, "control");
+  if (/Undefined/i.test(compact)) return [compact.match(/Undefined[^.!]*[.!]?/i)?.[0]?.trim() || "Undefined control sequence"].slice(0, 20);
+  return logTail
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => /! |^l\.\d+|Error|Undefined|Missing|Runaway|File ended|Fatal/i.test(l))
+    .slice(0, 20);
+}

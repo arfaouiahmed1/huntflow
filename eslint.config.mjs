@@ -17,6 +17,7 @@ const eslintConfig = defineConfig([
     ".claude/**",
     "scripts/**",
     "data/**",
+    "public/**",
   ]),
 ]);
 

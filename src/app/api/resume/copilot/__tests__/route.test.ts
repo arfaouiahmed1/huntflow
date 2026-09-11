@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "../route";
-import { callLLMJSON } from "@/lib/llm/router";
+import { callLLMJSON, resolveChain } from "@/lib/llm/router";
 import { searchVault, VaultSearchHit } from "@/lib/vault";
 
 vi.mock("@/lib/llm/router", () => ({
   callLLMJSON: vi.fn(),
-  resolveChain: vi.fn().mockReturnValue([]),
+  resolveChain: vi.fn().mockReturnValue([{ apiKey: "mock-key", provider: "openai" }]),
 }));
 
 vi.mock("@/lib/vault", () => ({
@@ -14,6 +14,7 @@ vi.mock("@/lib/vault", () => ({
 }));
 
 const mockCallLLMJSON = vi.mocked(callLLMJSON);
+const mockResolveChain = vi.mocked(resolveChain);
 const mockSearchVault = vi.mocked(searchVault);
 
 const VALID_LATEX = `\\documentclass{article}
@@ -56,6 +57,8 @@ function makeVaultHit(overrides: Partial<VaultSearchHit> = {}): VaultSearchHit {
 
 beforeEach(() => {
   mockCallLLMJSON.mockReset();
+  mockResolveChain.mockReset();
+  mockResolveChain.mockReturnValue([{ apiKey: "mock-key", provider: "openai" } as never]);
   mockSearchVault.mockReset();
   mockSearchVault.mockResolvedValue([]);
 });
@@ -269,5 +272,22 @@ Spearheaded payment pipeline redesign, cutting p99 latency by 42% ($2M annual sa
     expect(data.updatedResume.skills).toContain("Kubernetes");
     expect(data.tex).toContain("\\documentclass");
     expect(data.tex).toContain("Alex Rivera");
+  });
+
+  it("handles offline mode gracefully when no LLM provider is configured", async () => {
+    mockResolveChain.mockReturnValueOnce([]);
+
+    const req = makePostRequest({
+      message: "Quantify my bullet points",
+      tex: "\\documentclass{article}\\begin{document}\\item Managed deployments\\end{document}",
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+
+    expect(data.ok).toBe(true);
+    expect(data.reply).toContain("offline mode");
+    expect(data.tex).toContain("Managed deployments");
   });
 });

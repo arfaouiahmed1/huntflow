@@ -75,15 +75,20 @@ function buildThemeExtension(isDark: boolean): Extension {
   return EditorView.theme(
     {
       "&": {
-        backgroundColor: "var(--ink-card)",
+        backgroundColor: "var(--ink-card) !important",
         color: "var(--paper)",
         fontFamily: "var(--font-mono)",
         fontSize: "13px",
         height: "100%",
       },
+      ".cm-scroller": {
+        backgroundColor: "var(--ink-card) !important",
+        fontFamily: "var(--font-mono)",
+      },
       ".cm-content": {
         caretColor: "var(--paper)",
         padding: "8px 0",
+        backgroundColor: "var(--ink-card) !important",
       },
       ".cm-cursor": {
         borderLeftColor: "var(--paper)",
@@ -209,11 +214,11 @@ export default function TexEditor({
         ref={ref}
         value={value}
         height="100%"
-        theme={isDark ? "dark" : "light"}
+        theme={undefined}
         basicSetup={{ lineNumbers: true, foldGutter: false }}
         extensions={extensions}
         onChange={onChange}
-        className={cn("h-full")}
+        className={cn("h-full [&_.cm-editor]:!bg-[var(--ink-card)] [&_.cm-scroller]:!bg-[var(--ink-card)]")}
       />
     </div>
   );

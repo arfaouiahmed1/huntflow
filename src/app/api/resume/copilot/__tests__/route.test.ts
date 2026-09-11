@@ -2,14 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "../route";
 import { callLLMJSON, resolveChain } from "@/lib/llm/router";
-import { searchVault, VaultSearchHit } from "@/lib/vault";
+import { searchVault, VaultSearchHit } from "@/lib/vault/search";
 
 vi.mock("@/lib/llm/router", () => ({
   callLLMJSON: vi.fn(),
   resolveChain: vi.fn().mockReturnValue([{ apiKey: "mock-key", provider: "openai" }]),
 }));
 
-vi.mock("@/lib/vault", () => ({
+vi.mock("@/lib/vault/search", () => ({
   searchVault: vi.fn(),
 }));
 

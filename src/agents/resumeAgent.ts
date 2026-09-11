@@ -359,6 +359,8 @@ export function heuristicPatch(tex: string, logTail: string): string {
   if (/extra \}|too many \}/i.test(logTail)) {
     out = out.replace(/\}\s*\}/g, "}");
   }
+  // Escape unescaped currency dollar signs which trigger math mode errors
+  out = out.replace(/(?<!\\)\$(\d+)/g, "\\$$1");
   if (out.trim() === tex.trim() && /! /.test(logTail)) {
     out = out.replace(/\\([a-zA-Z]+)\s*\[/g, "\\$1[");
   }

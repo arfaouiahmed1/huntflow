@@ -237,7 +237,7 @@ export default function DocumentsPanel({ job }: { job: JobApplication }) {
       const docId = saveData.doc?.id;
       if (!docId) throw new Error("No doc ID returned from server.");
       success("Document saved to Studio. Opening editor…");
-      router.push(`/resume?docId=${encodeURIComponent(docId)}`);
+      router.push(`/studio?docId=${encodeURIComponent(docId)}`);
     } catch (e) {
       errToast(toErrorMessage(e));
     } finally {

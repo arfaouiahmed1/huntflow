@@ -280,7 +280,7 @@ export default function PdfViewer({
   }
 
   const iconBtn =
-    "grid h-7 w-7 place-items-center rounded-md text-[var(--paper)] transition-colors hover:bg-[var(--ink-soft)] disabled:cursor-not-allowed disabled:opacity-40";
+    "grid h-7 w-7 place-items-center rounded-lg text-[var(--paper)] transition-colors hover:bg-[var(--ink-soft)] disabled:cursor-not-allowed disabled:opacity-40";
   return (
     <section
       data-testid="compiled-pdf"
@@ -326,7 +326,7 @@ export default function PdfViewer({
               aria-label="Jump to PDF"
               onClick={() => void handleForward()}
               disabled={forwardBusy}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold text-[var(--paper)] transition-colors hover:bg-[var(--ink-soft)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11px] font-semibold text-[var(--paper)] transition-colors hover:bg-[var(--ink-soft)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               Jump to PDF
             </button>
@@ -336,7 +336,7 @@ export default function PdfViewer({
               aria-label="Jump to source"
               onClick={() => void handleReverse()}
               disabled={reverseBusy}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold text-[var(--paper)] transition-colors hover:bg-[var(--ink-soft)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11px] font-semibold text-[var(--paper)] transition-colors hover:bg-[var(--ink-soft)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               Jump to source
             </button>
@@ -373,7 +373,7 @@ export default function PdfViewer({
           title="Download PDF"
           onClick={() => void onDownload()}
           disabled={downloading}
-          className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[var(--chartreuse)]/15 px-2.5 text-[11px] font-semibold text-[var(--chartreuse)] ring-1 ring-[var(--chartreuse)]/25 transition-colors hover:bg-[var(--chartreuse)]/25 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-7 items-center gap-1.5 rounded-lg bg-[var(--chartreuse)]/15 px-2.5 text-[11px] font-semibold text-[var(--chartreuse)] ring-1 ring-[var(--chartreuse)]/25 transition-colors hover:bg-[var(--chartreuse)]/25 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
           Download
@@ -400,7 +400,7 @@ export default function PdfViewer({
                 ref={(el) => {
                   canvasRefs.current[page - 1] = el;
                 }}
-                className="block w-full rounded-md bg-white shadow-lg"
+                className="block w-full rounded-lg bg-white shadow-lg"
               />
               {forwardBox?.page === page && (
                 <div

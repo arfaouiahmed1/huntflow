@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readBody, routeError, jsonError } from "@/lib/errors";
-import { loadTemplateSource, templateMeta } from "@/lib/pdf/resumeTemplates";
-import { extractTexSections, assembleTemplateWithSections } from "@/lib/pdf/templateSwitcher";
+import { templateMeta } from "@/lib/pdf/resumeTemplates";
+import { assembleForTarget } from "@/lib/pdf/templateSwitcher";
 import { UserProfile } from "@/types";
 
 export const runtime = "nodejs";
@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
       tex: string;
       targetTemplateId: string;
       profile?: UserProfile;
+      job?: { company?: string; title?: string };
     };
 
     if (!body?.targetTemplateId) {
@@ -23,9 +24,7 @@ export async function POST(req: NextRequest) {
       return jsonError(`Unknown template: ${body.targetTemplateId}`, 404, "NOT_FOUND");
     }
 
-    const templateSource = loadTemplateSource(body.targetTemplateId);
-    const sections = extractTexSections(body.tex || "", body.profile);
-    const newTex = assembleTemplateWithSections(templateSource, sections);
+    const newTex = assembleForTarget(body.targetTemplateId, body.tex || "", body.profile, body.job);
 
     return NextResponse.json({
       ok: true,

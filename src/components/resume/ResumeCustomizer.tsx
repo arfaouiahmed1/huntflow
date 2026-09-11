@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+import type { UserProfile } from "@/types";
 import {
   type TexSettings,
   parseTexSettings,
@@ -32,6 +33,8 @@ interface Props {
   onSelectTemplate: (templateId: string) => void;
   templates: { id: string; name: string; badge: string; desc: string }[];
   className?: string;
+  profile?: UserProfile;
+  vaultHref?: string;
 }
 
 const ACCENT_PRESETS = [
@@ -55,6 +58,8 @@ export default function ResumeCustomizer({
   selectedTemplate,
   onSelectTemplate,
   templates,
+  profile,
+  vaultHref = "/vault",
 }: Props) {
   const [tab, setTab] = useState<"info" | "style" | "templates">("info");
   const [settings, setSettings] = useState<TexSettings>(() => parseTexSettings(tex));
@@ -71,6 +76,22 @@ export default function ResumeCustomizer({
     setSettings(updated);
     const patchedTex = applyTexSettings(tex, { [key]: value });
     onApply(patchedTex);
+  };
+
+  const autofillFromProfile = () => {
+    if (!profile) return;
+    const patch: Partial<TexSettings> = {};
+    if (profile.name) patch.name = profile.name;
+    if (profile.targetTitle) patch.title = profile.targetTitle;
+    if (profile.email) patch.email = profile.email;
+    if (profile.phone) patch.phone = profile.phone;
+    if (profile.location) patch.location = profile.location;
+    if (profile.linkedin) patch.linkedin = profile.linkedin;
+    if (profile.github) patch.github = profile.github;
+    if (profile.portfolio) patch.portfolio = profile.portfolio;
+    if (Object.keys(patch).length === 0) return;
+    setSettings((prev) => ({ ...prev, ...patch }));
+    onApply(applyTexSettings(tex, patch));
   };
 
   const addCustomField = () => {
@@ -137,6 +158,15 @@ export default function ResumeCustomizer({
         {/* Tab 1: Info & Contacts */}
         {tab === "info" && (
           <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-[var(--ink-soft)]/50 px-3 py-2">
+              <p className="text-[11px] text-dim flex-1 min-w-[180px]">Autofill contact fields from your profile, or manage source evidence in the vault.</p>
+              <button type="button" onClick={autofillFromProfile} className="rounded-lg border border-line px-2.5 py-1 text-[11px] font-semibold text-[var(--paper)] transition-colors hover:border-[var(--chartreuse)]/50 hover:text-[var(--chartreuse)]">
+                Pull from profile
+              </button>
+              <a href={vaultHref} className="rounded-lg border border-line px-2.5 py-1 text-[11px] font-semibold text-[var(--paper)] transition-colors hover:border-[var(--chartreuse)]/50 hover:text-[var(--chartreuse)]">
+                Open Vault
+              </a>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="text-[11px] font-semibold text-dim block mb-1">Full Name</label>
@@ -407,14 +437,14 @@ export default function ResumeCustomizer({
                     type="button"
                     onClick={() => onSelectTemplate(tmpl.id)}
                     className={cn(
-                      "group flex flex-col p-2 rounded-xl border text-left transition-all cursor-pointer",
+                      "group flex flex-col p-2 rounded-2xl border text-left transition-all cursor-pointer",
                       isSelected
                         ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/10 ring-2 ring-[var(--chartreuse)]/50 shadow-md"
-                        : "border-[var(--line)] bg-[var(--ink-soft)]/40 hover:bg-[var(--ink-soft)] hover:border-white/20"
+                        : "border-line bg-[var(--ink-soft)]/40 hover:bg-[var(--ink-soft)] hover:border-[var(--chartreuse)]/40"
                     )}
                   >
                     {/* Visual miniature mockup */}
-                    <div className="relative w-full rounded-md overflow-hidden mb-2 shadow-xs group-hover:scale-[1.02] transition-transform">
+                    <div className="relative w-full rounded-xl overflow-hidden mb-2 shadow-xs group-hover:scale-[1.02] transition-transform">
                       <TemplateVisualPreview templateId={tmpl.id} name={settings.name} title={settings.title} />
                       {isSelected && (
                         <div className="absolute top-1 right-1 grid h-5 w-5 place-items-center rounded-full bg-[var(--chartreuse)] text-neutral-950 shadow">

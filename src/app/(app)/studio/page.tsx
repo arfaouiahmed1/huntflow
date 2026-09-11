@@ -27,7 +27,10 @@ import {
   Loader2,
   FileCode,
   Archive,
+  FileText,
+  Mail,
 } from "lucide-react";
+import { motion, MotionConfig } from "framer-motion";
 import { useApp } from "@/context/AppContext";
 import { useToast } from "@/components/ui/Toaster";
 import { Button } from "@/components/ui/Button";
@@ -41,10 +44,12 @@ import ResumeDiff, { computeDiff, getChangedSections } from "@/components/resume
 import ResumeVariantsManager from "@/components/resume/ResumeVariantsManager";
 import TexEditor from "@/components/resume/TexEditor";
 import { useAutoCompile } from "@/hooks/useAutoCompile";
-import type { ResumeContent, ResumeDoc, UserProfile } from "@/types";
+import type { ResumeContent, ResumeDoc, ResumeDocKind, UserProfile } from "@/types";
+import { RESUME_TEMPLATES, templatesForKind, templateMeta } from "@/lib/pdf/resumeTemplatesMeta";
 import TemplateVisualPreview from "@/components/resume/TemplateVisualPreview";
 import ResumeCustomizer from "@/components/resume/ResumeCustomizer";
 import { parseTexSettings } from "@/lib/pdf/texSettingsSync";
+
 const PdfViewer = dynamic(() => import("@/components/resume/PdfViewer"), { ssr: false });
 
 interface ChatMessage {
@@ -60,76 +65,34 @@ interface TemplateMeta {
   name: string;
   desc: string;
   badge: string;
-  kind: "resume" | "cv" | "both";
-  font: string;
-  accent: string;
+  layout: "single" | "two";
 }
 
-const ALL_TEMPLATES: TemplateMeta[] = [
-  {
-    id: "classic-ats",
-    name: "Classic ATS Standard",
-    desc: "Single-column Helvetica. Predictable hierarchy and machine-readable text for parser safety.",
-    badge: "Single-column",
-    kind: "resume",
-    font: "font-sans",
-    accent: "bg-neutral-900",
-  },
-  {
-    id: "modern-professional",
-    name: "Modern Tech",
-    desc: "Clean two-tone headers with deep blue accent bar. Tech-optimized single column layout.",
-    badge: "Two-tone headers",
-    kind: "resume",
-    font: "font-sans",
-    accent: "bg-sky-700",
-  },
-  {
-    id: "technical-modern",
-    name: "Technical Modern",
-    desc: "High-density technical layout for senior software, ML, and systems engineers.",
-    badge: "High-density",
-    kind: "resume",
-    font: "font-mono",
-    accent: "bg-teal-700",
-  },
-  {
-    id: "minimal-clean",
-    name: "Minimal Clean",
-    desc: "Quiet typography, generous whitespace, single teal accent line.",
-    badge: "Whitespace",
-    kind: "resume",
-    font: "font-sans",
-    accent: "bg-emerald-700",
-  },
-  {
-    id: "executive",
-    name: "Executive Serif",
-    desc: "Times-based classic look for senior & leadership profiles. Small-caps section headers.",
-    badge: "Serif",
-    kind: "both",
-    font: "font-serif",
-    accent: "bg-stone-900",
-  },
-  {
-    id: "tabular-german",
-    name: "German Tabellarischer CV",
-    desc: "DACH standard format with date/location column and structured sections.",
-    badge: "DACH standard",
-    kind: "cv",
-    font: "font-sans",
-    accent: "bg-zinc-800",
-  },
-  {
-    id: "modern-french",
-    name: "French Standard CV",
-    desc: "Clean European format with structured competencies and detailed career timeline.",
-    badge: "European",
-    kind: "cv",
-    font: "font-sans",
-    accent: "bg-blue-800",
-  },
+const LAYOUT_BADGE: Record<string, string> = {
+  "developer-dashboard": "Two-column",
+  "tabular-german": "Two-column",
+  "creative-sidebar": "Sidebar",
+};
+
+/** Gallery is driven by the template registry — every shipped .tex shows up. */
+const STUDIO_TEMPLATES: TemplateMeta[] = RESUME_TEMPLATES.map((m) => ({
+  id: m.id,
+  name: m.name,
+  desc: m.description,
+  badge: LAYOUT_BADGE[m.id] ?? m.recommendedFor[0] ?? `ATS ${m.atsScore}`,
+  layout: m.id === "developer-dashboard" || m.id === "tabular-german" ? "two" : "single",
+}));
+
+const DOC_TYPE_META: { kind: ResumeDocKind; name: string; desc: string; defaultTemplate: string }[] = [
+  { kind: "resume", name: "Resume", desc: "Compact 1-page high-impact industry format.", defaultTemplate: "classic-ats" },
+  { kind: "cv", name: "CV", desc: "Detailed multi-page curriculum vitae.", defaultTemplate: "tabular-german" },
+  { kind: "cover_letter", name: "Cover Letter", desc: "Concise pitch generated from your current content.", defaultTemplate: "letter-cover" },
+  { kind: "motivation_letter", name: "Motivation Letter", desc: "Formal multi-paragraph motivation statement.", defaultTemplate: "letter-motivation" },
 ];
+
+function defaultTemplateForKind(kind: ResumeDocKind): string {
+  return DOC_TYPE_META.find((d) => d.kind === kind)?.defaultTemplate ?? "classic-ats";
+}
 
 const QUICK_PROMPTS = [
   { label: "ATS keyword polish", prompt: "Analyze this resume against modern ATS algorithms and optimize keyword density without keyword stuffing." },
@@ -225,7 +188,7 @@ function StudioInner() {
   const [docName, setDocName] = useState<string>("main.tex");
   const [selectedJobId, setSelectedJobId] = useState<string>("");
   const [selectedTemplate, setSelectedTemplate] = useState<string>("classic-ats");
-  const [docKind, setDocKind] = useState<"resume" | "cv">("resume");
+  const [docKind, setDocKind] = useState<ResumeDocKind>("resume");
 
   // Raw .tex is the single source of truth for the entire editor
   const [texBuffer, setTexBuffer] = useState<string>("");
@@ -289,7 +252,7 @@ function StudioInner() {
   const [refineCollapsed, setRefineCollapsed] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<
     | { kind: "template"; templateId: string }
-    | { kind: "docKind"; docKind: "resume" | "cv" }
+    | { kind: "docKind"; docKind: ResumeDocKind }
     | null
   >(null);
 
@@ -314,7 +277,7 @@ function StudioInner() {
     {
       id: "msg-0",
       sender: "assistant",
-      text: "**Welcome to the Overleaf-grade LaTeX Resume Studio!**\n\nI work directly on your raw `main.tex` buffer in real time. Ask me to rewrite experience bullets with quantified impact, align keywords against your target role, or pull verified metrics from your **Vault**.",
+      text: "**Welcome to the AI Studio!**\n\nI work directly on your raw `main.tex` buffer in real time across resumes, CVs, cover letters, and motivation letters. Ask me to rewrite experience bullets with quantified impact, align keywords against your target role, or pull verified metrics from your **Vault**.",
       timestamp: "Just now",
     },
   ]);
@@ -375,7 +338,7 @@ function StudioInner() {
             setActiveDocId(targetDoc.id);
             setDocName(targetDoc.name || "main.tex");
             setSelectedTemplate(targetDoc.templateId || "classic-ats");
-            setDocKind(targetDoc.kind === "cv" ? "cv" : "resume");
+            setDocKind(targetDoc.kind);
             if (targetDoc.targetJobId) setSelectedJobId(targetDoc.targetJobId);
             setTexBuffer(targetDoc.tex);
             setLastSavedTex(targetDoc.tex);
@@ -596,8 +559,8 @@ function StudioInner() {
 
   const parsedSettings = useMemo(() => parseTexSettings(texBuffer), [texBuffer]);
 
-  const switchTemplateInstantly = async (targetTemplateId: string, withAi = false) => {
-    if (targetTemplateId === selectedTemplate && !withAi) return;
+  const switchTemplateInstantly = async (targetTemplateId: string, withAi = false, force = false) => {
+    if (!force && targetTemplateId === selectedTemplate && !withAi) return;
     try {
       const res = await fetch("/api/resume/switch-template", {
         method: "POST",
@@ -606,6 +569,7 @@ function StudioInner() {
           tex: texBuffer,
           targetTemplateId,
           profile,
+          job: selectedJob ? { company: selectedJob.company, title: selectedJob.title } : undefined,
         }),
       });
       if (!res.ok) throw new Error("Template switch failed");
@@ -613,13 +577,15 @@ function StudioInner() {
       if (data.tex) {
         applyTexUpdate(data.tex);
         setSelectedTemplate(targetTemplateId);
+        const meta = templateMeta(targetTemplateId);
+        if (meta && !meta.kinds.includes(docKind)) setDocKind(meta.kinds[0]);
         success(`Switched to “${data.templateName || targetTemplateId}” with your content preserved.`);
       }
     } catch (e) {
       errToast(toErrorMessage(e));
     }
     if (withAi) {
-      void handleSendMessage(`Rebuild and format my resume according to the ${targetTemplateId} template layout.`);
+      void handleSendMessage(`Rebuild and format my document according to the ${targetTemplateId} template layout.`);
     }
   };
 
@@ -628,11 +594,11 @@ function StudioInner() {
     if (!pendingSwitch) return;
     if (pendingSwitch.kind === "docKind") {
       const kind = pendingSwitch.docKind;
+      const target = defaultTemplateForKind(kind);
       setDocKind(kind);
-      const target = ALL_TEMPLATES.find((t) => t.kind === kind || t.kind === "both")?.id || (kind === "cv" ? "tabular-german" : "classic-ats");
       setSelectedTemplate(target);
       setPendingSwitch(null);
-      void switchTemplateInstantly(target, withAiReformat);
+      void switchTemplateInstantly(target, withAiReformat, true);
     } else {
       const templateId = pendingSwitch.templateId;
       setPendingSwitch(null);
@@ -698,19 +664,26 @@ function StudioInner() {
   };
 
   const filteredTemplates = useMemo(
-    () => ALL_TEMPLATES.filter((t) => t.kind === docKind || t.kind === "both"),
+    () =>
+      templatesForKind(docKind)
+        .map((m) => STUDIO_TEMPLATES.find((t) => t.id === m.id))
+        .filter((t): t is TemplateMeta => Boolean(t)),
     [docKind]
   );
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="flex h-[calc(100vh-5rem)] min-h-0 flex-col overflow-hidden text-[var(--paper)]">
       {/* Overleaf Top Bar: filename, dirty, Recompile, Auto, Latency, Target Job, Templates, Download, AI Rail */}
-      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-[var(--line)] bg-[var(--ink-card)]/90 px-3.5 py-2 backdrop-blur shrink-0">
+      <motion.header initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: "easeOut" }} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-[var(--line)] bg-[var(--ink-card)]/90 px-3.5 py-2 backdrop-blur shrink-0">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
-          {/* Document name & dirty dot */}
-          <div className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--ink-soft)] px-2.5 py-1">
+          {/* Document name, type & dirty dot */}
+          <div className="flex items-center gap-2 rounded-lg border border-line bg-[var(--ink-soft)] px-2.5 py-1">
             <FileCode className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
             <span className="font-mono text-xs font-bold text-[var(--paper)]">{docName}</span>
+            <span className="rounded-full bg-[var(--chartreuse)]/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--chartreuse)] ring-1 ring-[var(--chartreuse)]/25">
+              {DOC_TYPE_META.find((d) => d.kind === docKind)?.name ?? docKind}
+            </span>
             {isDirty && (
               <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" title="Unsaved changes" />
             )}
@@ -755,17 +728,18 @@ function StudioInner() {
           )}
 
           {/* Target Job Selector */}
-          <div className="w-36 sm:w-48">
+          <div className="w-52 sm:w-64" title={selectedJob ? `${selectedJob.company} — ${selectedJob.title}` : "General profile"}>
             <Select
               value={selectedJobId}
               onChange={(v) => setSelectedJobId(v)}
               options={[
-                { value: "", label: "General Profile" },
-                ...applications.map((app) => ({ value: app.id, label: `${app.company} — ${app.title}` })),
+                { value: "", label: "General Profile", hint: "No specific role" },
+                ...applications.map((app) => ({ value: app.id, label: app.company, hint: app.title })),
               ]}
               placeholder="Target role…"
               ariaLabel="Tailor for target job"
               className="w-full [&>button]:h-8 [&>button]:text-xs"
+              menuClassName="w-72 max-w-[85vw]"
             />
           </div>
         </div>
@@ -827,7 +801,7 @@ function StudioInner() {
             <span className="hidden lg:inline">{refineCollapsed ? "Copilot" : "Rail"}</span>
           </Button>
         </div>
-      </header>
+      </motion.header>
 
       {/* Mobile Tab Switcher (< lg) */}
       <div className="flex border-b border-[var(--line)] bg-[var(--ink-soft)] px-2 py-1 lg:hidden">
@@ -856,7 +830,10 @@ function StudioInner() {
           )}
         >
           {/* Left Pane: CodeMirror TexEditor */}
-          <div
+          <motion.div
+            initial={{ opacity: 0, x: -12 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut", delay: 0.05 }}
             style={{ width: `${splitPct}%` }}
             className="flex min-h-0 min-w-[320px] flex-col border-r border-[var(--line)] bg-[var(--ink-card)]"
           >
@@ -883,7 +860,7 @@ function StudioInner() {
                 revealLine={revealLine}
               />
             </div>
-          </div>
+          </motion.div>
 
           {/* Drag Handle */}
           <div
@@ -895,7 +872,10 @@ function StudioInner() {
           </div>
 
           {/* Right Pane: PdfViewer continuous scroll */}
-          <div
+          <motion.div
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut", delay: 0.1 }}
             style={{ width: `${100 - splitPct}%` }}
             className="flex min-h-0 min-w-[320px] flex-1 flex-col overflow-hidden bg-[var(--ink-deep)] p-2 sm:p-4"
           >
@@ -914,7 +894,7 @@ function StudioInner() {
               reverseBusy={reverseBusy}
               onRevealLine={(line: number) => setRevealLine(line)}
             />
-          </div>
+          </motion.div>
         </div>
 
         {/* Mobile View: active tab only (< lg) */}
@@ -952,8 +932,11 @@ function StudioInner() {
 
         {/* Collapsible Right AI Rail */}
         {(!refineCollapsed || mobileTab === "ai") && (
-          <aside
+          <motion.aside
             aria-label="Refine workspace"
+            initial={{ opacity: 0, x: 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut", delay: 0.15 }}
             className={cn(
               "z-20 flex min-h-0 flex-col border-l border-[var(--line)] bg-[var(--ink-card)]/95 backdrop-blur-xl",
               mobileTab === "ai"
@@ -1173,7 +1156,7 @@ function StudioInner() {
                 )}
               </div>
             )}
-          </aside>
+          </motion.aside>
         )}
       </div>
 
@@ -1182,13 +1165,13 @@ function StudioInner() {
         <Modal
           open
           onClose={() => setPendingSwitch(null)}
-          title={pendingSwitch.kind === "template" ? "Switch template?" : `Switch to ${pendingSwitch.docKind === "cv" ? "CV" : "Resume"} mode?`}
+          title={pendingSwitch.kind === "template" ? "Switch template?" : `Generate ${DOC_TYPE_META.find((d) => d.kind === pendingSwitch.docKind)?.name ?? pendingSwitch.docKind}?`}
         >
           <div className="space-y-4 text-xs text-dim leading-relaxed">
             <p>
               {pendingSwitch.kind === "template"
-                ? `The editor will re-render with template “${ALL_TEMPLATES.find((t) => t.id === pendingSwitch.templateId)?.name ?? pendingSwitch.templateId}”.`
-                : `The editor will re-render with ${pendingSwitch.docKind === "cv" ? "multi-page CV" : "compact 1-page Resume"} layout.`}
+                ? `The editor will re-render with template “${STUDIO_TEMPLATES.find((t) => t.id === pendingSwitch.templateId)?.name ?? pendingSwitch.templateId}”.`
+                : `The editor will generate a ${DOC_TYPE_META.find((d) => d.kind === pendingSwitch.docKind)?.name ?? pendingSwitch.docKind} from your current content — bullets, metrics, and edits preserved.`}
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <Button size="sm" variant="outline" onClick={() => setPendingSwitch(null)}>
@@ -1207,24 +1190,21 @@ function StudioInner() {
 
       {/* Configure modal */}
       {configureOpen && (
-        <Modal open={configureOpen} onClose={() => setConfigureOpen(false)} title="Studio Settings" wide>
+        <Modal open={configureOpen} onClose={() => setConfigureOpen(false)} title="AI Studio Settings" wide>
           <div className="space-y-5">
             <fieldset>
-              <legend className="text-[10px] font-semibold uppercase tracking-wider text-dim">Document Mode</legend>
+              <legend className="text-[10px] font-semibold uppercase tracking-wider text-dim">Generate document</legend>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {(
-                  [
-                    { kind: "resume", name: "Resume", desc: "Compact 1-page high-impact industry format." },
-                    { kind: "cv", name: "CV", desc: "Detailed multi-page curriculum vitae." },
-                  ] as const
-                ).map((opt) => (
+                {DOC_TYPE_META.map((opt) => {
+                  const Icon = opt.kind === "resume" ? FileText : opt.kind === "cv" ? Layers : opt.kind === "cover_letter" ? Mail : Sparkles;
+                  return (
                   <label
                     key={opt.kind}
                     className={cn(
-                      "cursor-pointer rounded-xl border p-3 transition-all",
+                      "cursor-pointer rounded-2xl border p-3 transition-all",
                       docKind === opt.kind
                         ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/10 ring-1 ring-[var(--chartreuse)]/30"
-                        : "border-[var(--line)] bg-[var(--ink-soft)]/50 hover:bg-[var(--ink-soft)]"
+                        : "border-line bg-[var(--ink-soft)]/50 hover:bg-[var(--ink-soft)]"
                     )}
                   >
                     <span className="flex items-center gap-2">
@@ -1235,11 +1215,13 @@ function StudioInner() {
                         onChange={() => setPendingSwitch({ kind: "docKind", docKind: opt.kind })}
                         className="h-4 w-4 accent-[var(--chartreuse)]"
                       />
+                      <Icon className="h-3.5 w-3.5 text-[var(--chartreuse)]" />
                       <span className="text-xs font-bold text-[var(--paper)]">{opt.name}</span>
                     </span>
                     <span className="mt-1 block text-[11px] text-dim">{opt.desc}</span>
                   </label>
-                ))}
+                  );
+                })}
               </div>
             </fieldset>
 
@@ -1258,13 +1240,13 @@ function StudioInner() {
                         void switchTemplateInstantly(tmpl.id);
                       }}
                       className={cn(
-                        "group flex flex-col p-2.5 rounded-xl border text-left transition-all cursor-pointer",
+                        "group flex flex-col p-2.5 rounded-2xl border text-left transition-all cursor-pointer",
                         isSelected
                           ? "border-[var(--chartreuse)] bg-[var(--chartreuse)]/10 ring-2 ring-[var(--chartreuse)]/40 shadow-sm"
-                          : "border-[var(--line)] bg-[var(--ink-soft)]/50 hover:bg-[var(--ink-soft)] hover:border-[var(--chartreuse)]/40"
+                          : "border-line bg-[var(--ink-soft)]/50 hover:bg-[var(--ink-soft)] hover:border-[var(--chartreuse)]/40"
                       )}
                     >
-                      <div className="relative w-full rounded-md overflow-hidden mb-2 shadow-xs group-hover:scale-[1.01] transition-transform">
+                      <div className="relative w-full rounded-xl overflow-hidden mb-2 shadow-xs group-hover:scale-[1.01] transition-transform">
                         <TemplateVisualPreview
                           templateId={tmpl.id}
                           name={parsedSettings.name}
@@ -1318,7 +1300,7 @@ function StudioInner() {
 
       {/* Resume Visual Customizer & Settings Modal */}
       {customizerOpen && (
-        <Modal open={customizerOpen} onClose={() => setCustomizerOpen(false)} title="Resume Visual Customizer & Settings" wide>
+        <Modal open={customizerOpen} onClose={() => setCustomizerOpen(false)} title="AI Studio Customizer & Settings" wide>
           <div className="h-[580px] -mx-6 -my-4">
             <ResumeCustomizer
               tex={texBuffer}
@@ -1328,6 +1310,8 @@ function StudioInner() {
                 void switchTemplateInstantly(tmplId);
               }}
               templates={filteredTemplates}
+              profile={profile}
+              vaultHref="/vault"
             />
           </div>
         </Modal>
@@ -1364,12 +1348,13 @@ function StudioInner() {
         </Modal>
       )}
     </div>
+    </MotionConfig>
   );
 }
 
-export default function ResumeStudioPage() {
+export default function AIStudioPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-dim">Loading Resume Studio…</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-dim">Loading AI Studio…</div>}>
       <StudioInner />
     </Suspense>
   );

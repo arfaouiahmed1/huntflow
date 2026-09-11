@@ -112,7 +112,7 @@ export default function DashboardPage() {
       label: "Prepare",
       value: `${applications.filter((job) => job.documents && Object.keys(job.documents).length > 0).length} document sets`,
       detail: "Tailor ATS documents from the evidence in your profile vault.",
-      href: "/resume",
+      href: "/studio",
       action: "Open document studio",
       icon: FileCheck2,
       color: "var(--violet)",

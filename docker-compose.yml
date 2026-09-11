@@ -9,9 +9,11 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       HUNTFLOW_DATA_DIR: /app/data
-      SCRAPLING_AGENT_URL: http://agent:8001
+      SCRAPLING_AGENT_URL: ${SCRAPLING_AGENT_URL:-http://host.docker.internal:8001}
       HUNTFLOW_AGENT_TOKEN: ${HUNTFLOW_AGENT_TOKEN:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

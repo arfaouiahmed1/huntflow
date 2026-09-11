@@ -6,7 +6,7 @@
     "node": ">=22 <23"
   },
   "scripts": {
-    "postinstall": "node -e \"const fs = require('fs'); fs.copyFileSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs', 'public/pdf.worker.min.mjs');\"",
+    "postinstall": "node -e \"const fs=require('fs'); try { if (fs.existsSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs')) { fs.mkdirSync('public', { recursive: true }); fs.copyFileSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs', 'public/pdf.worker.min.mjs'); } } catch (e) {}\"",
     "predev": "node scripts/predev.mjs",
     "dev": "concurrently -n \"next,scrapling\" -c \"green,magenta\" \"next dev\" \"cd scrapling-agent && uv run uvicorn server:app --port 8001\"",
     "dev:all": "npm run dev",

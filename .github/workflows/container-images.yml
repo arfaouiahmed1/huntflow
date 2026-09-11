@@ -12,6 +12,7 @@ on:
       - "public/**"
       - "src/**"
       - "scrapling-agent/**"
+      - "docker-compose.yml"
       - ".github/workflows/container-images.yml"
   pull_request:
     branches:
@@ -24,6 +25,7 @@ on:
       - "public/**"
       - "src/**"
       - "scrapling-agent/**"
+      - "docker-compose.yml"
       - ".github/workflows/container-images.yml"
   workflow_dispatch:
     inputs:

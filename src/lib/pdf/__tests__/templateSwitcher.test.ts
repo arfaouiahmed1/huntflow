@@ -2,12 +2,15 @@ import { describe, it, expect } from "vitest";
 import {
   extractTexSections,
   assembleTemplateWithSections,
+  assembleForTarget,
+  deriveLetterParagraphs,
+  extractLetterParagraphs,
 } from "@/lib/pdf/templateSwitcher";
 import {
   parseTexSettings,
   applyTexSettings,
 } from "@/lib/pdf/texSettingsSync";
-
+import type { UserProfile } from "@/types";
 const SAMPLE_TEX = `\\documentclass[10pt]{article}
 \\usepackage{geometry}
 \\geometry{letterpaper, margin=0.55in, top=0.5in, bottom=0.5in}
@@ -66,6 +69,61 @@ CONTACT: {{CONTACT}}
     expect(assembled).toContain("TITLE: Principal Security Engineer");
     expect(assembled).toContain("Battle-tested security architect");
     expect(assembled).toContain("Lead Cyber Defense");
+  });
+});
+
+describe("assembleForTarget — cover and motivation letters", () => {
+  const profile = {
+    name: "Alex Johnson",
+    email: "alex@example.com",
+    phone: "+1 (555) 234-5678",
+    location: "San Francisco, CA",
+    summary: "Senior engineer.",
+    targetTitle: "Senior Full-Stack Engineer",
+    skills: ["TypeScript"],
+    experience: [],
+    education: [],
+    linkedin: "linkedin.com/in/alexjohnson",
+    github: "github.com/alexjohnson",
+    portfolio: "alexjohnson.dev",
+  } as UserProfile;
+
+  const LETTER_TEX = `\\documentclass[11pt]{article}
+\\begin{document}
+\\coverparagraph{Dear hiring team, I am excited to apply for the platform role.}
+\\coverparagraph{At Nexus I slashed p99 latency by 42\\% across core services.}
+\\end{document}`;
+
+  it("generates letter paragraphs when switching resume to cover letter", () => {
+    const out = assembleForTarget("letter-cover", SAMPLE_TEX, profile, { company: "Acme" });
+    expect(out).toContain("\\coverparagraph");
+    expect(out).toContain("Acme");
+    expect(out).toContain("neural net clusters");
+  });
+
+  it("preserves letter paragraphs when switching letter templates", () => {
+    const out = assembleForTarget("letter-modern", LETTER_TEX, profile, { company: "Acme" });
+    expect(out).toContain("excited to apply for the platform role");
+    expect(out).toContain("p99 latency");
+  });
+
+  it("folds letter paragraphs into a summary when switching back to resume", () => {
+    const out = assembleForTarget("classic-ats", LETTER_TEX, profile);
+    expect(out).toContain("\\resumesection{Summary}");
+    expect(out).toContain("excited to apply");
+  });
+
+  it("throws for unknown template ids", () => {
+    expect(() => assembleForTarget("nope-not-real", SAMPLE_TEX, profile)).toThrow("Unknown template");
+  });
+
+  it("extracts nested-brace cover paragraphs and derives plain-text bodies", () => {
+    const nested = "\\coverparagraph{Worked on \\textbf{core} systems.}";
+    expect(extractLetterParagraphs(nested)).toEqual(["Worked on \\textbf{core} systems."]);
+    const sections = extractTexSections(SAMPLE_TEX, profile);
+    const paras = deriveLetterParagraphs(SAMPLE_TEX, sections);
+    expect(paras.length).toBeGreaterThan(0);
+    expect(paras.join(" ")).toContain("critical infrastructure");
   });
 });
 

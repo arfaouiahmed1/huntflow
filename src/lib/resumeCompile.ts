@@ -1,5 +1,5 @@
-// Pure compile-state decisions for the Resume Studio dual-engine preview
-// (`src/app/(app)/resume/page.tsx`). Kept DOM-free so vitest (node env)
+// Pure compile-state decisions for the AI Studio dual-engine preview
+// (`src/app/(app)/studio/page.tsx`). Kept DOM-free so vitest (node env)
 // can pin the PR #22 regression contracts: deterministic engine selection
 // and a latency badge that can never show a previous run's value.
 

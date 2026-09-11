@@ -81,7 +81,7 @@ export default function Select<T extends string = string>({
       >
         <span className="flex min-w-0 items-center gap-2">
           {active?.dot && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: active.dot }} />}
-          <span className={cn("truncate", active ? "text-paper" : "text-dim/70")}>
+          <span className={cn("truncate", active ? "text-paper" : "text-dim/70")} title={active ? active.label : placeholder}>
             {active ? active.label : placeholder}
           </span>
         </span>

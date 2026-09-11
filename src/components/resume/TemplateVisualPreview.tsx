@@ -91,6 +91,29 @@ export default function TemplateVisualPreview({
           bg: "bg-white",
           ink: "#0F172A",
         };
+      case "developer-dashboard":
+        return {
+          type: "dashboard",
+          accent: "#0F172A",
+          secondary: "#22D3EE",
+          font: "font-sans",
+          bg: "bg-white",
+          ink: "#0F172A",
+        };
+      case "letter-cover":
+      case "letter-modern":
+      case "letter-minimal":
+      case "letter-motivation":
+      case "letter-motivation-fr":
+      case "letter-anschreiben-de":
+        return {
+          type: "letter",
+          accent: "#1F3A5F",
+          secondary: "#4B5563",
+          font: "font-serif",
+          bg: "bg-white",
+          ink: "#1F2937",
+        };
       case "classic-ats":
       default:
         return {
@@ -103,11 +126,10 @@ export default function TemplateVisualPreview({
         };
     }
   }, [templateId]);
-
   return (
     <div
       className={cn(
-        "relative aspect-[8.5/11] w-full overflow-hidden rounded-md border border-[var(--line)] shadow-sm select-none transition-transform",
+        "relative aspect-[8.5/11] w-full overflow-hidden rounded-xl border border-line shadow-sm select-none transition-transform",
         config.bg,
         className
       )}
@@ -443,7 +465,73 @@ export default function TemplateVisualPreview({
         </div>
       )}
 
-      {/* 9. Classic ATS Default: Single-column standard */}
+      {/* 9. Developer Dashboard: dark sidebar + metric main column */}
+      {config.type === "dashboard" && (
+        <div className="grid h-full grid-cols-[34%_66%] text-[7px] leading-none">
+          <div style={{ backgroundColor: config.accent }} className="p-1.5 space-y-2 text-white">
+            <div>
+              <div className="font-bold uppercase tracking-wider text-[7.5px]">{name}</div>
+              <div style={{ color: config.secondary }} className="mt-0.5 text-[5.5px] font-semibold">{title}</div>
+            </div>
+            <div className="space-y-0.5 text-[4.5px] opacity-80">
+              <div>alex@dev.io</div>
+              <div>github.com/alex</div>
+              <div>SF, CA</div>
+            </div>
+            <div>
+              <div style={{ color: config.secondary }} className="font-bold text-[5px] uppercase tracking-wider">Stack</div>
+              <div className="mt-1 flex flex-wrap gap-0.5">
+                {["TS", "Go", "K8s", "AWS"].map((s) => (
+                  <span key={s} className="rounded bg-white/10 px-1 py-0.5 text-[4px] font-bold">{s}</span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: config.secondary }} className="font-bold text-[5px] uppercase tracking-wider">Metrics</div>
+              <div className="mt-1 space-y-1">
+                <div className="rounded bg-white/10 p-1"><div className="font-bold text-[6px]">-42% p99</div></div>
+                <div className="rounded bg-white/10 p-1"><div className="font-bold text-[6px]">$2M saved</div></div>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-1.5 bg-white p-2">
+            <div>
+              <div className="font-bold uppercase tracking-wider text-[6px] text-slate-900">Experience</div>
+              <div className="mt-0.5 h-0.5 w-full rounded-full" style={{ backgroundColor: config.secondary }} />
+              <div className="mt-1 space-y-1">
+                <div className="font-bold text-[5.5px] text-slate-900">Lead Engineer — Nexus</div>
+                <div className="h-0.5 w-full rounded-xs bg-slate-300" />
+                <div className="h-0.5 w-4/5 rounded-xs bg-slate-300" />
+              </div>
+            </div>
+            <div>
+              <div className="font-bold uppercase tracking-wider text-[6px] text-slate-900">Projects</div>
+              <div className="mt-0.5 h-0.5 w-full rounded-full" style={{ backgroundColor: config.secondary }} />
+              <div className="mt-1 h-0.5 w-full rounded-xs bg-slate-300" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 10. Cover / Motivation Letter: sender block + paragraphs */}
+      {config.type === "letter" && (
+        <div className="flex h-full flex-col bg-white p-2.5 font-serif text-[7px] leading-snug text-slate-900">
+          <div className="font-bold text-[8px]">{name}</div>
+          <div className="mt-0.5 text-[5px] text-slate-500">alex@dev.io · San Francisco, CA</div>
+          <div className="mt-1 text-[5px] text-slate-500">Hiring Manager</div>
+          <div className="mt-1.5 space-y-1 text-[5.5px] text-slate-700">
+            <div className="h-1 w-full rounded-xs bg-slate-300" />
+            <div className="h-1 w-full rounded-xs bg-slate-300" />
+            <div className="h-1 w-4/5 rounded-xs bg-slate-300" />
+            <div className="h-1 w-full rounded-xs bg-slate-300" />
+            <div className="h-1 w-3/5 rounded-xs bg-slate-300" />
+          </div>
+          <div className="mt-2 text-[5.5px] italic text-slate-600">Sincerely,</div>
+          <div className="text-[6px] font-bold">{name}</div>
+        </div>
+      )}
+
+      {/* 11. Classic ATS Default: Single-column standard */}
       {config.type === "classic" && (
         <div className="flex h-full flex-col text-[7px] leading-none text-slate-900 p-2.5 space-y-1.5">
           <div className="border-b border-slate-900 pb-1">

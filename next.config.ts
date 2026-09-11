@@ -12,6 +12,8 @@ const nextConfig: NextConfig = {
     "/api/resume/*": ["./src/lib/pdf/templates/*.tex"],
     "/api/pdf": ["./src/lib/pdf/templates/*.tex"],
   },
+  async redirects() {
+    return [{ source: "/resume", destination: "/studio", permanent: false }];
+  },
 };
-
 export default nextConfig;

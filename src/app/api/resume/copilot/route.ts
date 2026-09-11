@@ -3,7 +3,7 @@ import { readBody, routeError } from "@/lib/errors";
 import { callLLMJSON, resolveChain } from "@/lib/llm/router";
 import { ResumeContent } from "@/types";
 import { cleanResumeContent } from "@/lib/llm/sanitize";
-import { searchVault } from "@/lib/vault";
+import { searchVault } from "@/lib/vault/search";
 import { renderTemplate } from "@/lib/pdf/resumeTemplates";
 
 export const runtime = "nodejs";
@@ -86,6 +86,7 @@ function sanitizeTex(raw: string): string {
   const fence = out.match(/```(?:latex|tex)?\s*([\s\S]*?)```/i);
   if (fence) out = fence[1].trim();
   out = out.replace(/^```(?:latex|tex)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  out = out.replace(/(?<!\\)\$(\d+)/g, "\\$$1");
   if (out && !out.includes("\\end{document}")) out += "\n\\end{document}\n";
   return out.slice(0, MAX_TEX);
 }
@@ -156,7 +157,7 @@ export async function POST(req: NextRequest) {
           ok: true,
           reply: "I've analyzed your resume in local offline mode (no external LLM key is configured in Settings). I have enhanced your bullet points with quantitative impact metrics following the Google XYZ formula (Accomplished [X], measured by [Y], by doing [Z]).\n\n*Configure an OpenAI, Anthropic, or OpenRouter API key in Settings -> LLM Providers to enable full cloud LLM generation.*",
           actionSummary: "Enhanced bullet points with quantifiable performance metrics.",
-          tex: enhancedTex,
+          tex: sanitizeTex(enhancedTex),
         });
       }
 
